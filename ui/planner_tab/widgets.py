@@ -142,6 +142,12 @@ UTC_OFFSETS: tuple[float, ...] = tuple(
 )
 
 
+def _system_offset_hours() -> float:
+    """Desfase UTC del reloj del sistema, en horas (verano incluido)."""
+    offset = datetime.now().astimezone().utcoffset()
+    return offset.total_seconds() / 3600.0 if offset else 0.0
+
+
 class LocationBar(QFrame):
     """Selector de ubicación de las subpestañas del Planificador.
 
@@ -153,8 +159,9 @@ class LocationBar(QFrame):
     de las condiciones meteorológicas), compactado en tres filas para caber
     en la columna izquierda; el resto de subpestañas lo consumen por señal.
 
-    El desfase puede quedar en "Auto", que equivale a hora solar local;
-    si el usuario lo fija, se usa como hora de reloj.
+    El desfase puede quedar en «Auto» (la hora del reloj del sistema, con
+    horario de verano), «Solar (longitud)» (hora solar local) o fijado a
+    una hora de reloj concreta.
     """
 
     location_changed = pyqtSignal(float, float, object)  # lat, lon, offset|None
@@ -216,16 +223,19 @@ class LocationBar(QFrame):
         offset_row.setSpacing(6)
         offset_row.addWidget(QLabel("Huso"))
         self._offset = QComboBox()
+        # «Auto» (None) se resuelve a la hora del sistema en
+        # utc_offset_hours(); «Solar» (None aguas abajo) usa la longitud.
         self._offset.addItem("Auto", None)
+        self._offset.addItem("Solar (longitud)", "solar")
         for value in UTC_OFFSETS:
             self._offset.addItem(f"{value:+.1f} h", value)
-        # «Auto (por longitud)» pedía 258 px y no cabía: el detalle va en el
-        # tooltip y la descripción larga, en el combo de la izquierda.
-        self._offset.setFixedWidth(104)
+        # 170 px: «Solar (longitud)» + desplegable pedían 158; margen de sobra.
+        self._offset.setFixedWidth(170)
         self._offset.setToolTip(
             "Desfase horario de la ubicación.\n"
-            "«Auto» lo calcula de la longitud (hora solar local); fíjalo para "
-            "que las horas sean de reloj (horario de verano incluido)."
+            "«Auto» usa la hora de tu reloj (horario de verano incluido);\n"
+            "«Solar (longitud)» calcula la hora solar local desde la longitud;\n"
+            "o fija una hora de reloj concreta."
         )
         self._offset.currentIndexChanged.connect(self._emit)
         offset_row.addWidget(self._offset)
@@ -249,8 +259,19 @@ class LocationBar(QFrame):
         return self._longitude.value()
 
     def utc_offset_hours(self) -> float | None:
-        """Desfase horario elegido o ``None`` si está en automático."""
-        return self._offset.currentData()
+        """Desfase horario a usar en los cálculos.
+
+        «Auto» → la hora del reloj del sistema (lo que pide el usuario sin
+        tocar nada); «Solar (longitud)» → ``None``, para que los planos
+        calculen la hora solar desde la longitud; un valor fijo → ese
+        desfase de reloj.
+        """
+        value = self._offset.currentData()
+        if value is None:                       # «Auto»
+            return _system_offset_hours()
+        if value == "solar":                    # «Solar (longitud)»
+            return None
+        return value
 
     def has_saved_location(self) -> bool:
         """¿Hay una ubicación de la base seleccionada (no el modo manual)?"""
