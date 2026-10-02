@@ -287,8 +287,10 @@ class LocationBar(QFrame):
             locations = []
         # Sin ubicaciones guardadas, el propio combo avisa. La etiqueta es
         # corta para no desbordar la columna izquierda.
+        # Sin ubicaciones guardadas el texto largo se cortaba en el combo;
+        # la indicación completa está en el tooltip.
         self._combo.addItem(
-            "(Manual — escribe lat/long)" if not locations else "(Manual)", None
+            "Manual — escribe aquí" if not locations else "(Manual)", None
         )
         for location in locations:
             name = location.get("name") or f"Ubicación {location['id']}"
@@ -411,12 +413,13 @@ class WeatherCards(QWidget):
     """
 
     #: (título, fuente, color por defecto del valor)
+    #: Títulos cortos: en una tarjeta estrecha las frases largas se cortaban.
     CARDS = (
-        ("Seeing Estimado", "seeing", "#22c55e"),
-        ("Cobertura Nubosa", "cloud", "#60a5fa"),
-        ("Humedad Relativa", "humidity", "#60a5fa"),
-        ("Punto de Rocío", "dew", "#f59e0b"),
-        ("Viento en Racha", "wind", "#60a5fa"),
+        ("Seeing", "seeing", "#22c55e"),
+        ("Nubosidad", "cloud", "#60a5fa"),
+        ("Humedad", "humidity", "#60a5fa"),
+        ("Rocío", "dew", "#f59e0b"),
+        ("Viento", "wind", "#60a5fa"),
         ("Transparencia", "transparency", "#22c55e"),
     )
 
@@ -432,10 +435,12 @@ class WeatherCards(QWidget):
             self._cards[key] = card
             layout.addWidget(card)
 
-        self._note = QLabel("")
-        self._note.setObjectName("HintLabel")
-        self._note.hide()
-        layout.addWidget(self._note)
+        # Nota de proveedores sin API key: NO va en este layout (estiraba
+        # las tarjetas y les cortaba el título); la coloca quien ensambla
+        # el panel, en la fila del título.
+        self.note_label = QLabel("")
+        self.note_label.setObjectName("HintLabel")
+        self.note_label.hide()
 
     def refresh(self, latitude: float, longitude: float, date_iso: str) -> None:
         """Rellena las tarjetas para ``date_iso`` en la ubicación dada."""
@@ -469,9 +474,18 @@ class WeatherCards(QWidget):
         for key, (text, unavailable) in values.items():
             self._cards[key].set_value(text, unavailable, colors[key])
 
+        # Aviso genérico: el detalle de keys no se enseña en la sección
+        # (viven en Configuración general); solo un «falta conectar».
         notes = [p.note for p in (clear, meteo) if not p.available and p.note]
-        self._note.setText(" · ".join(notes))
-        self._note.setVisible(bool(notes))
+        if notes:
+            self.note_label.setText("Falta conectar la API del clima")
+            self.note_label.setToolTip(
+                "Las API keys se guardan en Configuración general.\n"
+                + " · ".join(notes)
+            )
+            self.note_label.show()
+        else:
+            self.note_label.hide()
 
 
 # --------------------------------------------------------------------------- #

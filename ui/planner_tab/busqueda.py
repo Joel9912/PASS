@@ -343,11 +343,17 @@ class BusquedaTab(QWidget):
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(6)
 
+        # Título a la izquierda y, a la derecha, el aviso de proveedores
+        # sin conectar (así no estira las tarjetas ni les corta el título).
+        self._weather = WeatherCards()
+        title_row = QHBoxLayout()
         title = QLabel("Condiciones meteorológicas y seeing atmosférico")
         title.setObjectName("PanelTitle")
-        layout.addWidget(title)
+        title_row.addWidget(title)
+        title_row.addStretch(1)
+        title_row.addWidget(self._weather.note_label)
+        layout.addLayout(title_row)
 
-        self._weather = WeatherCards()
         layout.addWidget(self._weather)
         layout.addStretch(1)
         return panel
