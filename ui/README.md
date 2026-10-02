@@ -5,7 +5,7 @@ Capa de interfaz de usuario (PyQt6). Una subcarpeta por pestaña principal de PA
 
 ## Estado actual
 - `main_window.py` — `MainWindow` con **barra lateral izquierda colapsable** (iconos por pestaña + texto, ☰ para colapsar, Configuración abajo), área de contenido con `QStackedWidget`, pie con nombre + versión (`v0.1`) y la constante `TABS`.
-  - `PlannerPage` (antes `_planner_page`) es la página del Planificador: **barra `LocationBar` + sus 4 subpestañas en el orden Búsqueda → Catálogo Personal → Planificación → Sesiones Planificadas**. Aquí se concentra todo el cableado entre subpestañas (ninguna importa a otra).
+  - `PlannerPage` (antes `_planner_page`) es la página del Planificador: **4 subpestañas en el orden Búsqueda → Catálogo Personal → Planificación → Sesiones Planificadas**. La `LocationBar` vive **dentro de Búsqueda** (rejilla 3×2, fila 3 izquierda) y `PlannerPage` la expone como `location_bar` para que Planificación la reciba por señal. Aquí se concentra todo el cableado entre subpestañas (ninguna importa a otra).
   - Las demás pestañas son páginas placeholder ("Funcionalidad en construcción").
 - `style.py` — tema oscuro azulado (QSS con paleta única), fuente base 13pt, `apply_style(app)`. Incluye los objectNames de las reglas del Planificador (`PanelTitle`, `SectionTitle`, `MetricCard`, `MetricTitle`, `MetricValue`, `ApplyFilters`, `PrimaryButton`, `CurveTitle`, `CurveSubtitle`, `CurveLegend`, `GroupFrame`, `HintLabel`).
 - `planner_tab/` — **implementado** (4 subpestañas, planetario visual, curva de tránsito en PyQtGraph). Ver su README.

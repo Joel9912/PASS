@@ -57,11 +57,12 @@ Planning-Stacking-Suite/
 │
 ├── ui/                   # Interfaz PyQt6 (una carpeta por pestaña)
 │   ├── main_window.py        # MainWindow: sidebar + contenido + pie (v0.1)
-│   │                         #   PlannerPage = barra LocationBar + 4 subpestañas
+│   │                         #   PlannerPage = 4 subpestañas (LocationBar vive en
+│   │                         #   Búsqueda, fila 3 izquierda, y se comparte por señal)
 │   ├── style.py              # Tema oscuro azulado (QSS + fuente 13pt)
 │   ├── planner_tab/          # ⭐ Implementado: 4 subpestañas
 │   │   ├── widgets.py            # LocationBar, efemérides, curva (PyQtGraph), tarjetas
-│   │   ├── busqueda.py           # Filtros + tabla + efemérides + curva + clima
+│   │   ├── busqueda.py           # Rejilla 3×2: filtros + tabla + efemérides + curva + ubicación + clima
 │   │   ├── catalogo_personal.py  # Objetos y regiones guardados
 │   │   ├── planificacion.py      # Planetario + encuadre + plan de captura + sesión
 │   │   ├── sesiones.py           # Sesiones: editar / completar / eliminar
