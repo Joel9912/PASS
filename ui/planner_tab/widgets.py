@@ -335,7 +335,13 @@ class LocationBar(QFrame):
 class MetricCard(QFrame):
     """Tarjeta título + valor (clima, seeing, métricas de plan)."""
 
-    def __init__(self, title: str, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        title: str,
+        parent: QWidget | None = None,
+        *,
+        title_color: str | None = None,
+    ) -> None:
         super().__init__(parent)
         self.setObjectName("MetricCard")
         self.setMinimumWidth(110)
@@ -346,6 +352,10 @@ class MetricCard(QFrame):
 
         title_label = QLabel(title)
         title_label.setObjectName("MetricTitle")
+        if title_color:
+            # Color propio por tarjeta; el resto del estilo (tamaño,
+            # negrita) sigue viniendo de #MetricTitle.
+            title_label.setStyleSheet(f"color: {title_color};")
         layout.addWidget(title_label)
 
         self._value = QLabel("--")
@@ -412,15 +422,16 @@ class WeatherCards(QWidget):
     proveedores devuelven ``available=False`` y aquí se muestra "Sin datos".
     """
 
-    #: (título, fuente, color por defecto del valor)
+    #: (título, fuente, color del valor, color del título)
     #: Títulos cortos: en una tarjeta estrecha las frases largas se cortaban.
+    #: Cada título con su color para distinguir las tarjetas de un vistazo.
     CARDS = (
-        ("Seeing", "seeing", "#22c55e"),
-        ("Nubosidad", "cloud", "#60a5fa"),
-        ("Humedad", "humidity", "#60a5fa"),
-        ("Rocío", "dew", "#f59e0b"),
-        ("Viento", "wind", "#60a5fa"),
-        ("Transparencia", "transparency", "#22c55e"),
+        ("Seeing", "seeing", "#22c55e", "#22c55e"),          # verde
+        ("Nubosidad", "cloud", "#60a5fa", "#60a5fa"),        # azul
+        ("Humedad", "humidity", "#60a5fa", "#22d3ee"),       # cian
+        ("Rocío", "dew", "#f59e0b", "#f59e0b"),              # ámbar
+        ("Viento", "wind", "#60a5fa", "#a78bfa"),            # violeta
+        ("Transparencia", "transparency", "#22c55e", "#2dd4bf"),  # turquesa
     )
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -430,8 +441,8 @@ class WeatherCards(QWidget):
         layout.setSpacing(8)
 
         self._cards: dict[str, MetricCard] = {}
-        for title, key, _ in self.CARDS:
-            card = MetricCard(title)
+        for title, key, _color, title_color in self.CARDS:
+            card = MetricCard(title, title_color=title_color)
             self._cards[key] = card
             layout.addWidget(card)
 
@@ -462,7 +473,7 @@ class WeatherCards(QWidget):
             if clouds is None
             else (_transparency(clouds), False),
         }
-        colors = {key: color for _title, key, color in self.CARDS}
+        colors = {key: color for _title, key, color, _tc in self.CARDS}
         # La transparencia cambia de color con su cualitativa.
         if not values["transparency"][1]:
             colors["transparency"] = {
