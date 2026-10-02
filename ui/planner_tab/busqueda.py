@@ -403,35 +403,46 @@ class BusquedaTab(QWidget):
         )
 
     def _fill_table(self, rows: list[dict]) -> None:
-        self._table.setRowCount(len(rows))
-        for index, row in enumerate(rows):
-            values = (
-                str(index + 1),
-                str(row.get("object_id") or "--"),
-                _type_label(row.get("type")),
-                _constellation_label(row.get("constellation")),
-                _number(row.get("magnitude"), "{:.2f}"),
-                format_ra(row.get("ra_hours")),
-                format_dec(row.get("dec_deg")),
-                format_size(row.get("size_major_arcmin"), row.get("size_minor_arcmin")),
-                str(row.get("transit_local") or "--"),
-                _number(row.get("hours_above_30"), "{:.1f} h"),
-            )
-            for column, value in enumerate(values):
-                item = QTableWidgetItem(value)
-                if column == 1:
-                    # El ID va en azul, como en el original.
-                    item.setForeground(QColor(PALETTE["accentLight"]))
-                if column in (4, 8, 9):
-                    item.setTextAlignment(
-                        Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-                    )
-                elif column == 0:
-                    item.setTextAlignment(
-                        Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter
-                    )
-                self._table.setItem(index, column, item)
-        self._table.resizeRowsToContents()
+        header = self._table.horizontalHeader()
+        modo_previo = header.sectionResizeMode(0)
+        # ResizeToContents recalcula el tamaño de TODAS las filas de la
+        # columna en cada setItem (~36 ms/celda con 500 filas): la interfaz
+        # se congelaba ~90 s. Solo interactivo durante el llenado.
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        try:
+            self._table.setRowCount(len(rows))
+            for index, row in enumerate(rows):
+                values = (
+                    str(index + 1),
+                    str(row.get("object_id") or "--"),
+                    _type_label(row.get("type")),
+                    _constellation_label(row.get("constellation")),
+                    _number(row.get("magnitude"), "{:.2f}"),
+                    format_ra(row.get("ra_hours")),
+                    format_dec(row.get("dec_deg")),
+                    format_size(row.get("size_major_arcmin"), row.get("size_minor_arcmin")),
+                    str(row.get("transit_local") or "--"),
+                    _number(row.get("hours_above_30"), "{:.1f} h"),
+                )
+                for column, value in enumerate(values):
+                    item = QTableWidgetItem(value)
+                    if column == 1:
+                        # El ID va en azul, como en el original.
+                        item.setForeground(QColor(PALETTE["accentLight"]))
+                    if column in (4, 8, 9):
+                        item.setTextAlignment(
+                            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+                        )
+                    elif column == 0:
+                        item.setTextAlignment(
+                            Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter
+                        )
+                    self._table.setItem(index, column, item)
+            self._table.resizeRowsToContents()
+        finally:
+            # Un solo cálculo de anchos al restaurar (misma estética que antes).
+            header.setSectionResizeMode(modo_previo)
+            header.resizeSections()
 
     def _refresh_ephemeris(self) -> None:
         if self._latitude is None or self._longitude is None:
