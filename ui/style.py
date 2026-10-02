@@ -87,8 +87,8 @@ QMainWindow {
     background-color: $panel;
     color: $textDim;
     border-top: 1px solid $border;
-    padding: 6px;
-    font-size: 12pt;
+    padding: 2px;
+    font-size: 11pt;
 }
 
 /* ====== Subpestañas horizontales (con nombre) ====== */
@@ -105,7 +105,7 @@ QTabBar::tab {
     border-bottom: none;
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
-    padding: 8px 16px;
+    padding: 6px 14px;
     margin-right: 4px;
 }
 QTabBar::tab:selected {
@@ -123,7 +123,7 @@ QPushButton {
     border: 1px solid $border;
     border-radius: 6px;
     color: $text;
-    padding: 6px 14px;
+    padding: 3px 14px;
 }
 QPushButton:hover {
     border-color: $accent;
@@ -138,7 +138,7 @@ QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {
     border: 1px solid $border;
     border-radius: 6px;
     color: $text;
-    padding: 6px 8px;
+    padding: 3px 8px;
     selection-background-color: $accent;
 }
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus,

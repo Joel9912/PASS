@@ -164,8 +164,9 @@ class LocationBar(QFrame):
         self.setObjectName("GroupFrame")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(6)
+        # Compacto: la 3ª fila cede altura a Filtros y Efemérides.
+        layout.setContentsMargins(10, 2, 10, 2)
+        layout.setSpacing(4)
 
         # Fila 1: etiqueta + selector de ubicación guardada (o manual).
         head = QHBoxLayout()
@@ -715,8 +716,8 @@ class EphemerisPanel(QFrame):
         self.setObjectName("GroupFrame")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(6)
+        layout.setContentsMargins(10, 6, 10, 6)
+        layout.setSpacing(5)
 
         title = QLabel("Efemérides Sol y Luna")
         title.setObjectName("PanelTitle")

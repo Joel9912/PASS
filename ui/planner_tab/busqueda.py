@@ -176,7 +176,7 @@ class BusquedaTab(QWidget):
         #   fila 3: Ubicación          | Condiciones meteorológicas
         grid = QGridLayout()
         grid.setContentsMargins(0, 0, 0, 0)
-        grid.setSpacing(10)
+        grid.setSpacing(8)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 3)
         grid.setRowStretch(0, 3)
@@ -202,9 +202,11 @@ class BusquedaTab(QWidget):
         panel = QWidget()
         panel.setObjectName("GroupFrame")
         layout = QGridLayout(panel)
-        layout.setContentsMargins(10, 8, 10, 8)
+        # Compacto a propósito: esta fila compite por altura con Efemérides y
+        # un campo más alto = texto cortado cuando la rejilla la estrangula.
+        layout.setContentsMargins(8, 2, 8, 2)
         layout.setHorizontalSpacing(8)
-        layout.setVerticalSpacing(6)
+        layout.setVerticalSpacing(3)
         layout.setColumnStretch(1, 1)
 
         title = QLabel("Filtros de búsqueda")

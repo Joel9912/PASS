@@ -105,7 +105,8 @@ class PlannerPage(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
+        # Márgenes justos: cada píxel de aquí es de la rejilla de Búsqueda.
+        layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(10)
 
         self.busqueda = BusquedaTab()
