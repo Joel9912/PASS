@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Entorno virtual
+.venv/
+venv/
+
+# Tests y herramientas
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Datos locales del programa (base de SQLite, caché de catálogos, etc.)
+data/

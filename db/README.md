@@ -1,0 +1,21 @@
+# db/
+
+## Qué es
+Capa de persistencia de PAS.S: conexión única a **SQLite** (módulo `sqlite3` de la librería estándar, sin dependencias externas) y esquema en SQL.
+
+## Estado actual
+- `connection.py` — conexión única (`get_connection`; aplica `schema.sql` completo en la primera conexión, idempotente), `init_db()` y `close_connection()`. Base en `data/pass.db` (no versionada).
+  - **`_MIGRATIONS`**: dict `tabla → columnas` que se aplica con `PRAGMA table_info` + `ALTER TABLE` (SQLite no admite `ADD COLUMN IF NOT EXISTS`). Hoy cubre `locations`, `equipment_setups`, `personal_catalog` y `planned_sessions`.
+- `schema.sql` — tablas: `locations` (con `utc_offset_hours`, desfase horario de la ubicación), `equipment_setups`, `equipment_images`, `personal_catalog` (con `kind`, `ra_hours`/`dec_deg`, FOV y teselas para las regiones), `planned_sessions` (con `target_kind`, encuadre y `status`), `settings`, `catalog` (objetos deep-sky) y `stars`.
+- Sin ORM: consultas directas con `sqlite3`.
+
+## Qué hacer aquí
+- Aquí SOLO vive la capa de datos: conexión, esquema y migraciones.
+- Al añadir una tabla: editar `schema.sql` (siempre `IF NOT EXISTS`) y documentarla aquí.
+- Al añadir una columna: **ambas cosas** — la columna en `schema.sql` (bases nuevas) y una entrada en `_MIGRATIONS` (bases existentes) — y documentarlo aquí.
+- El resto de carpetas acceden a datos vía `db.connection.get_connection()`; no abran sus propias conexiones.
+- Fecha/hora se guardan en TEXT con formato `datetime('now')` (UTC).
+
+## Planes futuros
+- Migraciones versionadas con número de revisión si el esquema crece más.
+- Tablas de sesiones completadas/apiladas cuando el Apilador las necesite.

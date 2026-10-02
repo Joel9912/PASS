@@ -1,0 +1,145 @@
+"""Tránsito analítico rápido (sin astropy) para la tabla de Búsqueda.
+
+La tabla de resultados puede mostrar cientos de objetos a la vez; para cada
+fila necesitamos horas de tránsito y horas sobre 30° sin pagar el coste de
+astropy por objeto. Estas fórmulas son aproximadas (~1-2 min de error en el
+tránsito) pero suficientes para planificar y ordenar la tabla.
+
+La curva del objeto SELECCIONADO sí usa astropy (``planners.transit``), que
+es la que el usuario mira con detalle.
+"""
+from __future__ import annotations
+
+import math
+
+#: Tasa sideral: la hora sidereal avanza 1.0027379 h por hora solar.
+_SIDEREAL_RATE = 1.0027379
+
+#: Constantes de la GMST continua (Astronomical Almanac): GMST en horas
+#: como función del Julian Date. Verificada contra astropy a <0.01 min.
+_GMST_J2000_H = 18.697374558
+_GMST_RATE_PER_DAY = 24.06570982441908
+_JD_J2000 = 2451545.0
+
+
+def max_altitude(latitude_deg: float, dec_deg: float) -> float:
+    """Altitud máxima (culminación) de un objeto: ``90 − |lat − dec|``.
+
+    Puede ser negativa (el objeto nunca cruza el horizonte). La UI decide
+    si recorta a 0 o lo muestra tal cual.
+    """
+    return 90.0 - abs(latitude_deg - dec_deg)
+
+
+def is_circumpolar(latitude_deg: float, dec_deg: float) -> bool:
+    """¿El objeto nunca se pone para esa latitud? (no cruza el horizonte)."""
+    if latitude_deg >= 0:
+        return dec_deg >= 90.0 - latitude_deg
+    return dec_deg <= -90.0 - latitude_deg
+
+
+def never_rises(latitude_deg: float, dec_deg: float) -> bool:
+    """¿El objeto nunca sale? (su culminación queda bajo el horizonte)."""
+    if latitude_deg >= 0:
+        return dec_deg <= latitude_deg - 90.0
+    return dec_deg >= 90.0 + latitude_deg
+
+
+def _julian_day_at_0h_utc(date_iso: str) -> float:
+    """Julian Date a 0h UT de ``date_iso`` ('2026-10-02' → 2461315.5)."""
+    from datetime import date
+
+    year, month, day = (int(part) for part in date_iso[:10].split("-"))
+    return date(year, month, day).toordinal() + 1721424.5
+
+
+def gmst_0h_hours(date_iso: str) -> float:
+    """GMST (horas) a 0h UT del día dado, con la fórmula continua del JD.
+
+    ``GMST = 18.697374558 + 24.06570982441908·(JD − 2451545.0)`` (módulo 24),
+    que es la del Astronomical Almanac. El error frente a astropy es <0.01 min.
+    """
+    jd0 = _julian_day_at_0h_utc(date_iso)
+    return (_GMST_J2000_H + _GMST_RATE_PER_DAY * (jd0 - _JD_J2000)) % 24.0
+
+
+def transit_utc_hours(ra_hours: float, date_iso: str, longitude_deg: float = 0.0) -> float:
+    """Hora (UTC, decimal) de la culminación de ``ra_hours`` en ``date_iso``.
+
+    El objeto culmina cuando la hora sidereal local iguala su RA, es decir
+    cuando ``GMST = RA − longitud`` (longitud este positiva). Se resuelve con
+    ``GMST(t) = GMST_0h + t·1.0027379``.
+
+    ``longitude_deg`` es la del observador; con 0 (por defecto) devuelve la
+    culminación sobre el meridiano de Greenwich.
+    """
+    lst_target = (ra_hours - longitude_deg / 15.0) % 24.0
+    gmst0 = gmst_0h_hours(date_iso)
+    return ((lst_target - gmst0) % 24.0 / _SIDEREAL_RATE) % 24.0
+
+
+def local_utc_offset(
+    longitude_deg: float, utc_offset_hours: float | None = None
+) -> float:
+    """Horas que hay que sumar a UTC para obtener la hora local del lugar.
+
+    Si la ubicación guarda su desfase horario se usa ese (hora de reloj, con
+    horario de verano incluido). Si no, se recurre a la longitud: eso da
+    **hora solar local**, válida para cálculos pero que puede diferir del
+    reloj en hasta ~2 h según el país y la época del año.
+
+    Todo lo que convierta a hora local (curvas, culminación, efemérides)
+    pasa por aquí: una única fuente de verdad. Sin astropy, para que la
+    tabla de tránsitos siga siendo barata.
+    """
+    if utc_offset_hours is not None:
+        return float(utc_offset_hours)
+    return longitude_deg / 15.0
+
+
+def transit_local_hours(
+    ra_hours: float,
+    date_iso: str,
+    longitude_deg: float,
+    utc_offset_hours: float | None = None,
+) -> float:
+    """Hora local (decimal) de la culminación, en el huso de la ubicación."""
+    utc_hours = transit_utc_hours(ra_hours, date_iso, longitude_deg)
+    return (
+        utc_hours + local_utc_offset(longitude_deg, utc_offset_hours)
+    ) % 24.0
+
+
+def hours_above_altitude(latitude_deg: float, dec_deg: float, min_alt_deg: float) -> float:
+    """Horas al día que el objeto está sobre ``min_alt_deg`` (0-24).
+
+    Fórmula clásica del arco horario::
+
+        cos(H) = (sin(alt) − sin(lat)·sin(dec)) / (cos(lat)·cos(dec))
+        horas  = 2·H / 15
+
+    Devuelve 0 si nunca alcanza esa altura y 24 si siempre está sobre ella
+    (círculo polar / objeto circumpolar sobre el umbral).
+    """
+    cos_h = (
+        (math.sin(math.radians(min_alt_deg))
+         - math.sin(math.radians(latitude_deg)) * math.sin(math.radians(dec_deg)))
+        / (math.cos(math.radians(latitude_deg)) * math.cos(math.radians(dec_deg)))
+    )
+    if cos_h >= 1.0:
+        return 0.0
+    if cos_h <= -1.0:
+        return 24.0
+    arc_hours = math.degrees(math.acos(cos_h)) / 15.0
+    return round(2.0 * arc_hours, 2)
+
+
+def format_transit_hours(hour_decimal: float) -> str:
+    """18.6 → '18:36' (para la columna Tránsito de la tabla)."""
+    hour_decimal = hour_decimal % 24.0
+    hours = int(hour_decimal)
+    minutes = int(round((hour_decimal - hours) * 60.0))
+    if minutes == 60:
+        hours = (hours + 1) % 24
+        minutes = 0
+    return f"{hours:02d}:{minutes:02d}"

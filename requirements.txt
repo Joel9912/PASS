@@ -1,0 +1,9 @@
+# PAS.S — Dependencias (versiones verificadas en .venv)
+PyQt6==6.11.0
+astropy==8.0.1
+numpy==2.5.3
+PyYAML==6.0.3
+pyqtgraph==0.14.0
+
+# Tests
+pytest>=8.0
