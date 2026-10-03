@@ -39,6 +39,7 @@ from planners.moon_distance import (
     capture_windows,
     format_hour_range,
     min_moon_distance,
+    transition_zone,
     unwrap_hours,
 )
 from planners.transit import NightCurve, NightInfo, night_info
@@ -55,7 +56,7 @@ COLOR_LIMIT = "#ef4444"                   # rojo: línea de 30°
 COLOR_IDEAL = (34, 197, 94, 55)           # verde: ventana ideal
 COLOR_POSSIBLE = (245, 158, 11, 45)       # ámbar: ventana posible
 COLOR_NIGHT = (255, 255, 255, 26)         # gris: noche astronómica
-COLOR_ZONE = (251, 191, 36, 55)           # amarillo: zona ±2° (luna/45°)
+COLOR_ZONE = (251, 191, 36, 55)           # amarillo: transición ±2°
 
 COLOR_DAY = "#94a3b8"                     # barra: día
 COLOR_TWILIGHT = "#475569"                # barra: crepúsculo
@@ -930,9 +931,10 @@ class TransitCurve(QWidget):
     objeto** (azul) y la de la **Luna** (gris) — esta última muestra a
     qué hora sale y se oculta la Luna y qué altura alcanza. Debajo se
     pintan las bandas de noche astronómica, las ventanas de captura
-    Ideal/Possible y la **zona ±2°** (amarilla): tramos en los que el
-    objeto está a ±2° del umbral de separación mínima o de los 45° de
-    altitud. La separación objeto-Luna se lee como **texto** en el
+    Ideal/Possible y la **Transición ±2°** (amarilla): los tramos donde
+    se pasa de Posible a Ideal o de Ideal a Posible, es decir, a ±2° de
+    los 45° de altitud o del umbral de separación mínima. La separación
+    objeto-Luna se lee como **texto** en el
     subtítulo («Separación» y «Mínimo»), junto con las líneas de
     Captura Ideal y Captura Posible (rangos horarios y duración).
 
@@ -1028,7 +1030,7 @@ class TransitCurve(QWidget):
             pen=pg.mkPen(QColor(34, 197, 94, 180), width=1),
             z_value=-10,
         )
-        # Zona ±2° (umbral lunar / 45° de altitud): por encima de las
+        # Transición ±2° (umbral lunar / 45° de altitud): por encima de las
         # bandas (-9) para que se vea incluso sobre Ideal/Posible.
         self._zone_band = _BandPool(
             item,
@@ -1059,9 +1061,9 @@ class TransitCurve(QWidget):
         """Leyenda HTML: minimal (estado vacío) o completa con las bandas.
 
         Solo describe lo que se pinta en el gráfico: altitud del objeto,
-        límite de 30°, curva de la Luna, la zona ±2° y las dos ventanas
-        de captura. La separación y los rangos horarios viven en el
-        subtítulo.
+        límite de 30°, curva de la Luna y las tres bandas de color en el
+        orden en que se apilan (Ideal, Transición ±2° y Posible). La
+        separación y los rangos horarios viven en el subtítulo.
         """
         alt = f'<span style="color:{COLOR_ALTITUDE}">━━</span> Altitud'
         if not full:
@@ -1070,8 +1072,8 @@ class TransitCurve(QWidget):
             f'{alt} &nbsp; '
             f'<span style="color:{COLOR_LIMIT}">- -</span> 30° &nbsp; '
             f'<span style="color:{COLOR_MOON}">━━</span> Luna &nbsp; '
-            f'<span style="color:#fbbf24">■</span> Zona ±2° &nbsp; '
             f'<span style="color:#22c55e">■</span> Ideal &nbsp; '
+            f'<span style="color:#fbbf24">■</span> Transición ±2° &nbsp; '
             f'<span style="color:#f59e0b">■</span> Posible'
         )
 
@@ -1166,20 +1168,16 @@ class TransitCurve(QWidget):
         self._ideal_band.set_spans(
             _contiguous_spans(hours, [w == WINDOW_IDEAL for w in windows])
         )
-        # Zona ±2°: el objeto a tiro del umbral lunar o de los 45° de
-        # altitud (ambas condiciones comparten la misma banda amarilla).
-        # Con la Luna bajo el horizonte no hay umbral lunar que vigilar
-        # (igual que en las ventanas): solo cuenta la transición de altitud.
-        zone_mask = [
-            (
-                moon_alt > 0.0 and abs(separation - min_dist) <= 2.0
-            )
-            or abs(altitude - 45.0) <= 2.0
-            for separation, altitude, moon_alt in zip(
-                curve.moon_separations, curve.altitudes, curve.moon_altitudes,
-                strict=False,
-            )
-        ]
+        # Zona Transición ±2° (ver ``transition_zone``): solo se enciende
+        # si de verdad se pasa de Posible a Ideal o de Ideal a Posible,
+        # y solo durante la noche astronómica.
+        zone_mask = transition_zone(
+            curve.altitudes,
+            curve.moon_separations,
+            curve.moon_altitudes,
+            curve.astro_night,
+            illumination_pct,
+        )
         self._zone_band.set_spans(_contiguous_spans(hours, zone_mask))
         self._limit_line.show()          # límite de 30° (oculto en clear())
 
