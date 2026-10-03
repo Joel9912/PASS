@@ -5,7 +5,7 @@ usuario en ``settings`` (clave ``siril_path``).
 """
 from shutil import which
 
-from db.connection import get_connection
+from db.settings import get_setting, set_setting
 
 SETTINGS_KEY = "siril_path"
 
@@ -18,21 +18,9 @@ def find_siril() -> str | None:
     path = which("siril") or which("siril-cli") or which("Siril.exe")
     if path:
         return path
-
-    row = get_connection().execute(
-        "SELECT value FROM settings WHERE key = ?", (SETTINGS_KEY,)
-    ).fetchone()
-    if row and row["value"]:
-        return row["value"]
-    return None
+    return get_setting(SETTINGS_KEY)
 
 
 def save_user_path(path: str) -> None:
     """Guarda la ruta que eligió el usuario (fallback cuando no está en el PATH)."""
-    conn = get_connection()
-    conn.execute(
-        "INSERT INTO settings (key, value) VALUES (?, ?)"
-        " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        (SETTINGS_KEY, path),
-    )
-    conn.commit()
+    set_setting(SETTINGS_KEY, path)

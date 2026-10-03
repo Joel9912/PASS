@@ -4,7 +4,7 @@
 Integración de PAS.S con **SirIL** para calibrar, auditar y apilar sesiones completadas. SirIL es una herramienta externa (CLI): aquí NO se programa ningún motor propio de calibrado o apilado.
 
 ## Estado actual
-- `siril_finder.py` — detección de SirIL: PATH del sistema → ruta guardada por el usuario en `settings` (`siril_path`).
+- `siril_finder.py` — detección de SirIL: PATH del sistema → ruta guardada por el usuario en `settings` (`siril_path`), vía los helpers de `db.settings`.
 - `session_parser.py` — detecta estructura de cada sesión (`lights`, `flats`, `darks`, `bias`, `dark_flats` y carpeta `masters/`).
 - `calibrator.py` — calibración **automática** por sesión → salida a `data/working/calibrados/<sesion>/`.
 - `global_pool.py` — pool global de **referencias** a los lights calibrados (cero copias).

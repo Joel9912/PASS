@@ -2,6 +2,8 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
+from db.settings import get_setting, set_setting
+
 
 @dataclass
 class WeatherForecast:
@@ -32,9 +34,9 @@ class WeatherProvider(ABC):
 
 def load_api_key(settings_key: str) -> str | None:
     """Lee la API key desde la tabla ``settings``; ``None`` si no está definida."""
-    from db.connection import get_connection
+    return get_setting(settings_key)
 
-    row = get_connection().execute(
-        "SELECT value FROM settings WHERE key = ?", (settings_key,)
-    ).fetchone()
-    return row["value"] if row else None
+
+def save_api_key(settings_key: str, value: str) -> None:
+    """Guarda la API key en la tabla ``settings`` (nunca en código ni en el repo)."""
+    set_setting(settings_key, value)
