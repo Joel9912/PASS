@@ -20,5 +20,11 @@ class ClearOutside(WeatherProvider):
                 available=False,
                 note="Falta la API key de Clear Outside (Ajustes > Clima)",
             )
-        # TODO: llamada real a la API de Clear Outside cuando se añada la key.
-        raise NotImplementedError
+        # TODO: llamada real a la API de Clear Outside. Mientras tanto,
+        # no se lanza: la UI debe seguir funcionando con la key guardada.
+        return WeatherForecast(
+            provider="clear_outside",
+            date_iso=date_iso,
+            available=False,
+            note="API key de Clear Outside guardada; la llamada real está pendiente",
+        )

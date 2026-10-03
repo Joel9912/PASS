@@ -12,6 +12,8 @@ Tests de PAS.S con **pytest** (83 tests): validan que la estructura y la base de
 - `test_capture_plan.py` — puntuación offline y `best_dates` con astropy (orden, ventanas, sin noche → vacío, `utc_offset_hours` en la hora de culminación).
 - `test_ldn_loader.py` — parseo de las nebulosas oscuras de Lynds (datos inline, offline).
 - `test_settings.py` — `db.settings` (`get_setting`/`set_setting` con upsert) sobre una BD en memoria: roundtrip de API keys (`save_api_key`/`load_api_key`) y de la ruta de SirIL (`save_user_path`/`find_siril`, con `which` simulado: PATH primero, `settings` como fallback).
+- `test_weather.py` — proveedores de clima **nunca lanzan**: sin key → `available=False` con nota de key; con key → `available=False` con nota «llamada real pendiente» (regresión del `NotImplementedError` que crasheaba la UI al guardar una key).
+- `conftest.py` — fixture compartido `memory_settings` (tabla `settings` en memoria para `test_settings.py` y `test_weather.py`).
 
 ## Qué hacer aquí
 - Ejecutar: `pytest` desde la raíz (con el venv activado). Sin flags: los tests de UI se hacen aparte.

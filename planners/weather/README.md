@@ -5,7 +5,7 @@ Integración de datos atmosféricos para el Planificador: **Clear Outside** (pro
 
 ## Estado actual
 - `base.py` — interfaz `WeatherProvider`, dataclass `WeatherForecast` y lectura/escritura de API keys (`load_api_key` / `save_api_key`) en `settings` vía `db.settings`.
-- `clear_outside.py` y `meteoblue.py` — implementaciones **en modo mock**: sin API key devuelven `available=False` con aviso legible (no lanzan excepciones). Las llamadas reales están pendientes.
+- `clear_outside.py` y `meteoblue.py` — implementaciones **en modo mock**: sin API key devuelven `available=False` con aviso legible; **con key guardada también** devuelven `available=False` con nota «llamada real pendiente» (nunca lanzan: la UI no debe crashear al guardar una key). Las llamadas reales están pendientes.
 - `__init__.py` — reexporta `ClearOutside`, `Meteoblue`, `WeatherForecast`, `WeatherProvider` y `load_api_key`, para que la UI haga un único `from planners.weather import ...`.
 
 ## Qué hacer aquí

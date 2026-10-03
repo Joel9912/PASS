@@ -1,26 +1,10 @@
 """settings: claves-valor, API keys del clima y ruta de SirIL."""
-import sqlite3
-from pathlib import Path
-
-import pytest
-
 from db import settings as settings_mod
 from planners.weather import base as weather_base
 from stacks import siril_finder
 
-ROOT = Path(__file__).resolve().parent.parent
-
-
-@pytest.fixture()
-def memory_settings(monkeypatch):
-    """Tabla ``settings`` en memoria: sustituye la conexión global."""
-    conn = sqlite3.connect(":memory:")
-    conn.row_factory = sqlite3.Row
-    schema = (ROOT / "db" / "schema.sql").read_text(encoding="utf-8")
-    conn.executescript(schema)
-    monkeypatch.setattr(settings_mod, "get_connection", lambda: conn)
-    yield conn
-    conn.close()
+# El fixture ``memory_settings`` vive en conftest.py (compartido con
+# test_weather.py).
 
 
 def test_set_get_roundtrip(memory_settings):

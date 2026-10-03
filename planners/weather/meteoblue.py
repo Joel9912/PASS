@@ -20,5 +20,11 @@ class Meteoblue(WeatherProvider):
                 available=False,
                 note="Falta la API key de Meteoblue (Ajustes > Clima)",
             )
-        # TODO: llamada real a la API de Meteoblue cuando se añada la key.
-        raise NotImplementedError
+        # TODO: llamada real a la API de Meteoblue. Mientras tanto,
+        # no se lanza: la UI debe seguir funcionando con la key guardada.
+        return WeatherForecast(
+            provider="meteoblue",
+            date_iso=date_iso,
+            available=False,
+            note="API key de Meteoblue guardada; la llamada real está pendiente",
+        )

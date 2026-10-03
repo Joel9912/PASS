@@ -507,10 +507,15 @@ class WeatherCards(QWidget):
             self._cards[key].set_value(text, unavailable, colors[key])
 
         # Aviso genérico: el detalle de keys no se enseña en la sección
-        # (viven en Configuración general); solo un «falta conectar».
+        # (viven en Configuración general); solo un «falta conectar» o,
+        # si ya hay key pero la llamada real sigue en el horno, un
+        # «integración pendiente».
         notes = [p.note for p in (clear, meteo) if not p.available and p.note]
         if notes:
-            self.note_label.setText("Falta conectar la API del clima")
+            if any(note.startswith("Falta") for note in notes):
+                self.note_label.setText("Falta conectar la API del clima")
+            else:
+                self.note_label.setText("API guardada: integración pendiente")
             self.note_label.setToolTip(
                 "Las API keys se guardan en Configuración general.\n"
                 + " · ".join(notes)
