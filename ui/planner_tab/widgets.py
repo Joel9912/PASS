@@ -13,6 +13,7 @@ Reglas aplicables:
 """
 from __future__ import annotations
 
+import math
 from datetime import datetime
 
 import pyqtgraph as pg
@@ -635,23 +636,45 @@ class MoonPhaseWidget(QWidget):
         painter.end()
 
 
+#: Altura fija de la barra (px): 24 de franja de color + 20 para las marcas
+#: y las horas de abajo. Petición del usuario: la barra **no crece** ni con
+#: los datos ni con el sobrante del cuadro — ese aire se lo llevan los
+#: rótulos de «Puesta de Sol» y «Noche astronómica».
+DAY_NIGHT_BAR_HEIGHT = 44
+
+#: Margen del eje dinámico: 1 h antes de la puesta y 1 h después de la
+#: salida, el mismo criterio que la Curva de Tránsito.
+BAR_RANGE_MARGIN_HOURS = 1.0
+
+#: Pasos de las marcas de hora; se usa el primero que quepa en el ancho.
+TICK_STEPS_HOURS = (2, 3, 4, 6)
+#: Ancho mínimo (px) que se reserva a cada etiqueta de hora.
+TICK_LABEL_WIDTH = 46.0
+
+
 class DayNightBar(QWidget):
-    """Barra de 24 h con día, crepúsculo y noche astronómica.
+    """Barra de día, crepúsculo y noche sobre el rango puesta−1 h … salida+1 h.
+
+    El eje es **dinámico**, igual que la Curva de Tránsito: empieza 1 h antes
+    de la puesta del Sol y termina 1 h después de la salida, en horas locales
+    **desenvueltas** para poder cruzar la medianoche. Sin puesta/salida no
+    hay rango y se pinta el día completo, de 00 h a 24 h.
 
     Los cinco hitos (puesta, ocaso, amanecer, salida) vienen ya convertidos a
-    hora local decimal; esta clase solo clasifica cada píxel y pinta.
+    hora local decimal; esta clase decide el rango, clasifica cada píxel y
+    pinta. La altura es **fija** (44 px, ver ``DAY_NIGHT_BAR_HEIGHT``).
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setMinimumHeight(36)
-        # Vertical: Preferred, no Fixed — así el sobrante del panel de
-        # efemérides se reparte aquí (via stretch) en vez de quedar pegado
-        # al fondo del cuadro. La barra se dibuja a la altura disponible.
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        # Fija: no se estira con el sobrante del panel (petición del usuario).
+        self.setFixedHeight(DAY_NIGHT_BAR_HEIGHT)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._marks: dict[str, float | None] = {
             "sunset": None, "dusk": None, "dawn": None, "sunrise": None,
         }
+        #: (inicio, fin) en horas locales desenvueltas; None → día completo.
+        self._range: tuple[float, float] | None = None
 
     def set_marks(
         self,
@@ -661,7 +684,49 @@ class DayNightBar(QWidget):
         sunrise: float | None,
     ) -> None:
         self._marks = {"sunset": sunset, "dusk": dusk, "dawn": dawn, "sunrise": sunrise}
+        # Eje dinámico: de 1 h antes de la puesta a 1 h después de la salida.
+        if sunset is not None and sunrise is not None:
+            start = sunset - BAR_RANGE_MARGIN_HOURS
+            end = sunrise + BAR_RANGE_MARGIN_HOURS
+            if end <= start:
+                end += 24.0            # la salida es a la mañana siguiente
+            self._range = (start, end)
+        else:
+            self._range = None
         self.update()
+
+    def hour_range(self) -> tuple[float, float]:
+        """Rango visible en horas locales desenvueltas (0-24 sin datos)."""
+        return self._range if self._range is not None else (0.0, 24.0)
+
+    def tick_hours(self, width: float | None = None) -> list[float]:
+        """Horas redondas dentro del rango, con el paso que quepa en ``width``.
+
+        Empieza a 2 h (como la Curva de Tránsito: «17:00», «19:00»…) y sube a
+        3, 4 o 6 h si las etiquetas no caben. Las etiquetas repetidas se
+        descartan (p. ej. los dos «00:00» de los extremos de un día completo).
+        """
+        if width is None:
+            width = float(self.width()) or 1.0
+        start, end = self.hour_range()
+        px_per_hour = width / max(end - start, 1e-9)
+        step = TICK_STEPS_HOURS[-1]
+        for candidate in TICK_STEPS_HOURS:
+            if candidate * px_per_hour >= TICK_LABEL_WIDTH:
+                step = candidate
+                break
+
+        ticks: list[float] = []
+        seen: set[str] = set()
+        for hour in range(math.ceil(start), math.floor(end) + 1):
+            if hour % step:
+                continue
+            label = fmt_hhmm(hour % 24)
+            if label in seen:
+                continue
+            seen.add(label)
+            ticks.append(float(hour))
+        return ticks
 
     @staticmethod
     def _in_interval(hour: float, start: float, end: float) -> bool:
@@ -700,16 +765,20 @@ class DayNightBar(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
-        # Altura a la altura disponible, no fija: al crecer el panel de
-        # efemérides, la barra se lleva el sobrante (20 px reservados
-        # abajo para los ticks «00h…24h» y las marcas). Con 36 px de
-        # alto da 16 px, casi los 14 de siempre.
+        # Altura: la disponible, con 20 px reservados abajo para las marcas
+        # y las horas. Con la altura fija de 44 px da 24 px de franja.
         rect = QRectF(0, 4, self.width(), max(14, self.height() - 20))
         painter.setPen(Qt.PenStyle.NoPen)
 
+        # Eje dinámico: cada píxel es una hora del rango (desenvuelta, para
+        # cruzar la medianoche) y se clasifica ya envuelta en 24 h.
+        start, end = self.hour_range()
+        span = end - start
+        width = max(rect.width(), 1)
+
         for x in range(int(rect.width())):
-            hour = (x + 0.5) / max(rect.width(), 1) * 24.0
-            kind = self._kind(hour)
+            hour = start + (x + 0.5) / width * span
+            kind = self._kind(hour % 24.0)
             color = {
                 "day": COLOR_DAY,
                 "twilight": COLOR_TWILIGHT,
@@ -723,22 +792,23 @@ class DayNightBar(QWidget):
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRect(rect)
 
-        # Marcas de 6 h
+        # Marcas de hora dentro del rango (HH:MM cada 2 h, como la curva)
         painter.setPen(QColor(PALETTE["textDim"]))
         font = painter.font()
         font.setPointSize(8)
         painter.setFont(font)
-        for tick in (0, 6, 12, 18, 24):
-            x = rect.left() + tick / 24.0 * rect.width()
+        for hour in self.tick_hours(rect.width()):
+            x = rect.left() + (hour - start) / span * rect.width()
             painter.drawLine(QPointF(x, rect.bottom()), QPointF(x, rect.bottom() + 2))
-            label = f"{tick % 24:02d}h"
+            # La etiqueta no se sale del widget en los extremos del rango.
+            left = min(max(x - 16.0, 0.0), max(self.width() - 32.0, 0.0))
             painter.drawText(
-                QRectF(x - 16, rect.bottom() + 3, 32, 13),
+                QRectF(left, rect.bottom() + 3, 32, 13),
                 Qt.AlignmentFlag.AlignCenter,
-                label,
+                fmt_hhmm(hour % 24),
             )
 
-        # Hitos de la noche
+        # Hitos de la noche: si caen fuera del rango, no se pintan
         for key, color in (
             ("sunset", "#f59e0b"), ("dusk", "#818cf8"),
             ("dawn", "#818cf8"), ("sunrise", "#f59e0b"),
@@ -746,7 +816,11 @@ class DayNightBar(QWidget):
             value = self._marks.get(key)
             if value is None:
                 continue
-            x = rect.left() + value / 24.0 * rect.width()
+            if not start <= value <= end:
+                if not start <= value + 24.0 <= end:
+                    continue
+                value += 24.0        # la salida es a la mañana siguiente
+            x = rect.left() + (value - start) / span * rect.width()
             painter.setPen(QPen(QColor(color), 1.6))
             painter.drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()))
         painter.end()
@@ -855,21 +929,22 @@ class EphemerisPanel(QFrame):
         moon_text.addWidget(self._illum_label)
         moon_row.addLayout(moon_text, 1)
         moon_row.addStretch(1)
-        # stretch=1: cuando el cuadro crece, la Luna gana un par de
-        # píxeles de aire en vez de dejarlos todos al fondo del panel.
+        # Reparto del aire del cuadro: 1:3:3 entre la Luna, «Puesta de Sol»
+        # y «Noche astronómica» (la Luna su par de píxeles de siempre y el
+        # resto a los dos rótulos de abajo, que es lo que pidió el usuario).
         layout.addLayout(moon_row, 1)
 
-        # --- Luz del día y noche
-        day_label = QLabel("LUZ DEL DÍA Y NOCHE ASTRONÓMICA")
+        # --- Puesta de Sol y noche astronómica (rótulo renombrado por
+        # petición del usuario: antes decía «LUZ DEL DÍA Y NOCHE ASTRONÓMICA»)
+        day_label = QLabel("PUESTA DE SOL Y NOCHE ASTRONÓMICA")
         day_label.setObjectName("MetricTitle")
         layout.addWidget(day_label)
 
         self._bar = DayNightBar()
-        # stretch=6: la gráfica es la que más aprovecha crecer (la barra
-        # se dibuja a la altura disponible) y se lleva el grueso del
-        # sobrante; el resto se reparte 1:6:1:1 entre Luna, barra,
-        # Puesta de Sol y Noche astronómica.
-        layout.addWidget(self._bar, 6)
+        # Sin stretch: la barra es de altura fija (44 px) y no crece ni con
+        # los datos ni con el sobrante del cuadro; el aire se lo llevan los
+        # dos rótulos de abajo.
+        layout.addWidget(self._bar)
 
         # --- Horas (los valores van en color, como en el original)
         self._sunset_label = QLabel("Puesta de Sol: --:-- – --:--")
@@ -879,14 +954,14 @@ class EphemerisPanel(QFrame):
         self._sunset_label.setAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
-        layout.addWidget(self._sunset_label, 1)
+        layout.addWidget(self._sunset_label, 3)
 
         self._night_label = QLabel("Noche astronómica: --:-- – --:--")
         self._night_label.setObjectName("HintLabel")
         self._night_label.setAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
         )
-        layout.addWidget(self._night_label, 1)
+        layout.addWidget(self._night_label, 3)
 
         # Estado actual (para poder refrescar tras mover la ubicación)
         self._latitude = 0.0

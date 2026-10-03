@@ -253,18 +253,20 @@ def test_ephemeris_panel_fills_its_cell():
     tragaba el sobrante (medido: 177 px en 1919×1026). Se sustituyó por
     ``addWidget(panel, 1)``, que estira el marco sin subir su sizeHint;
     así la rejilla reparte igual y **Filtros y Ubicación no cambian de
-    alto** (antes y después: 406 y 135 px en ese tamaño). El sobrante
-    del interior se reparte con stretches (Luna ×1, barra ×6, Puesta ×1,
-    Noche ×1) en vez de dejarlo pegado al fondo.
+    alto** (antes y después: 406 y 135 px en ese tamaño).
+
+    El aire del interior (rango 1:3:3) va a la Luna y a los dos rótulos de
+    abajo; la barra día/noche **no** se lo lleva: es de altura fija de
+    44 px, por petición del usuario.
     """
     import os
 
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-    from PyQt6.QtWidgets import QApplication, QGridLayout, QTabWidget
+    from PyQt6.QtWidgets import QApplication, QGridLayout, QLabel, QTabWidget
 
     from ui.main_window import MainWindow
-    from ui.planner_tab.widgets import EphemerisPanel
+    from ui.planner_tab.widgets import DAY_NIGHT_BAR_HEIGHT, DayNightBar, EphemerisPanel
 
     app = QApplication.instance() or QApplication([])
     window = MainWindow()
@@ -305,7 +307,79 @@ def test_ephemeris_panel_fills_its_cell():
     assert filtros.height() >= filtros.sizeHint().height()
     assert ubic.height() >= ubic.sizeHint().height()
 
+    # La barra día/noche es de altura fija en el layout real: no crece
+    # con el sobrante del cuadro.
+    bar = panel.findChild(DayNightBar)
+    assert bar is not None and bar.height() == DAY_NIGHT_BAR_HEIGHT
+
+    # El aire va a la Luna y a los dos rótulos de abajo (1:3:3), no a la
+    # barra (0).
+    layout = panel.layout()
+    assert layout.stretch(layout.indexOf(panel._bar)) == 0
+    assert layout.stretch(layout.indexOf(panel._sunset_label)) == 3
+    assert layout.stretch(layout.indexOf(panel._night_label)) == 3
+
+    # Rótulo de la sección renombrado.
+    titles = [
+        label.text()
+        for label in panel.findChildren(QLabel)
+        if label.objectName() == "MetricTitle"
+    ]
+    assert "PUESTA DE SOL Y NOCHE ASTRONÓMICA" in titles
+    assert "LUZ DEL DÍA Y NOCHE ASTRONÓMICA" not in titles
+
     window.close()
+
+
+def test_day_night_bar_dynamic_axis():
+    """La barra día/noche va de 1 h antes de la puesta a 1 h después de la salida.
+
+    Eje dinámico, al estilo de la Curva de Tránsito (petición del usuario):
+    los «00h 06h 12h 18h» fijos no decían nada del rango real de esa noche.
+    Las etiquetas son ``HH:MM`` cada 2 h dentro del rango (subiendo a 3/4/6 h
+    si no caben) y sin repetirse. Sin puesta/salida se pinta el día completo.
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import QApplication
+
+    from ui.planner_tab.widgets import (
+        DAY_NIGHT_BAR_HEIGHT,
+        DayNightBar,
+        fmt_hhmm,
+    )
+
+    app = QApplication.instance() or QApplication([])
+    bar = DayNightBar()
+
+    # Altura fija: no crece (ni por política ni por mínimos) con el aire.
+    assert bar.minimumHeight() == bar.maximumHeight() == DAY_NIGHT_BAR_HEIGHT
+
+    # Puesta 17:30 y salida 05:30 → rango 16:30 … 06:30 desenvuelto.
+    bar.set_marks(17.5, 18.7, 4.3, 5.5)
+    start, end = bar.hour_range()
+    assert (start, end) == (16.5, 30.5)
+
+    # Horas redondas dentro del rango, cada 2 h, sin repetir etiquetas.
+    ticks = bar.tick_hours(400)
+    assert ticks == [18.0, 20.0, 22.0, 24.0, 26.0, 28.0, 30.0]
+    assert all(start <= tick <= end for tick in ticks)
+    assert [fmt_hhmm(tick % 24) for tick in ticks] == [
+        "18:00", "20:00", "22:00", "00:00", "02:00", "04:00", "06:00",
+    ]
+
+    # Sin puesta/salida: día completo de 00 h a 24 h.
+    bar.set_marks(None, None, None, None)
+    assert bar.hour_range() == (0.0, 24.0)
+    labels = [fmt_hhmm(tick % 24) for tick in bar.tick_hours(400)]
+    assert len(labels) == len(set(labels))     # el 00:00 no sale dos veces
+
+    # Si2 h por etiqueta no caben, el paso sube solo (2 h → 3 h → 4 h → 6 h).
+    assert bar.tick_hours(200) == [0.0, 6.0, 12.0, 18.0]
+
+    app.processEvents()
 
 
 def test_find_siril_does_not_crash():
