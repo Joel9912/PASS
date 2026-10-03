@@ -762,22 +762,35 @@ class EphemerisPanel(QFrame):
         self.setObjectName("GroupFrame")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 6, 10, 6)
-        layout.setSpacing(5)
+        layout.setContentsMargins(10, 4, 10, 4)
+        layout.setSpacing(4)
 
         title = QLabel("Efemérides Sol y Luna")
         title.setObjectName("PanelTitle")
         layout.addWidget(title)
 
-        # --- Fecha y botón "Hoy"
+        # --- Fecha: ◀/▶ día a día y botón "Hoy"
         date_row = QHBoxLayout()
         date_row.setSpacing(6)
+
+        prev_day = QPushButton("◀")
+        prev_day.setFixedWidth(34)
+        prev_day.setToolTip("Un día atrás")
+        prev_day.clicked.connect(lambda: self._step_day(-1))
+        date_row.addWidget(prev_day)
+
         self._date = QDateEdit()
         self._date.setCalendarPopup(True)
         self._date.setDisplayFormat("dd/MM/yyyy")
         self._date.setDate(QDate.currentDate())
         self._date.dateChanged.connect(self._emit_date)
         date_row.addWidget(self._date)
+
+        next_day = QPushButton("▶")
+        next_day.setFixedWidth(34)
+        next_day.setToolTip("Un día adelante")
+        next_day.clicked.connect(lambda: self._step_day(1))
+        date_row.addWidget(next_day)
 
         today = QPushButton("Hoy")
         today.setFixedWidth(64)
@@ -903,6 +916,10 @@ class EphemerisPanel(QFrame):
     # -- Señales ------------------------------------------------------------
     def _emit_date(self, _date: QDate) -> None:
         self.date_changed.emit(self.current_date_iso())
+
+    def _step_day(self, days: int) -> None:
+        """Mueve la fecha±1 día; ``dateChanged`` se encarga de emitir."""
+        self._date.setDate(self._date.date().addDays(days))
 
     def _go_today(self) -> None:
         self._date.setDate(QDate.currentDate())

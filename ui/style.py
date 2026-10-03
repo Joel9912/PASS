@@ -133,7 +133,8 @@ QPushButton:pressed {
 }
 
 /* ============= Campos de entrada ============= */
-QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {
+QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox, QDoubleSpinBox,
+QDateEdit, QDateTimeEdit {
     background-color: $panel;
     border: 1px solid $border;
     border-radius: 6px;
@@ -142,7 +143,8 @@ QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {
     selection-background-color: $accent;
 }
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus,
-QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
+QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus,
+QDateEdit:focus, QDateTimeEdit:focus {
     border-color: $accent;
 }
 QComboBox::drop-down {
