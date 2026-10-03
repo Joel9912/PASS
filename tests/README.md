@@ -1,11 +1,11 @@
 # tests/
 
 ## Qué es
-Tests de PAS.S con **pytest** (96 tests): validan que la estructura y la base del programa están sanas y que la lógica de `planners/` da los valores correctos.
+Tests de PAS.S con **pytest** (100 tests): validan que la estructura y la base del programa están sanas y que la lógica de `planners/` da los valores correctos.
 
 ## Estado actual
 - `test_smoke.py` — valida que `main.py` importa, que las 6 pestañas están definidas, que todos los docs/READMEs existen y que el esquema SQLite se aplica (incluidas `catalog` y `stars`).
-- `test_planners.py` — parsing del cargador (OpenNGC/HYG con datos inline, offline), búsqueda con filtros reales, tránsito/noche con astropy y ranking (orden, reasons y pesos configurables). Cubre también los campos nuevos de `NightInfo` (`sunset`, `sunrise`, `moon_age_days`, `waxing`) y `night_curve(utc_offset_hours)`. Incluye la **regresión de la malla de 1 min**: si vuelve a subir el paso, las horas de Captura Ideal/Posible vuelven a salir redondas (21:20 en vez de 21:22). Los tests de BD llaman `ensure_catalog()`; si no hay datos ni red, se omiten.
+- `test_planners.py` — parsing del cargador (OpenNGC/HYG con datos inline, offline), búsqueda con filtros reales, tránsito/noche con astropy y ranking (orden, reasons y pesos configurables). Cubre también los campos nuevos de `NightInfo` (`sunset`, `sunrise`, `moon_age_days`, `waxing`) y `night_curve(utc_offset_hours)`. Incluye la **regresión de la malla de 1 min**: si vuelve a subir el paso, las horas de Captura Ideal/Posible vuelven a salir redondas (21:20 en vez de 21:22). Y las **optimizaciones de `night_curve`**: formato ISO con espacio (`times.iso` vectorizado), caché de Luna/sol por (fecha, ubicación) acotada a 8 entradas, y techo del error de la interpolación a paso grueso (<0,02°, con los bordes de noche idénticos). Los tests de BD llaman `ensure_catalog()`; si no hay datos ni red, se omiten.
 - `test_analytical_transit.py` — culminación/altitud sin astropy y consistencia con astropy (<10 min). Incluye `local_utc_offset`: desfase guardado > huso inferido, y `None` → `round(lon/15)` (regresión: con lon +85.4 y huso de sistema −6 la noche salía invertida).
 - `test_moon_distance.py` — polinomio de grado 3 (valores de referencia), `capture_windows` y `capture_window_summary`. Regresión del **cruce de medianoche**: `unwrap_hours` y que la ventana Ideal que pasa por las 00:00 no se descarte. También la **regla de la Luna hundida** (con la Luna ≤ 0° la separación no se exige y solo manda la altitud; regresión del caso M31 del 02/10/2026).
 - `test_framing.py` — FOV desde focal/píxel/resolución y `None` si faltan datos.

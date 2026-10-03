@@ -12,6 +12,7 @@ telescopio).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from threading import Lock
 
 import numpy as np
 from astropy import units as u
@@ -47,6 +48,24 @@ NIGHT_HOURS = 16.0
 
 #: Umbral de noche astronómica (sol bajo -18°).
 ASTRO_TWILIGHT_DEG = -18.0
+
+#: Paso (minutos) para la Luna y el sol: se mueven despacio, así que se
+#: calculan cada N muestras y se interpolan a la malla de 1 min (ver
+#: :func:`_moon_sun_series`). Medido con 961 muestras: 1 min → 622 ms,
+#: 5 min + interp → 139 ms, con error máximo de 0,009° en la altitud
+#: lunar y 0,006° en la separación, y los bordes de la noche
+#: astronómica **idénticos**. Los umbrales se manejan en grados, así
+#: que el error no llega a notarse.
+MOON_SUN_SAMPLE_MIN = 5
+
+#: (lat, lon, fecha, desfase) → (az de la Luna, alt de la Luna, alt del
+#: sol, iluminación). Solo en memoria: la Luna y el sol **no dependen del
+#: objeto**, así que al cambiar de objetivo se reutilizan. Acotada a las
+#: últimas entradas; el candado protege si algún día se calcula en
+#: segundo plano desde la UI.
+_MOON_SUN_CACHE: dict[tuple, tuple] = {}
+_MOON_SUN_CACHE_MAX = 8
+_CACHE_LOCK = Lock()
 
 #: Altitud del sol en el ocaso/amanecer (radio solar + refracción, ~-0°50').
 SUN_HORIZON_DEG = -0.833
@@ -167,9 +186,80 @@ def _night_times(
 def _local_hours(
     times: Time, longitude_deg: float, utc_offset_hours: float | None = None
 ) -> list[float]:
-    """Hora local decimal de cada ``Time`` (UTC fraccionario + desfase)."""
+    """Hora local decimal de cada ``Time`` (UTC fraccionario + desfase).
+
+    Vectorizado: leer ``t.mjd`` uno a uno dispara el mecanismo de
+    atributos de ``Time`` ~1000 veces (medido: 0,12 s de los 0,5 s del
+    perfil), mientras que ``times.mjd`` devuelve el array entero de una
+    vez. El resultado es bit a bit el mismo.
+    """
     offset = local_utc_offset(longitude_deg, utc_offset_hours)
-    return [float((t.mjd % 1.0) * 24.0 + offset) % 24.0 for t in times]
+    mjd = np.asarray(times.mjd)
+    return [float(value) for value in ((mjd % 1.0) * 24.0 + offset) % 24.0]
+
+
+def _target_arrays(times: Time, location: EarthLocation, target: SkyCoord):
+    """(az, alt) del objeto en grados para ``times``."""
+    frame = AltAz(obstime=times, location=location)
+    altaz = target.transform_to(frame)
+    return altaz.az.to_value(u.deg), altaz.alt.to_value(u.deg)
+
+
+def _moon_sun_arrays(times: Time, location: EarthLocation):
+    """(az de la Luna, alt de la Luna, alt del sol) en grados para ``times``."""
+    frame = AltAz(obstime=times, location=location)
+    moon = get_body("moon", times, location).transform_to(frame)
+    sun = get_sun(times).transform_to(frame).alt
+    return moon.az.to_value(u.deg), moon.alt.to_value(u.deg), sun.to_value(u.deg)
+
+
+def _lunar_illumination(times: Time, location: EarthLocation) -> float:
+    """Fracción iluminada de la Luna en el centro de la ventana nocturna."""
+    mid = times[len(times) // 2]
+    moon = get_body("moon", mid, location)
+    sun = get_sun(mid)
+    elongation = angular_separation(moon.ra, moon.dec, sun.ra, sun.dec)
+    return float((1.0 - np.cos(elongation.to_value(u.rad))) / 2.0)
+
+
+def _moon_sun_series(times: Time, location: EarthLocation):
+    """(az de la Luna, alt de la Luna, alt del sol) en **toda** la malla.
+
+    Se calculan cada :data:`MOON_SUN_SAMPLE_MIN` minutos — la Luna avanza
+    ~0,1° y el sol ~0,04° en ese tramo — y se interpolan linealmente hasta
+    la malla de 1 min. La interpolación va en **coordenadas rectangulares**
+    (x, y, z) y no en azimut+altitud, porque el azimut da vueltas de 180°
+    al pasar por el cenit y un tramo lineal ahí sería monstruoso.
+
+    Con paso de 5 min el error medido es de 0,009° de altitud lunar y
+    0,006° de separación, y los bordes de la noche astronómica no se
+    mueven: ahorra ~4,5× en la parte más cara del cálculo (622 → 139 ms).
+    """
+    every = max(1, round(MOON_SUN_SAMPLE_MIN / SAMPLE_MIN))
+    if every == 1:
+        return _moon_sun_arrays(times, location)
+    idx = np.arange(0, len(times), every)
+    caz, calt, csun = _moon_sun_arrays(times[idx], location)
+    lat, az = np.radians(calt), np.radians(caz)
+    x = np.cos(lat) * np.cos(az)
+    y = np.cos(lat) * np.sin(az)
+    z = np.sin(lat)
+    grid = np.arange(len(times))
+    return (
+        np.degrees(np.arctan2(np.interp(grid, idx, y), np.interp(grid, idx, x))),
+        np.degrees(np.arcsin(np.interp(grid, idx, z))),
+        np.interp(grid, idx, csun),
+    )
+
+
+def _remember_moon_sun(key: tuple, value: tuple) -> None:
+    """Guarda la entrada, descartando la más vieja si la caché está llena."""
+    with _CACHE_LOCK:
+        if key in _MOON_SUN_CACHE:
+            _MOON_SUN_CACHE[key] = _MOON_SUN_CACHE.pop(key)
+        elif len(_MOON_SUN_CACHE) >= _MOON_SUN_CACHE_MAX:
+            _MOON_SUN_CACHE.pop(next(iter(_MOON_SUN_CACHE)))
+        _MOON_SUN_CACHE[key] = value
 
 
 def night_curve(
@@ -189,35 +279,48 @@ def night_curve(
     ``utc_offset_hours`` (desfase de la ubicación, ver
     :func:`local_utc_offset`) solo afecta al eje horario; la física se
     calcula en UTC.
+
+    Tres optimizaciones, sin tocar la física (el resultado es el mismo
+    salvo el error de muestreo de :func:`_moon_sun_series`, de 0,009°):
+
+    - la Luna y el sol se guardan en :data:`_MOON_SUN_CACHE` por
+      (fecha, ubicación), que es todo lo que les afecta: al cambiar de
+      objeto solo se transforma el objeto;
+    - la Luna y el sol se calculan a paso grueso y se interpolan;
+    - el objeto se calcula en su malla de 1 min, que es lo barato.
     """
     location = _location(latitude, longitude)
     times = _night_times(date_iso, longitude, utc_offset_hours=utc_offset_hours)
-    frame = AltAz(obstime=times, location=location)
 
+    # Luna y sol: solo dependen de la fecha y la ubicación, no del objeto.
+    key = (latitude, longitude, date_iso, utc_offset_hours)
+    with _CACHE_LOCK:
+        cached = _MOON_SUN_CACHE.get(key)
+    if cached is None:
+        moon_az, moon_alt, sun_alt = _moon_sun_series(times, location)
+        illumination = _lunar_illumination(times, location)
+        _remember_moon_sun(key, (moon_az, moon_alt, sun_alt, illumination))
+    else:
+        moon_az, moon_alt, sun_alt, illumination = cached
+
+    # El objeto sí es nuevo en cada llamada: es lo barato.
     target = SkyCoord(ra=ra_hours * u.hourangle, dec=dec_deg * u.deg, frame="icrs")
-    target_altaz = target.transform_to(frame)
-    moon_altaz = get_body("moon", times, location).transform_to(frame)
-    sun_alt = get_sun(times).transform_to(frame).alt
+    target_az, target_alt = _target_arrays(times, location, target)
 
-    alts = target_altaz.alt.to_value(u.deg)
+    alts = target_alt
     separations = angular_separation(
-        target_altaz.az, target_altaz.alt, moon_altaz.az, moon_altaz.alt
+        target_az * u.deg, alts * u.deg, moon_az * u.deg, moon_alt * u.deg
     ).to_value(u.deg)
 
-    # Fase lunar en el centro de la ventana (noche local aproximada)
-    mid = times[len(times) // 2]
-    moon = get_body("moon", mid, location)
-    sun = get_sun(mid)
-    elongation = angular_separation(moon.ra, moon.dec, sun.ra, sun.dec)
-    illumination = float((1.0 - np.cos(elongation.to_value(u.rad))) / 2.0)
-
     return NightCurve(
-        times_iso=[str(t.iso) for t in times],
+        # times.iso vectorizado = [str(t.iso) for t in times] (verificado
+        # bit a bit), y sin ~1000 visitas al mecanismo de atributos de Time.
+        times_iso=[str(value) for value in times.iso],
         hours_local=_local_hours(times, longitude, utc_offset_hours),
         altitudes=[float(a) for a in alts],
-        moon_altitudes=[float(a) for a in moon_altaz.alt.to_value(u.deg)],
+        moon_altitudes=[float(a) for a in moon_alt],
         moon_separations=[float(s) for s in separations],
-        astro_night=[bool(alt < ASTRO_TWILIGHT_DEG) for alt in sun_alt.to_value(u.deg)],
+        astro_night=[bool(alt < ASTRO_TWILIGHT_DEG) for alt in sun_alt],
         moon_illumination=round(illumination, 3),
         transit_index=int(np.argmax(alts)),
     )

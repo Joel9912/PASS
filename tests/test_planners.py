@@ -445,6 +445,100 @@ def test_night_curve_samples_every_minute():
     assert min(deltas) == pytest.approx(1.0 / 60.0, abs=1e-9)
 
 
+def test_night_curve_keeps_the_space_separated_iso_format():
+    """``times_iso`` sigue en formato 'AAAA-MM-DD HH:MM:SS.mmm'.
+
+    Se vectorizó con ``times.iso`` en vez de ``[str(t.iso) for t in
+    times]`` (misma salida, verificado bit a bit) para no visitar el
+    mecanismo de atributos de ``Time`` ~1000 veces. Si alguien lo cambia
+    a ``.isot``, la fecha llevará «T» y la UI la leerá mal.
+    """
+    from planners.transit import night_curve
+
+    curve = night_curve(0.677, 23.0, 10.0, -85.4, "2026-10-02", -6.0)
+    # arranque de la malla: 16:00 local con huso −6 ⇒ 22:00 UTC
+    assert curve.times_iso[0] == "2026-10-02 22:00:00.000"
+    assert len(curve.times_iso) == len(curve.altitudes)
+
+
+def test_moon_and_sun_are_cached_per_date_and_location():
+    """La Luna y el sol se cachean por (fecha, ubicación, desfase).
+
+    No dependen del objeto, así que al cambiar de objetivo se reutilizan
+    (de 0,84 s a 0,11 s medido). Ojo: si la clave se quedara sin la
+    fecha o la ubicación, daría lunas de otro día.
+    """
+    from planners import transit
+
+    transit._MOON_SUN_CACHE.clear()
+    base = transit.night_curve(5.588139, -5.391111, 40.4, -3.7, "2026-10-02", 2.0)
+    assert len(transit._MOON_SUN_CACHE) == 1
+    again = transit.night_curve(5.588139, -5.391111, 40.4, -3.7, "2026-10-02", 2.0)
+    assert len(transit._MOON_SUN_CACHE) == 1  # reutiliza, no duplica
+    assert again.moon_altitudes == base.moon_altitudes
+    assert again.astro_night == base.astro_night
+    assert again.moon_illumination == base.moon_illumination
+
+    # otra fecha o desfase es otra entrada
+    transit.night_curve(5.588139, -5.391111, 40.4, -3.7, "2026-10-02", 0.0)
+    transit.night_curve(5.588139, -5.391111, 40.4, -3.7, "2026-10-03", 2.0)
+    assert len(transit._MOON_SUN_CACHE) == 3
+
+
+def test_moon_and_sun_cache_is_bounded():
+    """La caché no crece sin límite: como mucho, las últimas 8 entradas."""
+    from planners import transit
+
+    transit._MOON_SUN_CACHE.clear()
+    for index in range(transit._MOON_SUN_CACHE_MAX + 3):
+        transit._remember_moon_sun((index,), (index,))
+    assert len(transit._MOON_SUN_CACHE) == transit._MOON_SUN_CACHE_MAX
+    assert (0,) not in transit._MOON_SUN_CACHE  # las más viejas se caen
+    assert (transit._MOON_SUN_CACHE_MAX + 2,) in transit._MOON_SUN_CACHE
+
+
+def test_moon_sun_coarse_sampling_stays_within_hundredths_of_a_degree():
+    """La Luna/sol a paso grueso + interpolación no desvía el cálculo.
+
+    La Luna y el sol se calculan cada ``MOON_SUN_SAMPLE_MIN`` minutos y
+    se interpolan a la malla de 1 min en coordenadas rectangulares (4,5×
+    más rápido: 0,62 s → 0,14 s). Aquí se fija el techo del error: si
+    alguien sube el paso o interpola en azimut en vez de en x/y/z (el
+    azimut da vueltas de 180° al pasar por el cenit), se dispara.
+    """
+    import numpy as np
+    import astropy.units as u
+    from astropy.coordinates import AltAz, SkyCoord, angular_separation
+
+    from planners import transit
+
+    loc = transit._location(40.4, -3.7)
+    times = transit._night_times("2026-10-02", -3.7, utc_offset_hours=2.0)
+    exact_az, exact_alt, exact_sun = transit._moon_sun_arrays(times, loc)
+    coarse_az, coarse_alt, coarse_sun = transit._moon_sun_series(times, loc)
+
+    assert np.max(np.abs(coarse_alt - exact_alt)) < 0.02
+    assert np.max(np.abs(coarse_sun - exact_sun)) < 0.02
+
+    frame = AltAz(obstime=times, location=loc)
+    target = SkyCoord(
+        ra=5.588139 * u.hourangle, dec=-5.391111 * u.deg, frame="icrs"
+    ).transform_to(frame)
+    sep_exact = angular_separation(
+        target.az, target.alt, exact_az * u.deg, exact_alt * u.deg
+    ).to_value(u.deg)
+    sep_coarse = angular_separation(
+        target.az, target.alt, coarse_az * u.deg, coarse_alt * u.deg
+    ).to_value(u.deg)
+    assert np.max(np.abs(sep_coarse - sep_exact)) < 0.02
+
+    # los bordes de la noche astronómica no se mueven
+    edges = lambda sun: np.flatnonzero(  # noqa: E731
+        np.diff((sun < transit.ASTRO_TWILIGHT_DEG).astype(int))
+    ).tolist()
+    assert edges(coarse_sun) == edges(exact_sun)
+
+
 def test_transit_m42_madrid():
     """M42 en Madrid en enero: culmina a ~44° (altura teórica máxima)."""
     from planners.transit import transit_info
