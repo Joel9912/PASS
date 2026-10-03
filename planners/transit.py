@@ -36,7 +36,13 @@ except AttributeError:  # astropy puede renombrar la opción entre versiones
     pass
 
 #: Pasos de muestreo de la noche (minutos) y duración de la ventana analizada.
-SAMPLE_MIN = 10
+#: 1 minuto: las fronteras de las ventanas caen a minuto exacto (21:22, no
+#: 21:20) y las duraciones salen como son (3h 32min, no 3h 30min). Con
+#: ``SAMPLE_MIN = 10`` la cuantización se veía en la UI, porque los rangos
+#: de ``capture_window_summary`` son muestras de esta malla. Cuesta unos
+#: 4× en cómputo (~0,5 s por curva), holgado para recalcular al cambiar
+#: de objeto o de fecha.
+SAMPLE_MIN = 1
 NIGHT_HOURS = 16.0
 
 #: Umbral de noche astronómica (sol bajo -18°).

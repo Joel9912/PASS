@@ -421,8 +421,28 @@ def test_night_curve_hour_axis_follows_the_location_offset():
         expected = transit_local_hours(ra, "2026-10-02", lon, utc_offset_hours=offset)
         peak = curve.hours_local[curve.transit_index]
         diff = abs((peak - expected + 12.0) % 24.0 - 12.0)
-        # Culminación analítica (<10 min) + pico cuantizado a malla de 10 min
-        assert diff < 0.3, f"pico {peak:.2f} vs esperado {expected:.2f}"
+        # Culminación analítica (<10 min) + pico cuantizado a la malla
+        assert diff < 0.15, f"pico {peak:.2f} vs esperado {expected:.2f}"
+
+
+def test_night_curve_samples_every_minute():
+    """La malla es de 1 min para que las ventanes no se redondeen.
+
+    Las horas y duraciones de Captura Ideal/Posible salen de los
+    instantes de esta malla (ver ``capture_window_summary``): con un
+    paso de 10 min todo caía en múltiplos de 10 (21:20, 21:30, 3h 30min)
+    en vez de minutos reales (21:22, 3h 32min). Regresión: si alguien
+    vuelve a subir el paso, la UI vuelve a mostrar horas redondas.
+    """
+    from planners.transit import night_curve
+
+    curve = night_curve(5.588139, -5.391111, 40.4, -3.7, "2026-10-02")
+    deltas = [
+        b - a
+        for a, b in zip(curve.hours_local, curve.hours_local[1:], strict=False)
+        if b > a  # el salto de medianoche da delta negativo
+    ]
+    assert min(deltas) == pytest.approx(1.0 / 60.0, abs=1e-9)
 
 
 def test_transit_m42_madrid():
