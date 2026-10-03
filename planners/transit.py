@@ -87,6 +87,8 @@ class NightCurve:
     - ``times_iso``: instante (ISO, UTC) de cada punto.
     - ``hours_local``: hora local decimal (0-24) de cada punto, para el eje X.
     - ``altitudes``: altitud del objeto (grados).
+    - ``moon_altitudes``: altitud de la Luna (grados; para dibujar su
+      curva y ver salida/ocaso y altura máxima).
     - ``moon_separations``: separación angular objeto-Luna (grados).
     - ``astro_night``: True si el sol está bajo -18° (noche astronómica).
     - ``moon_illumination``: fracción iluminada (0-1) en el centro de la noche.
@@ -96,6 +98,7 @@ class NightCurve:
     times_iso: list[str]
     hours_local: list[float]
     altitudes: list[float]
+    moon_altitudes: list[float]
     moon_separations: list[float]
     astro_night: list[bool]
     moon_illumination: float
@@ -206,6 +209,7 @@ def night_curve(
         times_iso=[str(t.iso) for t in times],
         hours_local=_local_hours(times, longitude, utc_offset_hours),
         altitudes=[float(a) for a in alts],
+        moon_altitudes=[float(a) for a in moon_altaz.alt.to_value(u.deg)],
         moon_separations=[float(s) for s in separations],
         astro_night=[bool(alt < ASTRO_TWILIGHT_DEG) for alt in sun_alt.to_value(u.deg)],
         moon_illumination=round(illumination, 3),

@@ -50,11 +50,11 @@ pg.setConfigOptions(antialias=True, background=PALETTE["bg"])
 
 #: Colores de la curva de tránsito (coherentes con el resto del tema).
 COLOR_ALTITUDE = PALETTE["accent"]        # azul: altitud del objeto
+COLOR_MOON = "#94a3b8"                    # gris: altitud de la Luna
 COLOR_LIMIT = "#ef4444"                   # rojo: línea de 30°
 COLOR_IDEAL = (34, 197, 94, 55)           # verde: ventana ideal
 COLOR_POSSIBLE = (245, 158, 11, 45)       # ámbar: ventana posible
 COLOR_NIGHT = (255, 255, 255, 26)         # gris: noche astronómica
-COLOR_ZONE = (251, 191, 36, 55)           # amarillo: zona ±2° (luna/45°)
 
 COLOR_DAY = "#94a3b8"                     # barra: día
 COLOR_TWILIGHT = "#475569"                # barra: crepúsculo
@@ -103,9 +103,11 @@ def iso_to_local_hours(
 
 
 def format_duration(hours: float) -> str:
-    """Horas decimales a texto corto (``3h15m``; sub-hora a minutos)."""
+    """Horas decimales a texto corto (``5h 37min``; sub-hora a minutos)."""
     total = int(round(hours * 60))
-    return f"{total // 60}h{total % 60:02d}m" if total >= 60 else f"{total}m"
+    return (
+        f"{total // 60}h {total % 60:02d}min" if total >= 60 else f"{total}min"
+    )
 
 
 def window_lines(summary: dict[str, dict]) -> tuple[str, str]:
@@ -125,7 +127,7 @@ def _window_text(summary: dict[str, dict], key: str, prefix: str) -> str:
     ranges = entry.get("ranges") or []
     if not ranges:
         return f"{prefix}: sin ventana"
-    text = " · ".join(
+    text = " y ".join(
         format_hour_range(start, end) for start, end in ranges
     )
     return f"{prefix}: {text} ({format_duration(entry.get('hours', 0.0))})"
@@ -935,20 +937,24 @@ class EphemerisPanel(QFrame):
 #                         C U R V A   D E   T R Á N S I T O                    #
 # --------------------------------------------------------------------------- #
 class TransitCurve(QWidget):
-    """Curva de tránsito con PyQtGraph: altitud, umbral lunar y ventanas.
+    """Curva de tránsito con PyQtGraph: altitud del objeto y de la Luna.
 
-    Doble eje: la altitud (0-90°) va a la izquierda y la separación lunar
-    (0-180°) a la derecha, ambas sobre la misma hora local. Debajo se pintan
-    las bandas de noche astronómica, las ventanas de captura
-    Ideal/Possible y la **zona ±2°** (amarilla): tramos en los que el
-    objeto está a ±2° del umbral de separación mínima o de los 45° de
-    altitud. La separación en sí se lee como **texto** en el subtítulo,
-    no como curva.
+    Un solo eje (izquierdo, 0-90°) para dos curvas: la **altitud del
+    objeto** (azul) y la de la **Luna** (gris) — esta última muestra a
+    qué hora sale y se oculta la Luna y qué altura alcanza. Debajo se
+    pintan las bandas de noche astronómica y las ventanas de captura
+    Ideal/Possible. La separación objeto-Luna se lee como **texto** en
+    el subtítulo («Separación» y «Mínimo»), junto con las líneas de
+    Captura Ideal y Captura Posible (rangos horarios y duración).
+
+    No hay eje derecho: la gráfica aprovecha todo el ancho (petición
+    del usuario; antes ahí vivían la curva de separación y el umbral,
+    ya retirados).
 
     Es una gráfica **fija** (petición del usuario): no hace zoom con la
-    rueda (ni en la vista principal ni en la del eje derecho), no se
-    desplaza por el eje horario y no tiene menú contextual; solo cambia
-    cuando cambian los datos (objeto, fecha, filtros, ubicación).
+    rueda, no se desplaza por el eje horario y no tiene menú contextual;
+    solo cambia cuando cambian los datos (objeto, fecha, filtros,
+    ubicación).
 
     El eje horario es **dinámico**: muestra desde 1 h antes del inicio
     de la noche astronómica hasta 1 h después de su fin (si no hay
@@ -975,17 +981,24 @@ class TransitCurve(QWidget):
         self._subtitle.setObjectName("CurveSubtitle")
         header.addWidget(self._subtitle)
 
+        # Rangos de Captura Ideal / Posible (aparecen solo con datos).
+        self._windows_label = QLabel()
+        self._windows_label.setObjectName("CurveSubtitle")
+        self._windows_label.setWordWrap(True)
+        header.addWidget(self._windows_label)
+
         self._legend = QLabel(self._legend_text(full=False))
         self._legend.setObjectName("CurveLegend")
         header.addWidget(self._legend)
 
         layout.addLayout(header)
 
-        # --- Gráfico
+        # --- Gráfico (solo eje izquierdo: el derecho se retiró para que
+        # la gráfica ocupe todo el ancho)
         self._axis_bottom = pg.AxisItem(orientation="bottom")
         self._axis_bottom.tickStrings = self._tick_strings  # type: ignore[method-assign]
         self._plot = pg.PlotWidget(
-            axisItems={"bottom": self._axis_bottom, "right": pg.AxisItem("right")},
+            axisItems={"bottom": self._axis_bottom},
             enableMenu=False,
         )
         # Mínimo holgado: la curva se expande con el espacio libre, pero si
@@ -998,30 +1011,9 @@ class TransitCurve(QWidget):
         self._plot.setLabel("left", "Altitud", units="°")
 
         item = self._plot.getPlotItem()
-        axis_right = item.getAxis("right")
-        axis_right.setVisible(True)
-        # El eje derecho ya no lleva curva de separación: solo queda el
-        # umbral lunar, así que se le pone nombre para que se entienda.
-        axis_right.setLabel("Sep. lunar", units="°")
 
-        # ViewBox secundario para la separación lunar (0-180°)
-        self._right_view = pg.ViewBox()
-        item.scene().addItem(self._right_view)
-        self._right_view.setXLink(item)
-        axis_right.linkToView(self._right_view)
-        # Sin geometría propia la vista secundaria se queda en 50×50 en la
-        # esquina de la escena y recorta las curvas del eje derecho: se
-        # superpone a la principal y se mantiene sincronizada.
-        self._right_view.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
-        # La rueda NO es un botón: sin esto el zoom seguía entrando por la
-        # vista derecha y, al enlazar X, movía también la gráfica principal.
-        self._right_view.setMouseEnabled(x=False, y=False)
-        self._right_view.setMenuEnabled(False)
-        self._sync_right_view()
-        item.vb.geometryChanged.connect(self._sync_right_view)
-
-        # Ejes y etiquetas en gris secundario (los tres, idénticos al tema)
-        for axis in (item.getAxis("left"), axis_right, self._axis_bottom):
+        # Ejes y etiquetas en gris secundario (los dos, idénticos al tema)
+        for axis in (item.getAxis("left"), self._axis_bottom):
             axis.setTextPen(QColor(PALETTE["textDim"]))
 
         layout.addWidget(self._plot, 1)
@@ -1047,14 +1039,6 @@ class TransitCurve(QWidget):
             pen=pg.mkPen(QColor(34, 197, 94, 180), width=1),
             z_value=-10,
         )
-        # Zona ±2° (umbral lunar / 45° de altitud): por encima de las
-        # bandas (-9) para que se vea incluso sobre Ideal/Posible.
-        self._zone_band = _BandPool(
-            item,
-            brush=pg.mkBrush(*COLOR_ZONE),
-            pen=pg.mkPen(QColor(251, 191, 36, 170), width=1),
-            z_value=-9,
-        )
 
         self._limit_line = item.addLine(
             y=30, pen=pg.mkPen(COLOR_LIMIT, width=1.5, style=Qt.PenStyle.DashLine)
@@ -1064,15 +1048,11 @@ class TransitCurve(QWidget):
         self._altitude_curve = item.plot(
             pen=pg.mkPen(COLOR_ALTITUDE, width=2.2)
         )
-
-        self._threshold_line = pg.InfiniteLine(
-            # En pyqtgraph 0 es horizontal y 90 vertical: el umbral lunar
-            # va horizontal sobre el eje derecho (0-180° de separación).
-            # Con angle=90 salía una vertical en x=81,28 h, fuera del
-            # rango horario, y nunca se veía.
-            angle=0, pen=pg.mkPen("#f59e0b", width=1.2, style=Qt.PenStyle.DotLine)
+        # Altitud de la Luna sobre el mismo eje 0-90°: sale y se oculta
+        # al cruzar el borde inferior y su techo marca la altura máxima.
+        self._moon_curve = item.plot(
+            pen=pg.mkPen(COLOR_MOON, width=1.8)
         )
-        self._right_view.addItem(self._threshold_line)
 
         self.clear()
 
@@ -1081,18 +1061,17 @@ class TransitCurve(QWidget):
     def _legend_text(full: bool) -> str:
         """Leyenda HTML: minimal (estado vacío) o completa con las bandas.
 
-        La separación lunar ya no se dibuja como curva punteada (petición
-        del usuario): se lee como texto en el subtítulo; la leyenda solo
-        describe lo que sí se pinta en el gráfico.
+        Solo describe lo que se pinta en el gráfico: altitud del objeto,
+        límite de 30°, curva de la Luna y las dos ventanas de captura.
+        La separación y los rangos horarios viven en el subtítulo.
         """
         alt = f'<span style="color:{COLOR_ALTITUDE}">━━</span> Altitud'
         if not full:
             return alt
         return (
             f'{alt} &nbsp; '
-            f'<span style="color:{COLOR_LIMIT}">- -</span> Límite 30° &nbsp; '
-            f'<span style="color:#f59e0b">┄</span> Umbral lunar &nbsp; '
-            f'<span style="color:#fbbf24">■</span> Zona ±2° &nbsp; '
+            f'<span style="color:{COLOR_LIMIT}">- -</span> 30° &nbsp; '
+            f'<span style="color:{COLOR_MOON}">━━</span> Luna &nbsp; '
             f'<span style="color:#22c55e">■</span> Ideal &nbsp; '
             f'<span style="color:#f59e0b">■</span> Posible'
         )
@@ -1102,14 +1081,6 @@ class TransitCurve(QWidget):
     def _tick_strings(values, scale, spacing) -> list[str]:
         """Etiquetas del eje inferior en ``HH:MM`` (horas desenvueltas)."""
         return [fmt_hhmm(value) for value in values]
-
-    def _sync_right_view(self, *_args) -> None:
-        """Superpone la vista del eje derecho a la principal.
-
-        ``QGraphicsView`` no la coloca sola: sin esto se queda en el rect
-        por defecto (0, 0, 50, 50) y todo lo del eje derecho se recorta.
-        """
-        self._right_view.setGeometry(self._plot.getPlotItem().vb.geometry())
 
     # -- API ----------------------------------------------------------------
     def clear(self, message: str = CURVE_EMPTY_SUBTITLE) -> None:
@@ -1125,24 +1096,20 @@ class TransitCurve(QWidget):
         """
         self._title.setText(CURVE_TITLE)
         self._subtitle.setText(message)
+        self._windows_label.clear()
+        self._windows_label.hide()
         self._legend.setText(self._legend_text(full=False))
         self._altitude_curve.setData([], [])
-        for band in (
-            self._night_band,
-            self._possible_band,
-            self._ideal_band,
-            self._zone_band,
-        ):
+        self._moon_curve.setData([], [])
+        for band in (self._night_band, self._possible_band, self._ideal_band):
             band.hide()
         self._limit_line.hide()
-        self._threshold_line.hide()
 
-        # Rangos del estado inicial: la noche local de 16:00 a 08:00 y los
-        # dos ejes completos, para que no quede un auto-rango absurdo.
+        # Rangos del estado inicial: la noche local de 16:00 a 08:00 y el
+        # eje completo, para que no quede un auto-rango absurdo.
         item = self._plot.getPlotItem()
         item.setXRange(*NIGHT_X_RANGE, padding=0)
         item.setYRange(0, 90, padding=0)
-        self._right_view.setYRange(0, 180, padding=0)
 
     def show_curve(
         self,
@@ -1174,14 +1141,17 @@ class TransitCurve(QWidget):
         self._subtitle.setText(
             f"Tránsito: {target_label} · Máx {peak:.1f}° · "
             f"Culm. {fmt_hhmm(transit)} · Luna {illumination_pct:.0f} % · "
-            f"Sep. mín. {worst_sep:.0f}° · Umbral {min_dist:.0f}°"
+            f"Separación {worst_sep:.0f}° · Mínimo {min_dist:.0f}°"
         )
+        # Rangos de captura: Ideal y Posible (no ideal) con horas y duración.
+        ideal_line, possible_line = window_lines(summary)
+        self._windows_label.setText(f"{ideal_line} · {possible_line}")
+        self._windows_label.show()
         self._legend.setText(self._legend_text(full=True))
 
         # --- Curvas
         self._altitude_curve.setData(hours, curve.altitudes)
-        self._threshold_line.setValue(min_dist)
-        self._threshold_line.show()
+        self._moon_curve.setData(hours, curve.moon_altitudes)
 
         # --- Bandas
         self._night_band.set_spans(_contiguous_spans(hours, curve.astro_night))
@@ -1191,21 +1161,11 @@ class TransitCurve(QWidget):
         self._ideal_band.set_spans(
             _contiguous_spans(hours, [w == WINDOW_IDEAL for w in windows])
         )
-        # Zona ±2°: el objeto a tiro del umbral lunar o de los 45° de
-        # altitud (ambas condiciones comparten la misma banda amarilla).
-        zone_mask = [
-            abs(separation - min_dist) <= 2.0 or abs(altitude - 45.0) <= 2.0
-            for separation, altitude in zip(
-                curve.moon_separations, curve.altitudes, strict=False
-            )
-        ]
-        self._zone_band.set_spans(_contiguous_spans(hours, zone_mask))
         self._limit_line.show()          # límite de 30° (oculto en clear())
 
-        # --- Ejes
+        # --- Eje
         item = self._plot.getPlotItem()
         item.setYRange(0, 90, padding=0)
-        self._right_view.setYRange(0, 180, padding=0)
         # Eje horario dinámico: de 1 h antes a 1 h después de la noche
         # astronómica (petición del usuario). Si la noche no existe
         # (objeto que no sale, latitudes extremas) se muestra la muestra
