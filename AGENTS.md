@@ -36,6 +36,7 @@ Toda carpeta con código (p. ej. `ui/<pestaña>/`, `planners/`) tiene su propio 
 - Mantener separación entre UI (`ui/`) y lógica backend (`planners/`, `stacks/`, etc.).
 - Documentación en español: todos los `.md` del proyecto se escriben en español.
 - Para cambios estructurales o decisiones ambiguas: proponer al usuario en lugar de imponer.
+- **Al terminar una tarea con cambios que verificar**: lanzar la aplicación (`python main.py`, en segundo plano) para que el usuario la revise; si la tarea no tiene cambios visibles (p. ej. solo backend/tests), no hace falta.
 
 ## Entorno
 - Windows + PowerShell; `.venv/` con Python 3.12.
