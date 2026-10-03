@@ -55,6 +55,7 @@ COLOR_LIMIT = "#ef4444"                   # rojo: línea de 30°
 COLOR_IDEAL = (34, 197, 94, 55)           # verde: ventana ideal
 COLOR_POSSIBLE = (245, 158, 11, 45)       # ámbar: ventana posible
 COLOR_NIGHT = (255, 255, 255, 26)         # gris: noche astronómica
+COLOR_ZONE = (251, 191, 36, 55)           # amarillo: zona ±2° (luna/45°)
 
 COLOR_DAY = "#94a3b8"                     # barra: día
 COLOR_TWILIGHT = "#475569"                # barra: crepúsculo
@@ -942,9 +943,11 @@ class TransitCurve(QWidget):
     Un solo eje (izquierdo, 0-90°) para dos curvas: la **altitud del
     objeto** (azul) y la de la **Luna** (gris) — esta última muestra a
     qué hora sale y se oculta la Luna y qué altura alcanza. Debajo se
-    pintan las bandas de noche astronómica y las ventanas de captura
-    Ideal/Possible. La separación objeto-Luna se lee como **texto** en
-    el subtítulo («Separación» y «Mínimo»), junto con las líneas de
+    pintan las bandas de noche astronómica, las ventanas de captura
+    Ideal/Possible y la **zona ±2°** (amarilla): tramos en los que el
+    objeto está a ±2° del umbral de separación mínima o de los 45° de
+    altitud. La separación objeto-Luna se lee como **texto** en el
+    subtítulo («Separación» y «Mínimo»), junto con las líneas de
     Captura Ideal y Captura Posible (rangos horarios y duración).
 
     No hay eje derecho: la gráfica aprovecha todo el ancho (petición
@@ -1039,6 +1042,14 @@ class TransitCurve(QWidget):
             pen=pg.mkPen(QColor(34, 197, 94, 180), width=1),
             z_value=-10,
         )
+        # Zona ±2° (umbral lunar / 45° de altitud): por encima de las
+        # bandas (-9) para que se vea incluso sobre Ideal/Posible.
+        self._zone_band = _BandPool(
+            item,
+            brush=pg.mkBrush(*COLOR_ZONE),
+            pen=pg.mkPen(QColor(251, 191, 36, 170), width=1),
+            z_value=-9,
+        )
 
         self._limit_line = item.addLine(
             y=30, pen=pg.mkPen(COLOR_LIMIT, width=1.5, style=Qt.PenStyle.DashLine)
@@ -1062,8 +1073,9 @@ class TransitCurve(QWidget):
         """Leyenda HTML: minimal (estado vacío) o completa con las bandas.
 
         Solo describe lo que se pinta en el gráfico: altitud del objeto,
-        límite de 30°, curva de la Luna y las dos ventanas de captura.
-        La separación y los rangos horarios viven en el subtítulo.
+        límite de 30°, curva de la Luna, la zona ±2° y las dos ventanas
+        de captura. La separación y los rangos horarios viven en el
+        subtítulo.
         """
         alt = f'<span style="color:{COLOR_ALTITUDE}">━━</span> Altitud'
         if not full:
@@ -1072,6 +1084,7 @@ class TransitCurve(QWidget):
             f'{alt} &nbsp; '
             f'<span style="color:{COLOR_LIMIT}">- -</span> 30° &nbsp; '
             f'<span style="color:{COLOR_MOON}">━━</span> Luna &nbsp; '
+            f'<span style="color:#fbbf24">■</span> Zona ±2° &nbsp; '
             f'<span style="color:#22c55e">■</span> Ideal &nbsp; '
             f'<span style="color:#f59e0b">■</span> Posible'
         )
@@ -1101,7 +1114,12 @@ class TransitCurve(QWidget):
         self._legend.setText(self._legend_text(full=False))
         self._altitude_curve.setData([], [])
         self._moon_curve.setData([], [])
-        for band in (self._night_band, self._possible_band, self._ideal_band):
+        for band in (
+            self._night_band,
+            self._possible_band,
+            self._ideal_band,
+            self._zone_band,
+        ):
             band.hide()
         self._limit_line.hide()
 
@@ -1161,6 +1179,15 @@ class TransitCurve(QWidget):
         self._ideal_band.set_spans(
             _contiguous_spans(hours, [w == WINDOW_IDEAL for w in windows])
         )
+        # Zona ±2°: el objeto a tiro del umbral lunar o de los 45° de
+        # altitud (ambas condiciones comparten la misma banda amarilla).
+        zone_mask = [
+            abs(separation - min_dist) <= 2.0 or abs(altitude - 45.0) <= 2.0
+            for separation, altitude in zip(
+                curve.moon_separations, curve.altitudes, strict=False
+            )
+        ]
+        self._zone_band.set_spans(_contiguous_spans(hours, zone_mask))
         self._limit_line.show()          # límite de 30° (oculto en clear())
 
         # --- Eje
