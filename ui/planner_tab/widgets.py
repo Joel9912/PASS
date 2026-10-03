@@ -645,7 +645,10 @@ class DayNightBar(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setMinimumHeight(36)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        # Vertical: Preferred, no Fixed — así el sobrante del panel de
+        # efemérides se reparte aquí (via stretch) en vez de quedar pegado
+        # al fondo del cuadro. La barra se dibuja a la altura disponible.
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self._marks: dict[str, float | None] = {
             "sunset": None, "dusk": None, "dawn": None, "sunrise": None,
         }
@@ -697,7 +700,11 @@ class DayNightBar(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
-        rect = QRectF(0, 4, self.width(), 14)
+        # Altura a la altura disponible, no fija: al crecer el panel de
+        # efemérides, la barra se lleva el sobrante (20 px reservados
+        # abajo para los ticks «00h…24h» y las marcas). Con 36 px de
+        # alto da 16 px, casi los 14 de siempre.
+        rect = QRectF(0, 4, self.width(), max(14, self.height() - 20))
         painter.setPen(Qt.PenStyle.NoPen)
 
         for x in range(int(rect.width())):
@@ -848,7 +855,9 @@ class EphemerisPanel(QFrame):
         moon_text.addWidget(self._illum_label)
         moon_row.addLayout(moon_text, 1)
         moon_row.addStretch(1)
-        layout.addLayout(moon_row)
+        # stretch=1: cuando el cuadro crece, la Luna gana un par de
+        # píxeles de aire en vez de dejarlos todos al fondo del panel.
+        layout.addLayout(moon_row, 1)
 
         # --- Luz del día y noche
         day_label = QLabel("LUZ DEL DÍA Y NOCHE ASTRONÓMICA")
@@ -856,16 +865,28 @@ class EphemerisPanel(QFrame):
         layout.addWidget(day_label)
 
         self._bar = DayNightBar()
-        layout.addWidget(self._bar)
+        # stretch=6: la gráfica es la que más aprovecha crecer (la barra
+        # se dibuja a la altura disponible) y se lleva el grueso del
+        # sobrante; el resto se reparte 1:6:1:1 entre Luna, barra,
+        # Puesta de Sol y Noche astronómica.
+        layout.addWidget(self._bar, 6)
 
         # --- Horas (los valores van en color, como en el original)
         self._sunset_label = QLabel("Puesta de Sol: --:-- – --:--")
         self._sunset_label.setObjectName("HintLabel")
-        layout.addWidget(self._sunset_label)
+        # Centrado vertical: si el stretch le da aire, el texto no se
+        # queda pegado arriba.
+        self._sunset_label.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        layout.addWidget(self._sunset_label, 1)
 
         self._night_label = QLabel("Noche astronómica: --:-- – --:--")
         self._night_label.setObjectName("HintLabel")
-        layout.addWidget(self._night_label)
+        self._night_label.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        layout.addWidget(self._night_label, 1)
 
         # Estado actual (para poder refrescar tras mover la ubicación)
         self._latitude = 0.0

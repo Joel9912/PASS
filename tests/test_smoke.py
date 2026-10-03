@@ -245,6 +245,69 @@ def test_planner_search_tab_corrections():
     window.close()
 
 
+def test_ephemeris_panel_fills_its_cell():
+    """El cuadro de Efemérides llena su celda y no pellizca a los otros.
+
+    Regresión del hueco que quedaba sobre Ubicación: el container de
+    Efemérides llevaba un ``addStretch(1)`` después del panel, que se
+    tragaba el sobrante (medido: 177 px en 1919×1026). Se sustituyó por
+    ``addWidget(panel, 1)``, que estira el marco sin subir su sizeHint;
+    así la rejilla reparte igual y **Filtros y Ubicación no cambian de
+    alto** (antes y después: 406 y 135 px en ese tamaño). El sobrante
+    del interior se reparte con stretches (Luna ×1, barra ×6, Puesta ×1,
+    Noche ×1) en vez de dejarlo pegado al fondo.
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import QApplication, QGridLayout, QTabWidget
+
+    from ui.main_window import MainWindow
+    from ui.planner_tab.widgets import EphemerisPanel
+
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    window.show()
+    window.content.setCurrentIndex(4)      # página del Planificador visible
+    window.resize(1919, 1026)              # tamaño holgado, como el real
+    for _ in range(3):
+        app.processEvents()
+
+    page = window.content.widget(4).findChild(QTabWidget).widget(0)
+
+    def find_grid(layout):
+        for index in range(layout.count()):
+            child = layout.itemAt(index).layout()
+            if isinstance(child, QGridLayout):
+                return child
+            if child is not None:
+                found = find_grid(child)
+                if found is not None:
+                    return found
+        return None
+
+    grid = find_grid(page.layout())
+    assert grid is not None
+    page.layout().activate()
+    app.processEvents()
+
+    filtros = grid.itemAtPosition(0, 0).widget()
+    efem = grid.itemAtPosition(1, 0).widget()
+    ubic = grid.itemAtPosition(2, 0).widget()
+    efem.layout().activate()
+    panel = efem.findChild(EphemerisPanel)
+
+    # Sin hueco: el marco llega hasta la fila siguiente.
+    assert panel is not None and efem.height() == panel.height()
+
+    # Y las otras dos filas no se quedan cortas (no hay que robarles alto).
+    assert filtros.height() >= filtros.sizeHint().height()
+    assert ubic.height() >= ubic.sizeHint().height()
+
+    window.close()
+
+
 def test_find_siril_does_not_crash():
     """Detección de SirIL funciona aunque no esté instalado (None o ruta)."""
     from stacks.siril_finder import find_siril

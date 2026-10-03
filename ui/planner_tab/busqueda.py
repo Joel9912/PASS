@@ -331,13 +331,17 @@ class BusquedaTab(QWidget):
         return panel
 
     def _build_ephemeris(self) -> QWidget:
+        # stretch=1: el panel llena su celda hasta la fila de Ubicación.
+        # Antes iba un addStretch(1) después del panel, que se llevaba el
+        # sobrante y dejaba el hueco que se veía sobre Ubicación. El
+        # sizeHint del container no cambia, así que la altura de las
+        # filas de Filtros y Ubicación tampoco.
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
         self._ephemeris = EphemerisPanel()
         self._ephemeris.date_changed.connect(self._on_date_changed)
-        layout.addWidget(self._ephemeris)
-        layout.addStretch(1)
+        layout.addWidget(self._ephemeris, 1)
         return container
 
     def _build_curve(self) -> QWidget:
