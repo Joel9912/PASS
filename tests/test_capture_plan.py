@@ -113,8 +113,9 @@ def test_best_dates_transit_local_uses_the_saved_offset():
     """La culminación del plan pasa a hora de reloj con ``utc_offset_hours``.
 
     El desfase no cambia la puntuación ni las fechas (la física es la misma):
-    solo cambia cómo se lee la hora. Con +2 guardado, la diferencia frente a
-    hora solar es ``2 − longitud/15`` (con el redondeo a minutos del texto).
+    solo cambia cómo se lee la hora. Con +2 guardado, la diferencia frente al
+    huso inferido de la longitud es ``2 − round(longitud/15)`` (con el
+    redondeo a minutos del texto).
     """
     window = dict(start_date="2026-10-02", date_range_days=4, top_n=2)
     clock = best_dates(
@@ -126,7 +127,7 @@ def test_best_dates_transit_local_uses_the_saved_offset():
     assert [item["date"] for item in clock] == [item["date"] for item in solar]
     assert [item["score"] for item in clock] == [item["score"] for item in solar]
 
-    expected_delta = (2.0 - MADRID_LON / 15.0) % 24.0
+    expected_delta = (2.0 - round(MADRID_LON / 15.0)) % 24.0
     for clock_item, solar_item in zip(clock, solar, strict=True):
         delta = (_hhmm(clock_item["transit_local"])
                  - _hhmm(solar_item["transit_local"])) % 24.0

@@ -84,9 +84,10 @@ def local_utc_offset(
     """Horas que hay que sumar a UTC para obtener la hora local del lugar.
 
     Si la ubicación guarda su desfase horario se usa ese (hora de reloj, con
-    horario de verano incluido). Si no, se recurre a la longitud: eso da
-    **hora solar local**, válida para cálculos pero que puede diferir del
-    reloj en hasta ~2 h según el país y la época del año.
+    horario de verano incluido). Si no, se infiere de la longitud
+    redondeada a la hora (`round(lon / 15)`, huso horario estándar): así
+    una ubicación en el otro lado del planeta no acaba con el huso del
+    sistema (que es de otro continente) y la noche queda «invertida».
 
     Todo lo que convierta a hora local (curvas, culminación, efemérides)
     pasa por aquí: una única fuente de verdad. Sin astropy, para que la
@@ -94,7 +95,7 @@ def local_utc_offset(
     """
     if utc_offset_hours is not None:
         return float(utc_offset_hours)
-    return longitude_deg / 15.0
+    return round(longitude_deg / 15.0)
 
 
 def transit_local_hours(

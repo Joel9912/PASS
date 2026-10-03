@@ -317,9 +317,10 @@ def test_search_annotates_analytical_transit(loaded_db):
 def test_search_transit_column_uses_the_location_offset(loaded_db):
     """La columna Tránsito es hora de reloj si la ubicación guarda desfase.
 
-    Sin ``utc_offset_hours`` usa la longitud (hora solar); con +2 guardado
-    adelanta exactamente ``2 − longitud/15``. Las horas >30° no cambian: son
-    duración, no un instante.
+    Sin ``utc_offset_hours`` se infiere el huso de la longitud
+    (round(lon/15)); con +2 guardado adelanta exactamente
+    ``2 − round(longitud/15)``. Las horas >30° no cambian: son duración,
+    no un instante.
     """
     from planners.celestial_search import SearchFilters, search
 
@@ -331,7 +332,8 @@ def test_search_transit_column_uses_the_location_offset(loaded_db):
     )
 
     delta = (_hhmm(clock["transit_local"]) - _hhmm(solar["transit_local"])) % 24.0
-    assert delta == pytest.approx((2.0 + 3.7 / 15.0) % 24.0, abs=0.02)
+    expected = (2.0 - round(base["longitude"] / 15.0)) % 24.0
+    assert delta == pytest.approx(expected, abs=0.02)
     assert clock["hours_above_30"] == solar["hours_above_30"]
 
 
@@ -398,11 +400,11 @@ def test_night_info_carries_sunset_sunrise_and_moon_age():
 def test_night_curve_hour_axis_follows_the_location_offset():
     """El eje horario respeta ``utc_offset_hours``; la física no cambia.
 
-    Sin desfase guardado se usa la longitud (hora solar); con +2 guardado la
-    misma culminación se lee a la hora de reloj. La ventana temporal también
-    se desplaza (arranca a las 16:00 hora local), por eso se comprueba el
-    pico de altitud contra la culminación analítica en vez de comparar
-    instantes uno a uno.
+    Sin desfase guardado se infiere el huso de la longitud (round(lon/15));
+    con +2 guardado la misma culminación se lee a la hora de reloj. La
+    ventana temporal también se desplaza (arranca a las 16:00 hora local),
+    por eso se comprueba el pico de altitud contra la culminación analítica
+    en vez de comparar instantes uno a uno.
     """
     from planners.analytical_transit import transit_local_hours
     from planners.transit import night_curve

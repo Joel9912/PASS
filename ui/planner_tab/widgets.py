@@ -92,8 +92,8 @@ def iso_to_local_hours(
     """Instante ISO en UTC a horas decimales locales (``None`` si falta).
 
     El paso a hora local lo hace :func:`local_utc_offset`: si la ubicación
-    tiene desfase guardado se usa (hora de reloj); si no, la longitud
-    (hora solar).
+    tiene desfase guardado se usa (hora de reloj); si no, se infiere el
+    huso de la longitud (``round(lon/15)``).
     """
     if not iso_utc:
         return None
@@ -145,12 +145,6 @@ UTC_OFFSETS: tuple[float, ...] = tuple(
 )
 
 
-def _system_offset_hours() -> float:
-    """Desfase UTC del reloj del sistema, en horas (verano incluido)."""
-    offset = datetime.now().astimezone().utcoffset()
-    return offset.total_seconds() / 3600.0 if offset else 0.0
-
-
 class LocationBar(QFrame):
     """Selector de ubicación de las subpestañas del Planificador.
 
@@ -162,9 +156,9 @@ class LocationBar(QFrame):
     de las condiciones meteorológicas), compactado en tres filas para caber
     en la columna izquierda; el resto de subpestañas lo consumen por señal.
 
-    El desfase puede quedar en «Auto» (la hora del reloj del sistema, con
-    horario de verano), «Solar (longitud)» (hora solar local) o fijado a
-    una hora de reloj concreta.
+    El desfase puede quedar en «Auto» (se infiere del huso estándar de la
+    longitud de la ubicación) o fijado a una hora de reloj concreta (override
+    para husos políticos que no coinciden con la longitud).
     """
 
     location_changed = pyqtSignal(float, float, object)  # lat, lon, offset|None
@@ -226,19 +220,17 @@ class LocationBar(QFrame):
         offset_row.setSpacing(6)
         offset_row.addWidget(QLabel("Huso"))
         self._offset = QComboBox()
-        # «Auto» (None) se resuelve a la hora del sistema en
-        # utc_offset_hours(); «Solar» (None aguas abajo) usa la longitud.
+        # «Auto» (None) se infiere de la longitud de la ubicación en
+        # local_utc_offset (round(lon/15)); nunca la hora del sistema.
         self._offset.addItem("Auto", None)
-        self._offset.addItem("Solar (longitud)", "solar")
         for value in UTC_OFFSETS:
             self._offset.addItem(f"{value:+.1f} h", value)
         # 170 px: «Solar (longitud)» + desplegable pedían 158; margen de sobra.
         self._offset.setFixedWidth(170)
         self._offset.setToolTip(
             "Desfase horario de la ubicación.\n"
-            "«Auto» usa la hora de tu reloj (horario de verano incluido);\n"
-            "«Solar (longitud)» calcula la hora solar local desde la longitud;\n"
-            "o fija una hora de reloj concreta."
+            "«Auto» lo infiere de la longitud (huso estándar);\n"
+            "o fija una hora de reloj concreta (p. ej. España +1/+2)."
         )
         self._offset.currentIndexChanged.connect(self._emit)
         offset_row.addWidget(self._offset)
@@ -264,17 +256,11 @@ class LocationBar(QFrame):
     def utc_offset_hours(self) -> float | None:
         """Desfase horario a usar en los cálculos.
 
-        «Auto» → la hora del reloj del sistema (lo que pide el usuario sin
-        tocar nada); «Solar (longitud)» → ``None``, para que los planos
-        calculen la hora solar desde la longitud; un valor fijo → ese
-        desfase de reloj.
+        «Auto» → ``None``, para que la ubicación infiera su huso de la
+        longitud (``round(lon/15)``); un valor fijo → ese desfase de reloj
+        (override para husos políticos como España o la India).
         """
-        value = self._offset.currentData()
-        if value is None:                       # «Auto»
-            return _system_offset_hours()
-        if value == "solar":                    # «Solar (longitud)»
-            return None
-        return value
+        return self._offset.currentData()
 
     def has_saved_location(self) -> bool:
         """¿Hay una ubicación de la base seleccionada (no el modo manual)?"""
@@ -870,7 +856,7 @@ class EphemerisPanel(QFrame):
         """Recalcula todo el panel para ``date_iso`` y la ubicación dada.
 
         ``utc_offset_hours`` es el desfase horario guardado de la ubicación
-        (``None`` → se usa la longitud como hora solar).
+        (``None`` → se infiere el huso de la longitud).
         """
         self._latitude = latitude
         self._longitude = longitude

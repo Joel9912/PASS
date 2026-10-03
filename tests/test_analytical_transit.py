@@ -120,20 +120,34 @@ def test_local_utc_offset_prefers_the_saved_offset():
     assert local_utc_offset(0.0, 5.5) == pytest.approx(5.5)
 
 
-def test_local_utc_offset_falls_back_to_longitude():
-    """Sin desfase guardado se usa la longitud (hora solar, aproximación)."""
-    assert local_utc_offset(MADRID_LON) == pytest.approx(MADRID_LON / 15.0)
+def test_local_utc_offset_falls_back_to_the_inferred_timezone():
+    """Sin desfase guardado se infiere el huso de la longitud: round(lon/15)."""
+    assert local_utc_offset(MADRID_LON) == pytest.approx(round(MADRID_LON / 15.0))
     assert local_utc_offset(-15.0, None) == pytest.approx(-1.0)
     assert local_utc_offset(75.0, None) == pytest.approx(5.0)
     # 0 guardado SÍ es un valor (UTC+0, p. ej. Greenwich en invierno),
-    # no se confunde con "sin guardar": solo None cae a la longitud.
+    # no se confunde con "sin guardar": solo None cae al huso inferido.
     assert local_utc_offset(MADRID_LON, 0) == 0.0
     assert local_utc_offset(0.0, None) == 0.0
 
 
+def test_local_utc_offset_infers_the_hemisphere_from_longitude():
+    """Regresión: la ubicación nunca hereda el huso del sistema.
+
+    Caso del usuario: lat 10, lon +85.4 con Auto (antes = huso del sistema
+    −6, ¡11.7 h desfasados!) dejaba la noche «invertida» (el sol se ocultaba
+    a las 6 de la mañana). Auto ahora infiere el huso desde la longitud.
+    """
+    assert local_utc_offset(85.4) == pytest.approx(6.0)    # este → +6
+    assert local_utc_offset(-85.4) == pytest.approx(-6.0)   # oeste → −6
+    # El huso guardado sigue mandando (override político: España +2)
+    assert local_utc_offset(MADRID_LON, 2.0) == pytest.approx(2.0)
+
+
 def test_transit_local_hours_accepts_an_explicit_offset():
-    """Con offset +2 la culminación local es 2 h más que con hora solar."""
+    """Con offset +2 la culminación local es 2 h más que con huso inferido."""
     solar = transit_local_hours(M42_RA, "2026-01-01", MADRID_LON)
     clock = transit_local_hours(M42_RA, "2026-01-01", MADRID_LON, utc_offset_hours=2.0)
     assert 0.0 <= clock < 24.0
-    assert (clock - solar) % 24.0 == pytest.approx(2.0 - MADRID_LON / 15.0, abs=1e-6)
+    inferred = round(MADRID_LON / 15.0)
+    assert (clock - solar) % 24.0 == pytest.approx(2.0 - inferred, abs=1e-6)
