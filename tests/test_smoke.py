@@ -382,6 +382,45 @@ def test_day_night_bar_dynamic_axis():
     app.processEvents()
 
 
+def test_curve_windows_line_is_reserved():
+    """La curva no cambia su mínimo al llegar los datos (sin reflow).
+
+    El rótulo «★ Captura Ideal / ⚠ Captura Posible» estaba **oculto** sin
+    datos: al seleccionar un objeto aparecía y el mínimo del panel crecía
+    **+21 px** (235 → 256 medidos), la rejilla de Búsqueda reequilibraba
+    las filas y el cuadro de Efemérides se hinchaba — los dos rótulos de
+    abajo cambiaban de tamaño con los datos (panel 272 → 294 px y rótulos
+    22 → 33 px). Ahora la línea se reserva con **texto en blanco** desde
+    el arranque (petición del usuario: los tamaños tienen que estar
+    puestos antes), así que el mínimo es el mismo con y sin datos.
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import QApplication
+
+    from ui.planner_tab.widgets import TransitCurve
+
+    app = QApplication.instance() or QApplication([])
+    curve = TransitCurve()
+    curve.clear()                       # estado sin selección
+
+    label = curve._windows_label
+    assert not label.isHidden()         # la línea sigue reservada
+    assert label.text().strip() == ""   # ...con texto en blanco
+
+    # El mínimo no se mueve cuando llega el texto de datos.
+    before = curve.minimumSizeHint().height()
+    label.setText(
+        "★ Captura Ideal: 00:08 – 01:54 (1h 46min) · "
+        "⚠ Captura Posible: 00:08 – 02:19 (2h 11min)"
+    )
+    assert curve.minimumSizeHint().height() == before
+
+    app.processEvents()
+
+
 def test_find_siril_does_not_crash():
     """Detección de SirIL funciona aunque no esté instalado (None o ruta)."""
     from stacks.siril_finder import find_siril

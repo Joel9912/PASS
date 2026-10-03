@@ -1099,8 +1099,14 @@ class TransitCurve(QWidget):
         self._subtitle.setObjectName("CurveSubtitle")
         header.addWidget(self._subtitle)
 
-        # Rangos de Captura Ideal / Posible (aparecen solo con datos).
-        self._windows_label = QLabel()
+        # Rangos de Captura Ideal / Posible. La línea se RESERVA desde el
+        # principio (texto en blanco): si el rótulo solo apareciera con
+        # datos, su mínimo crecería al seleccionar un objeto (+21 px
+        # medidos), la rejilla reequilibraría sus filas y el cuadro de
+        # Efemérides se hincharía — los dos rótulos de abajo cambiaban de
+        # tamaño al llegar los datos (petición del usuario: los tamaños
+        # tienen que estar puestos antes).
+        self._windows_label = QLabel(" ")
         self._windows_label.setObjectName("CurveSubtitle")
         self._windows_label.setWordWrap(True)
         header.addWidget(self._windows_label)
@@ -1214,8 +1220,11 @@ class TransitCurve(QWidget):
         """
         self._title.setText(CURVE_TITLE)
         self._subtitle.setText(message)
-        self._windows_label.clear()
-        self._windows_label.hide()
+        # La línea de ventanas se reserva con texto en blanco; NO se oculta
+        # (ocultarla cambiaba el mínimo del panel al llegar los datos y
+        # refluía la fila entera: ver __init__).
+        self._windows_label.setText(" ")
+        self._windows_label.show()
         self._legend.setText(self._legend_text(full=False))
         self._altitude_curve.setData([], [])
         self._moon_curve.setData([], [])
