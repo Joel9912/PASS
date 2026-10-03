@@ -206,6 +206,7 @@ def best_dates(
         windows = capture_windows(
             curve.altitudes,
             curve.moon_separations,
+            curve.moon_altitudes,
             curve.astro_night,
             item["_illumination_pct"],
         )

@@ -57,18 +57,38 @@ def test_min_moon_distance_fits_user_data_within_rmse():
 # ------------------------------------------------------------ clasificación
 def test_classify_instant_ideal_possible_and_no_possible():
     """Ideal exige alt>45 y sep>umbral; Possible alt>=30 y sep>=umbral-10."""
-    # 50 % de luna → umbral ~77°
-    assert classify_instant(60.0, 100.0, 50.0) == WINDOW_IDEAL
-    assert classify_instant(40.0, 75.0, 50.0) == WINDOW_POSSIBLE   # 77-10=67
-    assert classify_instant(44.0, 120.0, 50.0) == WINDOW_POSSIBLE  # alt < 45
-    assert classify_instant(35.0, 60.0, 50.0) == WINDOW_NO_POSSIBLE  # sep < 67
-    assert classify_instant(20.0, 120.0, 50.0) == WINDOW_NO_POSSIBLE  # alt < 30
+    # 50 % de luna → umbral ~77°; la luna arriba (30°) exige distancia
+    moon_up = 30.0
+    assert classify_instant(60.0, 100.0, 50.0, moon_up) == WINDOW_IDEAL
+    assert classify_instant(40.0, 75.0, 50.0, moon_up) == WINDOW_POSSIBLE   # 77-10=67
+    assert classify_instant(44.0, 120.0, 50.0, moon_up) == WINDOW_POSSIBLE  # alt < 45
+    assert classify_instant(35.0, 60.0, 50.0, moon_up) == WINDOW_NO_POSSIBLE  # sep < 67
+    assert classify_instant(20.0, 120.0, 50.0, moon_up) == WINDOW_NO_POSSIBLE  # alt < 30
 
 
 def test_classify_instant_stricter_with_full_moon():
     """Con llena (umbral ~120°) casi nada es Ideal, aunque la luna esté lejos."""
-    assert classify_instant(70.0, 110.0, 100.0) == WINDOW_POSSIBLE
-    assert classify_instant(70.0, 125.0, 100.0) == WINDOW_IDEAL
+    moon_up = 30.0
+    assert classify_instant(70.0, 110.0, 100.0, moon_up) == WINDOW_POSSIBLE
+    assert classify_instant(70.0, 125.0, 100.0, moon_up) == WINDOW_IDEAL
+
+
+def test_classify_instant_moon_below_horizon_skips_separation():
+    """Luna bajo el horizonte: no contamina, solo manda la altitud.
+
+    Regresión del caso M31 del 02/10/2026: con la luna hundida la
+    separación angular bloqueaba ventanas legítimas (el usuario vio la
+    Posible cortada hasta las 22:20 en vez de empezar a las 19:40).
+    """
+    moon_down = -5.0
+    assert classify_instant(60.0, 10.0, 50.0, moon_down) == WINDOW_IDEAL
+    assert classify_instant(40.0, 10.0, 50.0, moon_down) == WINDOW_POSSIBLE
+    # La altitud sigue mandando con la luna hundida
+    assert classify_instant(20.0, 10.0, 50.0, moon_down) == WINDOW_NO_POSSIBLE
+    # En el horizonte exacto cuenta como hundida (arriba = > 0°)
+    assert classify_instant(60.0, 10.0, 50.0, 0.0) == WINDOW_IDEAL
+    # Un pelo sobre el horizonte vuelve a exigir la distancia
+    assert classify_instant(60.0, 10.0, 50.0, 1.0) == WINDOW_NO_POSSIBLE
 
 
 def test_capture_windows_only_classifies_astro_night():
@@ -76,16 +96,29 @@ def test_capture_windows_only_classifies_astro_night():
     windows = capture_windows(
         altitudes=[60.0, 60.0, 10.0],
         moon_separations=[120.0, 10.0, 120.0],
+        moon_altitudes=[30.0, 30.0, -10.0],
         astro_night_mask=[True, True, False],
         illumination_pct=20.0,  # umbral ~54°
     )
     assert windows == [WINDOW_IDEAL, WINDOW_NO_POSSIBLE, WINDOW_NO_POSSIBLE]
 
 
+def test_capture_windows_ignores_separation_while_moon_is_down():
+    """La serie lunar entera manda: hundida ignora sep, arriba la exige."""
+    windows = capture_windows(
+        altitudes=[60.0, 60.0, 60.0],
+        moon_separations=[10.0, 10.0, 10.0],
+        moon_altitudes=[-5.0, 5.0, -5.0],
+        astro_night_mask=[True, True, True],
+        illumination_pct=50.0,  # umbral ~77°
+    )
+    assert windows == [WINDOW_IDEAL, WINDOW_NO_POSSIBLE, WINDOW_IDEAL]
+
+
 def test_capture_windows_rejects_mismatched_lengths():
-    """Las tres series deben tener la misma longitud."""
+    """Las cuatro series deben tener la misma longitud."""
     with pytest.raises(ValueError):
-        capture_windows([1.0], [1.0, 2.0], [True], 50.0)
+        capture_windows([1.0], [1.0, 2.0], [1.0], [True], 50.0)
 
 
 def test_capture_window_summary_groups_ranges_and_hours():

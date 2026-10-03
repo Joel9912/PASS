@@ -1147,6 +1147,7 @@ class TransitCurve(QWidget):
         windows = capture_windows(
             curve.altitudes,
             curve.moon_separations,
+            curve.moon_altitudes,
             curve.astro_night,
             illumination_pct,
         )
@@ -1181,10 +1182,16 @@ class TransitCurve(QWidget):
         )
         # Zona ±2°: el objeto a tiro del umbral lunar o de los 45° de
         # altitud (ambas condiciones comparten la misma banda amarilla).
+        # Con la Luna bajo el horizonte no hay umbral lunar que vigilar
+        # (igual que en las ventanas): solo cuenta la transición de altitud.
         zone_mask = [
-            abs(separation - min_dist) <= 2.0 or abs(altitude - 45.0) <= 2.0
-            for separation, altitude in zip(
-                curve.moon_separations, curve.altitudes, strict=False
+            (
+                moon_alt > 0.0 and abs(separation - min_dist) <= 2.0
+            )
+            or abs(altitude - 45.0) <= 2.0
+            for separation, altitude, moon_alt in zip(
+                curve.moon_separations, curve.altitudes, curve.moon_altitudes,
+                strict=False,
             )
         ]
         self._zone_band.set_spans(_contiguous_spans(hours, zone_mask))

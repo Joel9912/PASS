@@ -4,7 +4,7 @@
 Lógica de planificación de PAS.S: catálogo de objetos, búsqueda, tránsito/luna/noche astronómica, ranking de recomendaciones, encuadre/FOV, plan de captura y gestión de catálogo personal y sesiones planificadas.
 
 ## Estado actual
-Todo implementado; **73 tests** en `tests/` son la verificación disponible.
+Todo implementado; **94 tests** en `tests/` son la verificación disponible.
 
 ### Catálogo y búsqueda
 - `catalog_loader.py` — descarga y carga en SQLite: OpenNGC (`NGC.csv` + `addendum.csv`, ~13 372 objetos NGC/IC/Messier/Barnard/Caldwell), HYG (estrellas con magnitud ≤ 8, ~41 487) y **LDN** desde VizieR (`VII/7A/ldn`, **1 787** nebulosas oscuras). Ficheros cacheados en `data/downloads/`; refresco completo (DELETE+INSERT). `ensure_catalog()` lo ejecuta `main.py` si las tablas están vacías (sin red: aviso y sigue); manual: `python -m planners.catalog_loader [--force]`.
@@ -15,6 +15,7 @@ Todo implementado; **73 tests** en `tests/` son la verificación disponible.
 - `analytical_transit.py` — **sin astropy**, rápido para tablas de 500 filas: `max_altitude`, `is_circumpolar`, `never_rises`, `gmst_0h_hours`, `transit_utc_hours`, `transit_local_hours`, `hours_above_altitude`.
   - **`local_utc_offset(longitude, utc_offset_hours)`** — única fuente de verdad para pasar de UTC a hora local: usa el desfase guardado de la ubicación (hora de reloj) o, si no hay, la longitud (hora solar). Reexportado por `transit.py`.
 - `moon_distance.py` — umbral `min_moon_distance(illumination_pct)` (polinomio de grado 3 ajustado a datos reales), `classify_instant`, `capture_windows`, `capture_window_summary` (horas totales + rangos por ventana) y `format_hour_range`.
+  - **Regla de la Luna bajo el horizonte**: `classify_instant`/`capture_windows` reciben la altitud lunar; con la Luna hundida (≤ 0°) no contamina y la separación se da por cumplida — solo manda la altitud del objeto. En cuanto la Luna asoma (> 0°) vige el umbral. Sin esa regla un objeto a tiro quedaba bloqueado por una separación calculada contra una Luna invisible (caso M31 del 02/10/2026: la Posible no arrancaba hasta las 22:20 en vez de al cruzar los 30°).
   - `unwrap_hours()` desenvuelve la medianoche **dentro** de `capture_window_summary`: sin eso, una ventana Ideal que cruza las 00:00 se perdía entera.
 - `framing.py` — `calculate_fov(setup)` → FOV en grados desde focal + píxel + resolución. Si faltan datos devuelve `None` (la UI no activa el encuadre) y `_resolution_px` parsea `camera_resolution` ("6048x4032") como respaldo.
 - `capture_plan.py` — `best_dates(...)`: ranking de fechas (malla gruesa 30 días ≈ 1,5-2 s) y, para el top N, ventanas de captura con `utc_offset_hours` para que los rangos sean hora de reloj.

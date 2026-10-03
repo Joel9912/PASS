@@ -12,6 +12,12 @@ Con ese umbral se clasifica cada instante de la noche en tres ventanas:
 
 Solo se clasifica dentro de la noche astronómica; el día y el crepúsculo
 quedan fuera (la UI los pinta aparte).
+
+La separación lunar solo se exige cuando la Luna está sobre el horizonte
+(``moon_altitude > 0°``): con la Luna hundida no contamina, así que la
+condición de separación se da por cumplida y manda únicamente la altitud
+del objeto. Sin esa regla, un objeto a tiro de umbral quedaba bloqueado
+por una separación angular calculada contra una Luna invisible.
 """
 from __future__ import annotations
 
@@ -53,6 +59,7 @@ def classify_instant(
     altitude_deg: float,
     separation_moon_deg: float,
     illumination_pct: float,
+    moon_altitude_deg: float,
 ) -> str:
     """Clasifica un instante de la noche en una ventana de captura.
 
@@ -60,16 +67,23 @@ def classify_instant(
     - ``possible``: altitud >= 30° y separación >= umbral - 10° (y no ideal).
     - ``no_possible``: el resto.
 
+    Si ``moon_altitude_deg`` no supera los 0° la Luna está bajo el
+    horizonte: no contamina, la separación se da por cumplida y solo
+    manda la altitud. En cuanto la Luna asoma, la distancia exige el
+    umbral de vuelta.
+
     Esta función NO mira si es de noche: el filtro de noche astronómica lo
     aplica quien tenga la máscara (ver :func:`capture_windows`).
     """
     min_dist = min_moon_distance(illumination_pct)
-    if altitude_deg > IDEAL_MIN_ALTITUDE and separation_moon_deg > min_dist:
+    moon_up = moon_altitude_deg > 0.0
+    sep_ok_ideal = not moon_up or separation_moon_deg > min_dist
+    sep_ok_possible = (
+        not moon_up or separation_moon_deg >= min_dist - POSSIBLE_MOON_MARGIN
+    )
+    if altitude_deg > IDEAL_MIN_ALTITUDE and sep_ok_ideal:
         return WINDOW_IDEAL
-    if (
-        altitude_deg >= POSSIBLE_MIN_ALTITUDE
-        and separation_moon_deg >= min_dist - POSSIBLE_MOON_MARGIN
-    ):
+    if altitude_deg >= POSSIBLE_MIN_ALTITUDE and sep_ok_possible:
         return WINDOW_POSSIBLE
     return WINDOW_NO_POSSIBLE
 
@@ -77,6 +91,7 @@ def classify_instant(
 def capture_windows(
     altitudes: list[float],
     moon_separations: list[float],
+    moon_altitudes: list[float],
     astro_night_mask: list[bool],
     illumination_pct: float,
 ) -> list[str]:
@@ -87,20 +102,30 @@ def capture_windows(
     astronómica se etiquetan ``no_possible``: así la curva puede pintar
     todo el eje sin agujeros y la leyenda resume solo lo nocturno.
 
-    Los tres argumentos deben tener la misma longitud.
+    ``moon_altitudes`` es la altitud de la Luna en cada instante: con ella
+    bajo el horizonte la separación no se exige (ver
+    :func:`classify_instant`).
+
+    Las cuatro series deben tener la misma longitud.
     """
-    if not (len(altitudes) == len(moon_separations) == len(astro_night_mask)):
+    if not (
+        len(altitudes)
+        == len(moon_separations)
+        == len(moon_altitudes)
+        == len(astro_night_mask)
+    ):
         raise ValueError(
-            "altitudes, moon_separations y astro_night_mask deben tener la misma longitud"
+            "altitudes, moon_separations, moon_altitudes y astro_night_mask "
+            "deben tener la misma longitud"
         )
     windows: list[str] = []
-    for alt, sep, is_astro in zip(
-        altitudes, moon_separations, astro_night_mask, strict=True
+    for alt, sep, moon_alt, is_astro in zip(
+        altitudes, moon_separations, moon_altitudes, astro_night_mask, strict=True
     ):
         if not is_astro:
             windows.append(WINDOW_NO_POSSIBLE)
         else:
-            windows.append(classify_instant(alt, sep, illumination_pct))
+            windows.append(classify_instant(alt, sep, illumination_pct, moon_alt))
     return windows
 
 

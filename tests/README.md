@@ -1,13 +1,13 @@
 # tests/
 
 ## Qué es
-Tests de PAS.S con **pytest** (83 tests): validan que la estructura y la base del programa están sanas y que la lógica de `planners/` da los valores correctos.
+Tests de PAS.S con **pytest** (94 tests): validan que la estructura y la base del programa están sanas y que la lógica de `planners/` da los valores correctos.
 
 ## Estado actual
 - `test_smoke.py` — valida que `main.py` importa, que las 6 pestañas están definidas, que todos los docs/READMEs existen y que el esquema SQLite se aplica (incluidas `catalog` y `stars`).
 - `test_planners.py` — parsing del cargador (OpenNGC/HYG con datos inline, offline), búsqueda con filtros reales, tránsito/noche con astropy y ranking (orden, reasons y pesos configurables). Cubre también los campos nuevos de `NightInfo` (`sunset`, `sunrise`, `moon_age_days`, `waxing`) y `night_curve(utc_offset_hours)`. Los tests de BD llaman `ensure_catalog()`; si no hay datos ni red, se omiten.
 - `test_analytical_transit.py` — culminación/altitud sin astropy y consistencia con astropy (<10 min). Incluye `local_utc_offset`: desfase guardado > longitud, y `None` cae a hora solar.
-- `test_moon_distance.py` — polinomio de grado 3 (valores de referencia), `capture_windows` y `capture_window_summary`. Regresión del **cruce de medianoche**: `unwrap_hours` y que la ventana Ideal que pasa por las 00:00 no se descarte.
+- `test_moon_distance.py` — polinomio de grado 3 (valores de referencia), `capture_windows` y `capture_window_summary`. Regresión del **cruce de medianoche**: `unwrap_hours` y que la ventana Ideal que pasa por las 00:00 no se descarte. También la **regla de la Luna hundida** (con la Luna ≤ 0° la separación no se exige y solo manda la altitud; regresión del caso M31 del 02/10/2026).
 - `test_framing.py` — FOV desde focal/píxel/resolución y `None` si faltan datos.
 - `test_capture_plan.py` — puntuación offline y `best_dates` con astropy (orden, ventanas, sin noche → vacío, `utc_offset_hours` en la hora de culminación).
 - `test_ldn_loader.py` — parseo de las nebulosas oscuras de Lynds (datos inline, offline).
