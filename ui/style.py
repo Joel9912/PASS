@@ -82,6 +82,28 @@ QMainWindow {
     background-color: $surface;
 }
 
+/* ============== Nav del diálogo de Configuración ============== */
+#ConfigNav {
+    background-color: $panel;
+    border: 1px solid $border;
+    border-radius: 6px;
+    outline: none;
+}
+#ConfigNav::item {
+    color: $textDim;
+    padding: 10px 10px;
+    margin: 3px 6px;
+    border-radius: 6px;
+}
+#ConfigNav::item:hover {
+    background-color: $surface;
+    color: $text;
+}
+#ConfigNav::item:selected {
+    background-color: $accentSoft;
+    color: $accentLight;
+}
+
 /* ============== Pie de página ============== */
 #Footer {
     background-color: $panel;

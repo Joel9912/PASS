@@ -1,0 +1,274 @@
+"""Diálogo «Configuración General de la Aplicación».
+
+Se abre con el botón ⚙ de la barra lateral. Dos secciones en el nav:
+«General» (motor SirIL y carpeta base de proyectos) y «Clima» (API keys
+de Clear Outside y Meteoblue). «Guardar» escribe todo de una vez en la
+tabla ``settings`` (nunca en código ni en el repositorio); «Cerrar» o ✕
+descarta los cambios.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+
+from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtWidgets import (
+    QCheckBox,
+    QDialog,
+    QFileDialog,
+    QFormLayout,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QMessageBox,
+    QPushButton,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
+
+from db.settings import get_setting, set_setting
+from planners.weather.base import load_api_key, save_api_key
+from stacks.siril_finder import find_siril, save_user_path, siril_version
+
+#: Clave de ``settings`` para la carpeta base de proyectos.
+PROJECT_ROOT_KEY = "project_root"
+
+#: Colores de estado (mismos tonos que las tarjetas de clima).
+_OK = "#22c55e"      # verde: detectado y operativo
+_WARN = "#f59e0b"    # ámbar: falta algo o no responde
+_ERROR = "#f85149"   # rojo: la ruta no existe
+
+
+class ConfigDialog(QDialog):
+    """Configuración general: SirIL, carpeta base y API keys del clima.
+
+    Emite ``saved`` tras «Guardar» para que la ventana principal pueda
+    refrescar el clima de Búsqueda si cambiaron las API keys.
+    """
+
+    saved = pyqtSignal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Configuración General de la Aplicación")
+        self.setMinimumSize(860, 520)
+        # La regla base `QWidget { background-color }` deja las etiquetas
+        # con fondo negro sobre las tarjetas; aquí se transparentan (como
+        # en el mockup). Global: decisión a proponer aparte.
+        self.setStyleSheet(
+            "QLabel { background: transparent; }"
+            "QCheckBox { background: transparent; }"
+        )
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(12, 12, 12, 10)
+        root.setSpacing(10)
+
+        body = QHBoxLayout()
+        body.setSpacing(12)
+
+        # Nav lateral (según el mockup: General y Clima).
+        self._nav = QListWidget()
+        self._nav.setObjectName("ConfigNav")
+        self._nav.setFixedWidth(170)
+        self._nav.addItems(["\U0001f527  General", "\U0001f324  Clima"])
+        body.addWidget(self._nav)
+
+        self._stack = QStackedWidget()
+        self._stack.addWidget(self._build_general_page())
+        self._stack.addWidget(self._build_clima_page())
+        body.addWidget(self._stack, 1)
+        root.addLayout(body, 1)
+
+        # Pie: Guardar / Cerrar (abajo a la derecha, como el mockup).
+        footer = QHBoxLayout()
+        footer.setSpacing(8)
+        footer.addStretch(1)
+        save = QPushButton("Guardar")
+        save.setObjectName("PrimaryButton")
+        save.clicked.connect(self._save)
+        footer.addWidget(save)
+        close_button = QPushButton("Cerrar")
+        close_button.clicked.connect(self.reject)
+        footer.addWidget(close_button)
+        root.addLayout(footer)
+
+        self._nav.currentRowChanged.connect(self._stack.setCurrentIndex)
+        self._nav.setCurrentRow(0)
+
+        self._load_values()
+
+    # ------------------------------------------------------------ construcción
+    @staticmethod
+    def _group(title: str) -> tuple[QFrame, QVBoxLayout]:
+        """Marco de sección con su título azul (estilo GroupFrame)."""
+        frame = QFrame()
+        frame.setObjectName("GroupFrame")
+        layout = QVBoxLayout(frame)
+        layout.setContentsMargins(12, 6, 12, 10)
+        layout.setSpacing(8)
+        title_label = QLabel(title)
+        title_label.setObjectName("PanelTitle")
+        layout.addWidget(title_label)
+        return frame, layout
+
+    @staticmethod
+    def _field_row(field: QLineEdit, browse_slot) -> QWidget:
+        """Campo de texto + botón «Examinar...» en una fila compacta."""
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+        row.addWidget(field, 1)
+        browse = QPushButton("\U0001f4c1 Examinar...")
+        browse.clicked.connect(browse_slot)
+        row.addWidget(browse)
+        wrapper = QWidget()
+        wrapper.setLayout(row)
+        return wrapper
+
+    def _build_general_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        # --- Motor de procesamiento (SirIL)
+        siril_frame, siril_layout = self._group("Motor de Procesamiento (Siril)")
+        form = QFormLayout()
+        form.setSpacing(6)
+        self._siril_path = QLineEdit()
+        self._siril_path.setPlaceholderText(r"C:\Program Files\Siril\bin\siril-cli.exe")
+        form.addRow("Ruta al ejecutable:", self._field_row(self._siril_path, self._browse_siril))
+        self._siril_status = QLabel("")
+        self._siril_status.setWordWrap(True)
+        form.addRow("", self._siril_status)
+        siril_layout.addLayout(form)
+        layout.addWidget(siril_frame)
+
+        # --- Carpeta base de proyectos
+        project_frame, project_layout = self._group("Carpeta Base de Proyectos")
+        project_form = QFormLayout()
+        project_form.setSpacing(6)
+        self._project_root = QLineEdit()
+        self._project_root.setPlaceholderText(r"D:\Astrofotografía")
+        project_form.addRow(
+            "Directorio raíz:",
+            self._field_row(self._project_root, self._browse_project_root),
+        )
+        project_layout.addLayout(project_form)
+        hint = QLabel("Esta carpeta servirá de inicio al examinar y organizar "
+                      "tus sesiones nocturnas.")
+        hint.setObjectName("HintLabel")
+        hint.setWordWrap(True)
+        project_layout.addWidget(hint)
+        layout.addWidget(project_frame)
+
+        layout.addStretch(1)
+        return page
+
+    def _build_clima_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        weather_frame, weather_layout = self._group("API keys del clima")
+        form = QFormLayout()
+        form.setSpacing(6)
+
+        self._clear_outside_key = QLineEdit()
+        self._clear_outside_key.setEchoMode(QLineEdit.EchoMode.Password)
+        self._clear_outside_key.setPlaceholderText("Sin API key")
+        form.addRow("Clear Outside:", self._clear_outside_key)
+
+        self._meteoblue_key = QLineEdit()
+        self._meteoblue_key.setEchoMode(QLineEdit.EchoMode.Password)
+        self._meteoblue_key.setPlaceholderText("Sin API key")
+        form.addRow("Meteoblue:", self._meteoblue_key)
+
+        self._show_keys = QCheckBox("Mostrar las claves")
+        self._show_keys.toggled.connect(self._toggle_keys)
+        form.addRow("", self._show_keys)
+        weather_layout.addLayout(form)
+
+        hint = QLabel(
+            "Se guardan en la base local (tabla settings), nunca en el código "
+            "ni en el repositorio. Sin clave, el clima muestra «Sin datos»."
+        )
+        hint.setObjectName("HintLabel")
+        hint.setWordWrap(True)
+        weather_layout.addWidget(hint)
+        layout.addWidget(weather_frame)
+
+        layout.addStretch(1)
+        return page
+
+    # ------------------------------------------------------------------ valores
+    def _load_values(self) -> None:
+        """Rellena los campos con lo guardado y evalúa el estado de SirIL."""
+        self._siril_path.setText(find_siril() or "")
+        self._project_root.setText(get_setting(PROJECT_ROOT_KEY) or "")
+        self._clear_outside_key.setText(load_api_key("clear_outside_api_key") or "")
+        self._meteoblue_key.setText(load_api_key("meteoblue_api_key") or "")
+        self._update_siril_status()
+
+    def _update_siril_status(self) -> None:
+        """«✓ detectado y operativo» con la versión real, o el aviso oportuno."""
+        path = self._siril_path.text().strip()
+        if not path:
+            text, color = (
+                "⚠ No se encontró SirIL. Usa «Examinar...» para indicar la ruta del cliente.",
+                _WARN,
+            )
+        else:
+            version = siril_version(path)
+            if version:
+                text, color = f"✓ {version} detectado y operativo.", _OK
+            elif Path(path).is_file():
+                text, color = f"⚠ Encontrado en {path}, pero no responde a --version.", _WARN
+            else:
+                text, color = "⚠ La ruta no existe: usa «Examinar...».", _ERROR
+        self._siril_status.setText(text)
+        self._siril_status.setStyleSheet(f"color: {color};")
+
+    # ------------------------------------------------------------------ acciones
+    def _browse_siril(self) -> None:
+        start = self._siril_path.text().strip() or None
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Seleccionar el ejecutable de SirIL",
+            start or "",
+            "Ejecutables (*.exe);;Todos los archivos (*.*)",
+        )
+        if path:
+            self._siril_path.setText(path)
+            self._update_siril_status()
+
+    def _browse_project_root(self) -> None:
+        start = self._project_root.text().strip() or None
+        path = QFileDialog.getExistingDirectory(
+            self, "Seleccionar la carpeta base de proyectos", start or ""
+        )
+        if path:
+            self._project_root.setText(path)
+
+    def _toggle_keys(self, checked: bool) -> None:
+        mode = (
+            QLineEdit.EchoMode.Normal
+            if checked
+            else QLineEdit.EchoMode.Password
+        )
+        self._clear_outside_key.setEchoMode(mode)
+        self._meteoblue_key.setEchoMode(mode)
+
+    def _save(self) -> None:
+        """Escribe todo de una vez en ``settings`` y avisa a la ventana."""
+        save_user_path(self._siril_path.text().strip())
+        set_setting(PROJECT_ROOT_KEY, self._project_root.text().strip())
+        save_api_key("clear_outside_api_key", self._clear_outside_key.text().strip())
+        save_api_key("meteoblue_api_key", self._meteoblue_key.text().strip())
+        self._update_siril_status()
+        QMessageBox.information(self, "Configuración", "Configuración guardada.")
+        self.saved.emit()

@@ -392,6 +392,15 @@ class BusquedaTab(QWidget):
         self._refresh_selected_curve()
         self._refresh_weather()
 
+    def refresh_weather(self) -> None:
+        """Solo las tarjetas de clima, sin repetir la búsqueda.
+
+        Lo usa la ventana principal tras guardar API keys en
+        Configuración, para que el «Falta conectar la API» desaparezca
+        sin esperar al siguiente «Aplicar filtros».
+        """
+        self._refresh_weather()
+
     # -- Cálculos ------------------------------------------------------------
     def _filters(self) -> SearchFilters:
         max_magnitude = self._magnitude.currentData()

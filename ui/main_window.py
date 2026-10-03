@@ -15,7 +15,6 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
-    QMessageBox,
     QPushButton,
     QStackedWidget,
     QTabWidget,
@@ -274,4 +273,16 @@ class MainWindow(QMainWindow):
             self.content.setCurrentIndex(index)
 
     def _show_settings(self) -> None:
-        QMessageBox.information(self, "Configuración", "Ajustes del programa: próximamente.")
+        """Abre el diálogo de Configuración (SirIL, carpeta base, API keys)."""
+        from ui.config_tab import ConfigDialog
+
+        dialog = ConfigDialog(self)
+        dialog.saved.connect(self._on_settings_saved)
+        dialog.exec()
+
+    def _on_settings_saved(self) -> None:
+        """Si cambiaron las API keys, el clima de Búsqueda se refresca ya."""
+        planner = self.content.widget(4)  # índice del Planificador en TABS
+        busq = planner.findChild(BusquedaTab)
+        if busq is not None:
+            busq.refresh_weather()

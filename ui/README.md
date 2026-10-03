@@ -9,6 +9,7 @@ Capa de interfaz de usuario (PyQt6). Una subcarpeta por pestaña principal de PA
   - Las demás pestañas son páginas placeholder ("Funcionalidad en construcción").
 - `style.py` — tema oscuro azulado (QSS con paleta única), fuente base 13pt, `apply_style(app)`. Campos de entrada con padding compacto (`3px 8px`, incluye `QDateEdit`/`QDateTimeEdit`) y pie a 11pt/2px: el espacio que necesita la rejilla de Búsqueda. Incluye los objectNames de las reglas del Planificador (`PanelTitle`, `SectionTitle`, `MetricCard`, `MetricTitle`, `MetricValue`, `ApplyFilters`, `PrimaryButton`, `CurveTitle`, `CurveSubtitle`, `CurveLegend`, `GroupFrame`, `HintLabel`).
 - `planner_tab/` — **implementado** (4 subpestañas, planetario visual, curva de tránsito en PyQtGraph). Ver su README.
+- `config_tab/` — **implementado**: diálogo modal «Configuración General de la Aplicación» (nav General/Clima: SirIL con estado real, carpeta base `project_root` y API keys del clima en `settings`). Se abre con la ⚙ de la barra lateral; tras «Guardar» refresca el clima de Búsqueda. Ver su README.
 - `summary_tab/`, `planetary_tab/`, `equipment_tab/`, `planner_equip_tab/`, `stacker_tab/` — solo `README.md` (contenido pendiente).
 
 ## Qué hacer aquí
