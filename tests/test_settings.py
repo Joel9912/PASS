@@ -63,3 +63,40 @@ def test_find_siril_prefers_path_over_saved(memory_settings, monkeypatch):
     monkeypatch.setattr(siril_finder, "which", lambda _name: "C:/bin/siril.exe")
     siril_finder.save_user_path("ruta-antigua")
     assert siril_finder.find_siril() == "C:/bin/siril.exe"
+
+
+def test_find_siril_ignores_empty_saved_path(memory_settings, monkeypatch):
+    """Una ruta vacía guardada cuenta como «no guardado»."""
+    monkeypatch.setattr(siril_finder, "which", lambda _name: None)
+    siril_finder.save_user_path("")
+    assert siril_finder.find_siril() is None
+
+
+def test_siril_version_reads_first_line(memory_settings, monkeypatch):
+    """siril_version devuelve la primera línea de `--version` si todo va bien."""
+    import subprocess as sp
+
+    def fake_run(_cmd, **_kwargs):
+        return sp.CompletedProcess(
+            _cmd, 0, stdout="Siril 1.2.1\notra línea\n", stderr=""
+        )
+
+    monkeypatch.setattr(siril_finder.subprocess, "run", fake_run)
+    assert siril_finder.siril_version("C:/siril/siril-cli.exe") == "Siril 1.2.1"
+
+
+def test_siril_version_none_on_failure(memory_settings, monkeypatch):
+    """Fallo de ejecución (código ≠ 0 o error del sistema) → None, sin excepciones."""
+    import subprocess as sp
+
+    def fake_run(_cmd, **_kwargs):
+        return sp.CompletedProcess(_cmd, 1, stdout="", stderr="boom")
+
+    monkeypatch.setattr(siril_finder.subprocess, "run", fake_run)
+    assert siril_finder.siril_version("malo.exe") is None
+
+    def raise_oserror(_cmd, **_kwargs):
+        raise OSError("no existe")
+
+    monkeypatch.setattr(siril_finder.subprocess, "run", raise_oserror)
+    assert siril_finder.siril_version("otro.exe") is None
