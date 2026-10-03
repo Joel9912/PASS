@@ -19,6 +19,7 @@ import pyqtgraph as pg
 from PyQt6.QtCore import QPointF, QRectF, Qt, QDate, pyqtSignal
 from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import (
+    QAbstractSpinBox,
     QComboBox,
     QDateEdit,
     QDoubleSpinBox,
@@ -116,8 +117,11 @@ def window_lines(summary: dict[str, dict]) -> tuple[str, str]:
     Devuelve una tupla ``(ideal, posible)`` lista para la leyenda; una ventana
     sin tramos se describe como "sin ventana" para no dejar la línea vacía.
     """
+    # La ★ va envuelta en span: sin él toma el color del texto (azul) y
+    # se perdía sobre la interfaz. Verde, igual que la banda y la leyenda
+    # de Ideal; el ⚠ de Posible sí se distingue por su glifo ámbar.
     return (
-        _window_text(summary, WINDOW_IDEAL, "★ Captura Ideal"),
+        _window_text(summary, WINDOW_IDEAL, '<span style="color:#22c55e">★</span> Captura Ideal'),
         _window_text(summary, WINDOW_POSSIBLE, "⚠ Captura Posible"),
     )
 
@@ -188,30 +192,37 @@ class LocationBar(QFrame):
         head.addWidget(self._combo, 1)
         layout.addLayout(head)
 
-        # Fila 2: latitud y longitud.
+        # Fila 2: latitud y longitud, con ◀/▶ como los botones de
+        # Efemérides: un clic = 1°, botones grandes de 34 px. Las
+        # flechitas nativas del spinbox eran minúsculas y el clic a
+        # veces no acertaba. El valor sigue editable a mano (3 decimales);
+        # el spinbox va sin botones nativos para que quepa en la columna.
         coords = QHBoxLayout()
         coords.setSpacing(6)
-        coords.addWidget(QLabel("Lat"))
+
         self._latitude = QDoubleSpinBox()
         self._latitude.setRange(-90.0, 90.0)
         self._latitude.setDecimals(3)
-        self._latitude.setSingleStep(0.1)
+        self._latitude.setSingleStep(1.0)
         self._latitude.setSuffix("°")
-        # Ancho mínimo real: «-90,000°» + botones pide 120 px.
-        # Con 92 el valor salía cortado.
-        self._latitude.setFixedWidth(124)
+        self._latitude.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
+        self._latitude.setMinimumWidth(88)     # «-90,000°» sin botones
         self._latitude.valueChanged.connect(self._on_manual)
-        coords.addWidget(self._latitude)
 
-        coords.addWidget(QLabel("Lon"))
+        coords.addWidget(QLabel("Lat"))
+        coords.addLayout(self._stepper(self._latitude))
+
         self._longitude = QDoubleSpinBox()
         self._longitude.setRange(-180.0, 180.0)
         self._longitude.setDecimals(3)
-        self._longitude.setSingleStep(0.1)
+        self._longitude.setSingleStep(1.0)
         self._longitude.setSuffix("°")
-        self._longitude.setFixedWidth(136)     # «-180,000°» pide 132 px
+        self._longitude.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
+        self._longitude.setMinimumWidth(96)    # «-180,000°» sin botones
         self._longitude.valueChanged.connect(self._on_manual)
-        coords.addWidget(self._longitude)
+
+        coords.addWidget(QLabel("Lon"))
+        coords.addLayout(self._stepper(self._longitude))
         layout.addLayout(coords)
 
         # Fila 3: huso horario.
@@ -321,6 +332,31 @@ class LocationBar(QFrame):
             self._offset.setCurrentIndex(at if at >= 0 else 0)
             self._loading = False
         self._emit()
+
+    @staticmethod
+    def _stepper(spin: QDoubleSpinBox) -> QHBoxLayout:
+        """``◀ [valor] ▶`` alrededor de un spinbox: un clic, un paso.
+
+        Igual que los botones ◀/▶ de Efemérides Sol y Luna (mismo ancho,
+        sin repetición al mantener pulsado), pero moviendo el paso del
+        propio spinbox. Así el paso vive en un solo sitio.
+        """
+        row = QHBoxLayout()
+        row.setSpacing(2)
+
+        back = QPushButton("◀")
+        back.setFixedWidth(34)
+        back.setToolTip("Un grado atrás")
+        back.clicked.connect(lambda: spin.setValue(spin.value() - spin.singleStep()))
+        row.addWidget(back)
+        row.addWidget(spin)
+
+        forward = QPushButton("▶")
+        forward.setFixedWidth(34)
+        forward.setToolTip("Un grado adelante")
+        forward.clicked.connect(lambda: spin.setValue(spin.value() + spin.singleStep()))
+        row.addWidget(forward)
+        return row
 
     def _on_manual(self, _value: float) -> None:
         if self._loading:

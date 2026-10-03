@@ -3,7 +3,7 @@
 Layout (rejilla de 3×2, reparto del programa original):
 
 ```
-┌─ Filtros ──────────┐  ┌─ Objetos por filtro ──── [⭐ Añadir] ──┐
+┌─ Filtros ──────────┐  ┌─ Catálogo ───────────── [⭐ Añadir] ──┐
 │ Buscar / Tipo /    │  │ # ID Tipo Const Mag RA Dec Tamaño      │
 │ Catálogo / Const /  │  │             Tránsito  Horas >30°       │
 │ Mag / Altitud /     │  │                                       │
@@ -175,7 +175,7 @@ class BusquedaTab(QWidget):
 
         # Rejilla 3×2 (reparto del original, con la ubicación en la tercera
         # fila a la izquierda de las condiciones meteorológicas):
-        #   fila 1: Filtros            | Objetos por filtro
+        #   fila 1: Filtros            | Catálogo
         #   fila 2: Efemérides Sol/Luna| Curva de tránsito
         #   fila 3: Ubicación          | Condiciones meteorológicas
         grid = QGridLayout()
@@ -280,7 +280,7 @@ class BusquedaTab(QWidget):
 
         header = QHBoxLayout()
         header.setSpacing(8)
-        title = QLabel("Objetos por filtro")
+        title = QLabel("Catálogo")
         title.setObjectName("PanelTitle")
         header.addWidget(title)
         self._count = QLabel("0 objetos")
@@ -458,14 +458,12 @@ class BusquedaTab(QWidget):
                     if column == 1:
                         # El ID va en azul, como en el original.
                         item.setForeground(QColor(PALETTE["accentLight"]))
-                    if column in (4, 8, 9):
-                        item.setTextAlignment(
-                            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-                        )
-                    elif column == 0:
-                        item.setTextAlignment(
-                            Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter
-                        )
+                    # Todas las columnas centradas, igual que las
+                    # cabeceras: antes Mag/Tránsito/Horas iban a la
+                    # derecha y el resto a la izquierda.
+                    item.setTextAlignment(
+                        Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter
+                    )
                     self._table.setItem(index, column, item)
             # Filas con aire: resizeRowsToContents daba 37 px.
             for index in range(len(rows)):
