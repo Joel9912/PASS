@@ -25,7 +25,7 @@ reenvía a Planificación por señal. La fecha la aporta el panel de efemérides
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import QEvent, Qt, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -156,6 +156,10 @@ class BusquedaTab(QWidget):
 
     #: Límite de filas: la tabla no debe perder la fluidez con 15k objetos.
     ROW_LIMIT = 500
+
+    #: Altura fija de fila de la tabla de objetos (resizeRowsToContents
+    #: daba 37 px, muy pegado; con 42 el texto respira).
+    ROW_HEIGHT = 42
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -300,6 +304,7 @@ class BusquedaTab(QWidget):
         self._table = QTableWidget(0, len(COLUMNS))
         self._table.setHorizontalHeaderLabels([label for label, _ in COLUMNS])
         self._table.verticalHeader().setVisible(False)
+        self._table.verticalHeader().setDefaultSectionSize(self.ROW_HEIGHT)
         self._table.setAlternatingRowColors(True)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
@@ -310,9 +315,17 @@ class BusquedaTab(QWidget):
 
         header_view = self._table.horizontalHeader()
         header_view.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        header_view.setStretchLastSection(True)
+        # Sin stretchLast: «Horas >30°» se quedaba con TODO el sobrante
+        # (~366 px para ~75 de contenido). El reparto lo hace
+        # _spread_surplus a partir de los anchos de contenido.
+        header_view.setStretchLastSection(False)
         for index, (_, width) in enumerate(COLUMNS):
             self._table.setColumnWidth(index, int(width))
+        # Base estable de reparto: anchos de contenido (los declarados
+        # hasta la primera búsqueda; luego los medidos en _fill_table).
+        self._content_widths: list[int] = [int(width) for _, width in COLUMNS]
+        self._spreading = False
+        self._table.viewport().installEventFilter(self)
         self._table.itemSelectionChanged.connect(self._on_row_selected)
         layout.addWidget(self._table, 1)
         return panel
@@ -412,7 +425,6 @@ class BusquedaTab(QWidget):
 
     def _fill_table(self, rows: list[dict]) -> None:
         header = self._table.horizontalHeader()
-        modo_previo = header.sectionResizeMode(0)
         # ResizeToContents recalcula el tamaño de TODAS las filas de la
         # columna en cada setItem (~36 ms/celda con 500 filas): la interfaz
         # se congelaba ~90 s. Solo interactivo durante el llenado.
@@ -446,11 +458,54 @@ class BusquedaTab(QWidget):
                             Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter
                         )
                     self._table.setItem(index, column, item)
-            self._table.resizeRowsToContents()
+            # Filas con aire: resizeRowsToContents daba 37 px.
+            for index in range(len(rows)):
+                self._table.setRowHeight(index, self.ROW_HEIGHT)
         finally:
-            # Un solo cálculo de anchos al restaurar (misma estética que antes).
-            header.setSectionResizeMode(modo_previo)
+            # Un solo pase de anchos de contenido y reparto del sobrante.
+            header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
             header.resizeSections()
+            self._content_widths = [
+                header.sectionSize(i) for i in range(len(COLUMNS))
+            ]
+            header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+            self._spread_surplus()
+
+    def _spread_surplus(self) -> None:
+        """Anchuras de contenido más el sobrante repartido en proporción.
+
+        Sin esto, con ``stretchLastSection`` la última columna
+        («Horas >30°») se tragaba todo el ancho libre (~366 px para
+        ~75 de contenido) y el resto de columnas quedaba justo. La base
+        es siempre ``_content_widths`` (nunca los ya repartidos), para
+        que cada reparto sea idempotente.
+        """
+        if self._spreading:
+            return                          # no reentrar (barra ± viewport)
+        self._spreading = True
+        try:
+            header = self._table.horizontalHeader()
+            widths = self._content_widths
+            total = sum(widths)
+            if not total:
+                return
+            spare = self._table.viewport().width() - total
+            if spare <= 16:
+                # No sobra (o sobra migaja): los anchos de contenido,
+                # con barra horizontal si hace falta.
+                for index, width in enumerate(widths):
+                    header.resizeSection(index, width)
+                return
+            for index, width in enumerate(widths):
+                header.resizeSection(index, width + int(spare * width / total))
+        finally:
+            self._spreading = False
+
+    def eventFilter(self, obj, event: QEvent) -> bool:
+        """Al cambiar el ancho visible de la tabla, vuelve a repartir."""
+        if obj is self._table.viewport() and event.type() == QEvent.Type.Resize:
+            self._spread_surplus()
+        return super().eventFilter(obj, event)
 
     def _refresh_ephemeris(self) -> None:
         if self._latitude is None or self._longitude is None:
