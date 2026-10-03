@@ -39,7 +39,6 @@ from planners.moon_distance import (
     capture_windows,
     format_hour_range,
     min_moon_distance,
-    transition_zone,
     unwrap_hours,
 )
 from planners.transit import NightCurve, NightInfo, night_info
@@ -56,7 +55,6 @@ COLOR_LIMIT = "#ef4444"                   # rojo: línea de 30°
 COLOR_IDEAL = (34, 197, 94, 55)           # verde: ventana ideal
 COLOR_POSSIBLE = (245, 158, 11, 45)       # ámbar: ventana posible
 COLOR_NIGHT = (255, 255, 255, 26)         # gris: noche astronómica
-COLOR_ZONE = (251, 191, 36, 55)           # amarillo: transición ±2°
 
 COLOR_DAY = "#94a3b8"                     # barra: día
 COLOR_TWILIGHT = "#475569"                # barra: crepúsculo
@@ -930,11 +928,8 @@ class TransitCurve(QWidget):
     Un solo eje (izquierdo, 0-90°) para dos curvas: la **altitud del
     objeto** (azul) y la de la **Luna** (gris) — esta última muestra a
     qué hora sale y se oculta la Luna y qué altura alcanza. Debajo se
-    pintan las bandas de noche astronómica, las ventanas de captura
-    Ideal/Possible y la **Transición ±2°** (amarilla): los tramos donde
-    se pasa de Posible a Ideal o de Ideal a Posible, es decir, a ±2° de
-    los 45° de altitud o del umbral de separación mínima. La separación
-    objeto-Luna se lee como **texto** en el
+    pintan las bandas de noche astronómica y las ventanas de captura
+    Ideal/Possible. La separación objeto-Luna se lee como **texto** en el
     subtítulo («Separación» y «Mínimo»), junto con las líneas de
     Captura Ideal y Captura Posible (rangos horarios y duración).
 
@@ -1030,14 +1025,6 @@ class TransitCurve(QWidget):
             pen=pg.mkPen(QColor(34, 197, 94, 180), width=1),
             z_value=-10,
         )
-        # Transición ±2° (umbral lunar / 45° de altitud): por encima de las
-        # bandas (-9) para que se vea incluso sobre Ideal/Posible.
-        self._zone_band = _BandPool(
-            item,
-            brush=pg.mkBrush(*COLOR_ZONE),
-            pen=pg.mkPen(QColor(251, 191, 36, 170), width=1),
-            z_value=-9,
-        )
 
         self._limit_line = item.addLine(
             y=30, pen=pg.mkPen(COLOR_LIMIT, width=1.5, style=Qt.PenStyle.DashLine)
@@ -1061,9 +1048,8 @@ class TransitCurve(QWidget):
         """Leyenda HTML: minimal (estado vacío) o completa con las bandas.
 
         Solo describe lo que se pinta en el gráfico: altitud del objeto,
-        límite de 30°, curva de la Luna y las tres bandas de color en el
-        orden en que se apilan (Ideal, Transición ±2° y Posible). La
-        separación y los rangos horarios viven en el subtítulo.
+        límite de 30°, curva de la Luna y las dos ventanas de captura.
+        La separación y los rangos horarios viven en el subtítulo.
         """
         alt = f'<span style="color:{COLOR_ALTITUDE}">━━</span> Altitud'
         if not full:
@@ -1073,7 +1059,6 @@ class TransitCurve(QWidget):
             f'<span style="color:{COLOR_LIMIT}">- -</span> 30° &nbsp; '
             f'<span style="color:{COLOR_MOON}">━━</span> Luna &nbsp; '
             f'<span style="color:#22c55e">■</span> Ideal &nbsp; '
-            f'<span style="color:#fbbf24">■</span> Transición ±2° &nbsp; '
             f'<span style="color:#f59e0b">■</span> Posible'
         )
 
@@ -1106,7 +1091,6 @@ class TransitCurve(QWidget):
             self._night_band,
             self._possible_band,
             self._ideal_band,
-            self._zone_band,
         ):
             band.hide()
         self._limit_line.hide()
@@ -1168,17 +1152,6 @@ class TransitCurve(QWidget):
         self._ideal_band.set_spans(
             _contiguous_spans(hours, [w == WINDOW_IDEAL for w in windows])
         )
-        # Zona Transición ±2° (ver ``transition_zone``): solo se enciende
-        # si de verdad se pasa de Posible a Ideal o de Ideal a Posible,
-        # y solo durante la noche astronómica.
-        zone_mask = transition_zone(
-            curve.altitudes,
-            curve.moon_separations,
-            curve.moon_altitudes,
-            curve.astro_night,
-            illumination_pct,
-        )
-        self._zone_band.set_spans(_contiguous_spans(hours, zone_mask))
         self._limit_line.show()          # límite de 30° (oculto en clear())
 
         # --- Eje
@@ -1205,8 +1178,8 @@ class _BandPool:
 
     pyqtgraph 0.14 pinta **un solo tramo** por ``LinearRegionItem``:
     ``setRegion`` solo lee ``rgn[0]`` y ``rgn[1]`` e ignora el resto, así
-    que las bandas con huecos (ventanas Ideal/Posible partidas, zonas ±2°
-    en subida y bajada del objeto) se quedaban solo con el primer tramo.
+    que las bandas con huecos (ventanas Ideal/Posible partidas en subida
+    y bajada del objeto) se quedaban solo con el primer tramo.
     Esta pool crea un item por par, actualiza su región y oculta los
     sobrantes.
 

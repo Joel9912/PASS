@@ -33,10 +33,6 @@ POSSIBLE_MIN_ALTITUDE = 30.0
 #: Margen de tolerancia (grados) respecto al umbral lunar para "possible".
 POSSIBLE_MOON_MARGIN = 10.0
 
-#: Semianchura (grados) de la banda de transición Posible ↔ Ideal.
-#: Cubre tanto el cruce de 45° de altitud como el del umbral lunar.
-TRANSITION_MARGIN_DEG = 2.0
-
 #: Coeficientes del polinomio de grado 3 (de mayor a menor potencia).
 #: Ajustados por mínimos cuadrados a los datos del usuario.
 _POLY_COEFFS = (4.061e-05, -5.012e-03, 0.8861, 40.53)
@@ -131,64 +127,6 @@ def capture_windows(
         else:
             windows.append(classify_instant(alt, sep, illumination_pct, moon_alt))
     return windows
-
-
-def transition_zone(
-    altitudes: list[float],
-    moon_separations: list[float],
-    moon_altitudes: list[float],
-    astro_night_mask: list[bool],
-    illumination_pct: float,
-) -> list[bool]:
-    """Marca los instantes de **transición** entre Posible e Ideal.
-
-    La banda de transición (±2°) señala dónde se pasa de Posible a Ideal
-    o de Ideal a Posible. Solo se enciende si de verdad hay esa
-    transición, es decir, si al otro lado del umbral se abre una ventana;
-    si no, no hay nada que transicionar. Solo se calcula durante la noche
-    astronómica: fuera de ella no hay ventanas.
-
-    Se transiciona por dos umbrales:
-
-    - **45° de altitud** (±2°): solo si la Luna deja pasar, hundida
-      (``moon_alt <= 0``) o por encima del umbral de separación. Con la
-      Luna mala no se abre Ideal al subir de 45°, luego no hay transición.
-    - **Umbral de separación** (±2°): solo por encima de 45°, donde Ideal
-      y Posible se tocan (Luna buena → Ideal; Luna a tiro → Posible). Por
-      debajo de 45° no hay Ideal que perder, luego no hay transición.
-
-    Las cuatro series deben tener la misma longitud. Devuelve una lista
-    de booleanos del mismo tamaño que las series.
-    """
-    if not (
-        len(altitudes)
-        == len(moon_separations)
-        == len(moon_altitudes)
-        == len(astro_night_mask)
-    ):
-        raise ValueError(
-            "altitudes, moon_separations, moon_altitudes y astro_night_mask "
-            "deben tener la misma longitud"
-        )
-    min_dist = min_moon_distance(illumination_pct)
-    mask: list[bool] = []
-    for alt, sep, moon_alt, is_astro in zip(
-        altitudes, moon_separations, moon_altitudes, astro_night_mask, strict=True
-    ):
-        if not is_astro:
-            mask.append(False)
-            continue
-        moon_up = moon_alt > 0.0
-        crosses_altitude = (
-            abs(alt - IDEAL_MIN_ALTITUDE) <= TRANSITION_MARGIN_DEG
-            and (not moon_up or sep > min_dist)
-        )
-        crosses_separation = (
-            abs(sep - min_dist) <= TRANSITION_MARGIN_DEG
-            and alt > IDEAL_MIN_ALTITUDE
-        )
-        mask.append(crosses_altitude or crosses_separation)
-    return mask
 
 
 def capture_window_summary(

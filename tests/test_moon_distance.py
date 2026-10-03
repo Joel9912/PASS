@@ -20,7 +20,6 @@ from planners.moon_distance import (  # noqa: E402
     classify_instant,
     format_hour_range,
     min_moon_distance,
-    transition_zone,
     unwrap_hours,
 )
 
@@ -120,76 +119,6 @@ def test_capture_windows_rejects_mismatched_lengths():
     """Las cuatro series deben tener la misma longitud."""
     with pytest.raises(ValueError):
         capture_windows([1.0], [1.0, 2.0], [1.0], [True], 50.0)
-
-
-# ------------------------------------------------------------ transición
-def test_transition_zone_marks_the_altitude_crossing_with_moon_favourable():
-    """El cruce de 45° se marca si la luna deja pasar (hundida o lejos)."""
-    # 50 % → umbral ~77°; la luna lejos (100°) o hundida no estorba
-    zone = transition_zone(
-        altitudes=[45.0, 47.0, 44.0, 50.0],
-        moon_separations=[100.0, 100.0, 100.0, 100.0],
-        moon_altitudes=[-5.0, -5.0, -5.0, -5.0],
-        astro_night_mask=[True, True, True, True],
-        illumination_pct=50.0,
-    )
-    # 45 y 47 están a <=2° del umbral de altitud; 44 también; 50 ya no
-    assert zone == [True, True, True, False]
-
-
-def test_transition_zone_marks_the_separation_crossing_only_above_45():
-    """El cruce del umbral lunar solo cuenta por encima de 45°.
-
-    Debajo de 45° no hay Ideal que perder: el umbral separa Ideal de
-    Posible únicamente cuando la altitud ya permitiría Ideal.
-    """
-    threshold = min_moon_distance(50.0)  # ~77°
-    zone = transition_zone(
-        altitudes=[60.0, 60.0, 40.0, 60.0],
-        moon_separations=[threshold, threshold + 5.0, threshold, threshold + 5.0],
-        moon_altitudes=[30.0, 30.0, 30.0, 30.0],
-        astro_night_mask=[True, True, True, True],
-        illumination_pct=50.0,
-    )
-    # 60° con sep justo en el umbral → transición Ideal/Posible.
-    # 5° fuera ya no es transición; 40° no tiene Ideal que perder.
-    assert zone == [True, False, False, False]
-
-
-def test_transition_zone_stays_dark_when_no_window_opens():
-    """Regresión NGC 1499: luna a tiro, nunca se abre Ideal.
-
-    Ni el cruce de 45° (la luna arriba y mala lo impide) ni el del umbral
-    (que exigiría altitud > 45° con la luna en el rango de 10°) marcan,
-    luego la banda de transición no aparece: no hay nada que transicionar.
-    """
-    threshold = min_moon_distance(50.0)
-    zone = transition_zone(
-        altitudes=[45.0, 60.0, 45.0],
-        moon_separations=[threshold - 35.0, threshold - 35.0, threshold - 35.0],
-        moon_altitudes=[20.0, 20.0, 20.0],
-        astro_night_mask=[True, True, True],
-        illumination_pct=50.0,
-    )
-    assert zone == [False, False, False]
-
-
-def test_transition_zone_requires_astro_night():
-    """Fuera de la noche astronómica no hay zonas: si no hay noche, nada."""
-    zone = transition_zone(
-        altitudes=[45.0, 45.0, 45.0],
-        moon_separations=[100.0, 100.0, 100.0],
-        moon_altitudes=[-5.0, -5.0, -5.0],
-        astro_night_mask=[True, False, False],
-        illumination_pct=50.0,
-    )
-    assert zone == [True, False, False]
-
-
-def test_transition_zone_rejects_mismatched_lengths():
-    """Las cuatro series deben tener la misma longitud."""
-    with pytest.raises(ValueError):
-        transition_zone([1.0], [1.0, 2.0], [1.0], [True], 50.0)
 
 
 def test_capture_window_summary_groups_ranges_and_hours():
