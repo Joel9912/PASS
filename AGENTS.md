@@ -1,7 +1,7 @@
 # AGENTS.md — PAS.S (Planning & Astronomical Stacking Suite)
 
 Proyecto en fase inicial: existe `main.py` (ventana con 6 pestañas), carpetas de código con sus `README.md` y esta documentación. `planners/` está implementado con catálogo real (OpenNGC + HYG + LDN) y `ui/planner_tab/` con sus 4 subpestañas; el resto de módulos y pestañas aún son stubs (`NotImplementedError` a propósito).
-No hay lint ni CI: `pytest` (94 tests en `tests/`) es la única verificación disponible. Sí hay migraciones de esquema (`_MIGRATIONS` en `db/connection.py`).
+No hay lint ni CI: `pytest` (111 tests en `tests/`) es la única verificación disponible. Sí hay migraciones de esquema (`_MIGRATIONS` en `db/connection.py`).
 
 ## Qué leer según la tarea
 

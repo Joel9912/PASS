@@ -5,12 +5,17 @@ Se abre con el botón ⚙ de la barra lateral. Dos secciones en el nav:
 de Clear Outside y Meteoblue). «Guardar» escribe todo de una vez en la
 tabla ``settings`` (nunca en código ni en el repositorio); «Cerrar» o ✕
 descarta los cambios.
+
+La comprobación de SirIL corre en un hilo aparte: el diálogo abre al
+instante aunque arrancar ``siril-cli`` tarde (el antivirus puede
+tardar ~1 s el primer día en examinar el proceso).
 """
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -39,6 +44,40 @@ PROJECT_ROOT_KEY = "project_root"
 _OK = "#22c55e"      # verde: detectado y operativo
 _WARN = "#f59e0b"    # ámbar: falta algo o no responde
 _ERROR = "#f85149"   # rojo: la ruta no existe
+_BUSY = "#94a3b8"    # gris: comprobación en marcha
+
+#: Un solo hilo de trabajo para comprobar SirIL. Ejecutar ``siril-cli
+#: --version`` puede costar ~1 s el primer día (el antivirus examina el
+#: proceso): eso **no** puede congelar el diálogo, así que corre aquí.
+_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="config-siril")
+
+
+class _SirilBridge(QObject):
+    """Devuelve la comprobación de SirIL al hilo de la interfaz.
+
+    ``probe()`` se lanza desde el hilo de trabajo y emite ``checked``
+    desde allí: como el diálogo vive en el hilo principal, Qt la encola
+    (conexión automática) y el slot pinta el estado donde toca. Si el
+    diálogo se cierra antes, Qt desconecta el slot solo.
+    """
+
+    checked = pyqtSignal(str, str)  # (ruta comprobada, versión o "")
+
+    def probe(self, path: str) -> None:
+        """Ejecuta ``siril_version(path)`` fuera del hilo de la interfaz."""
+        future = _EXECUTOR.submit(siril_version, path)
+        future.add_done_callback(lambda fut: self._emit(path, fut))
+
+    def _emit(self, path: str, future) -> None:
+        try:
+            version = future.result()
+        except Exception:  # el hilo de trabajo jamás debe tumbar la UI
+            version = None
+        self.checked.emit(path, version or "")
+
+
+#: Puente compartido: el diálogo solo se conecta, sin crear hilos por apertura.
+_BRIDGE = _SirilBridge()
 
 
 class ConfigDialog(QDialog):
@@ -98,7 +137,9 @@ class ConfigDialog(QDialog):
         self._nav.currentRowChanged.connect(self._stack.setCurrentIndex)
         self._nav.setCurrentRow(0)
 
-        self._load_values()
+        # El estado de SirIL llega del hilo de trabajo por esta señal.
+        _BRIDGE.checked.connect(self._on_siril_result)
+        self.reload()
 
     # ------------------------------------------------------------ construcción
     @staticmethod
@@ -206,30 +247,48 @@ class ConfigDialog(QDialog):
         return page
 
     # ------------------------------------------------------------------ valores
-    def _load_values(self) -> None:
-        """Rellena los campos con lo guardado y evalúa el estado de SirIL."""
-        self._siril_path.setText(find_siril() or "")
+    def reload(self) -> None:
+        """Rellena los campos con ``settings`` y comprueba SirIL sin bloquear.
+
+        Lo llama ``MainWindow._show_settings`` al reabrir: el diálogo se
+        crea una sola vez y se reutiliza en vez de montarse otra vez.
+        """
+        path = find_siril() or ""
+        self._siril_path.setText(path)
         self._project_root.setText(get_setting(PROJECT_ROOT_KEY) or "")
         self._clear_outside_key.setText(load_api_key("clear_outside_api_key") or "")
         self._meteoblue_key.setText(load_api_key("meteoblue_api_key") or "")
-        self._update_siril_status()
+        self._check_siril(path)
 
-    def _update_siril_status(self) -> None:
-        """«✓ detectado y operativo» con la versión real, o el aviso oportuno."""
-        path = self._siril_path.text().strip()
+    def _check_siril(self, path: str) -> None:
+        """«✓ detectado y operativo» con la versión real, **sin congelar la UI**.
+
+        Los avisos malos salen ya mismo (no hay que arrancar nada) y lo
+        único que puede tardar — ``siril-cli --version`` — corre en el
+        hilo de trabajo; el resultado vuelve por ``_on_siril_result``.
+        """
         if not path:
-            text, color = (
+            self._set_siril_status(
                 "⚠ No se encontró SirIL. Usa «Examinar...» para indicar la ruta del cliente.",
                 _WARN,
             )
+            return
+        if not Path(path).is_file():
+            self._set_siril_status("⚠ La ruta no existe: usa «Examinar...».", _ERROR)
+            return
+        self._set_siril_status("⏳ Comprobando SirIL…", _BUSY)
+        _BRIDGE.probe(path)
+
+    def _on_siril_result(self, path: str, version: str) -> None:
+        """Pinta lo que dijo ``siril_version`` (señal encolada desde el hilo)."""
+        if version:
+            self._set_siril_status(f"✓ {version} detectado y operativo.", _OK)
         else:
-            version = siril_version(path)
-            if version:
-                text, color = f"✓ {version} detectado y operativo.", _OK
-            elif Path(path).is_file():
-                text, color = f"⚠ Encontrado en {path}, pero no responde a --version.", _WARN
-            else:
-                text, color = "⚠ La ruta no existe: usa «Examinar...».", _ERROR
+            self._set_siril_status(
+                f"⚠ Encontrado en {path}, pero no responde a --version.", _WARN
+            )
+
+    def _set_siril_status(self, text: str, color: str) -> None:
         self._siril_status.setText(text)
         self._siril_status.setStyleSheet(f"color: {color};")
 
@@ -244,7 +303,7 @@ class ConfigDialog(QDialog):
         )
         if path:
             self._siril_path.setText(path)
-            self._update_siril_status()
+            self._check_siril(path)
 
     def _browse_project_root(self) -> None:
         start = self._project_root.text().strip() or None
@@ -269,6 +328,6 @@ class ConfigDialog(QDialog):
         set_setting(PROJECT_ROOT_KEY, self._project_root.text().strip())
         save_api_key("clear_outside_api_key", self._clear_outside_key.text().strip())
         save_api_key("meteoblue_api_key", self._meteoblue_key.text().strip())
-        self._update_siril_status()
+        self._check_siril(self._siril_path.text().strip())
         QMessageBox.information(self, "Configuración", "Configuración guardada.")
         self.saved.emit()

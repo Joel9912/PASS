@@ -251,6 +251,9 @@ class MainWindow(QMainWindow):
             page = _planner_page() if key == "planner_tab" else _placeholder_page(title)
             self.content.addWidget(page)
 
+        # Diálogo de Configuración: se crea una sola vez y se reutiliza.
+        self._config_dialog = None
+
         self.sidebar = _Sidebar(on_select=self._select_tab)
         self.sidebar.settings_button.clicked.connect(self._show_settings)
 
@@ -273,12 +276,19 @@ class MainWindow(QMainWindow):
             self.content.setCurrentIndex(index)
 
     def _show_settings(self) -> None:
-        """Abre el diálogo de Configuración (SirIL, carpeta base, API keys)."""
+        """Abre el diálogo de Configuración (SirIL, carpeta base, API keys).
+
+        Se crea una sola vez y se reutiliza: reabrir solo refresca los
+        valores (``reload()``) en vez de volver a montar las widgets.
+        """
         from ui.config_tab import ConfigDialog
 
-        dialog = ConfigDialog(self)
-        dialog.saved.connect(self._on_settings_saved)
-        dialog.exec()
+        if self._config_dialog is None:
+            self._config_dialog = ConfigDialog(self)
+            self._config_dialog.saved.connect(self._on_settings_saved)
+        else:
+            self._config_dialog.reload()
+        self._config_dialog.exec()
 
     def _on_settings_saved(self) -> None:
         """Si cambiaron las API keys, el clima de Búsqueda se refresca ya."""

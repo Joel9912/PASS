@@ -8,7 +8,7 @@
 | **Estructura de carpetas** | ✅ Creada: `db/`, `planners/`, `stacks/`, `equipment/`, `planetary/`, `ui/` (6 pestañas), `i18n/`, `tests/`, `data/` |
 | **Docs** | ✅ Raíz: README, AGENTS, PROGRAM, MEMORY, STRUCTURE + LICENSE GPL-3.0 + requirements.txt |
 | **Entry point** | ✅ `main.py` con tema oscuro, barra lateral colapsable, pie `v0.1` y las 6 pestañas; carga catálogos al arrancar; se abre **maximizado sin bug de render** |
-| **Tests** | ✅ pytest: **94 tests** (`test_planners.py` + módulos `moon_distance`, `framing`, `analytical_transit`, `capture_plan`, `ldn_loader`) |
+| **Tests** | ✅ pytest: **111 tests** (`test_smoke`, `test_settings`, `test_weather`, `test_planners` + módulos `moon_distance`, `framing`, `analytical_transit`, `capture_plan`, `ldn_loader`) |
 | **Librerías Python** | Instaladas en venv: PyQt6 6.11, **pyqtgraph 0.14.0**, astropy 8.0, numpy 2.5, PyYAML 6.0, pytest |
 | **Catálogos astronómicos** | ✅ OpenNGC (13,372 objetos) + HYG (41,487 estrellas mag ≤ 8) + **LDN (1,787)** en `data/pass.db` |
 | **Pestaña Planificador** | ✅ `ui/planner_tab/`: Búsqueda → Catálogo Personal → Planificación → Sesiones Planificadas, planetario QPainter, curva de tránsito PyQtGraph (doble eje), plan de captura, barra de ubicación compartida |

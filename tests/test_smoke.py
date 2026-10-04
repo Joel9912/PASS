@@ -431,3 +431,158 @@ def test_find_siril_does_not_crash():
 
     result = find_siril()
     assert result is None or isinstance(result, str)
+
+
+# ---------------------------------------------------------------- Configuración
+#: QApplication de los tests de Configuración (evita que se recoja entre tests).
+_CONFIG_APP = None
+
+
+def _config_dialog(monkeypatch, find_path, *, real_probe=False):
+    """Crea un ``ConfigDialog`` de prueba: sin BD y con SirIL simulado.
+
+    Devuelve ``(módulo, diálogo, probed)``; ``probed`` registra las rutas
+    mandadas a comprobar. Con ``real_probe`` no se intercepta la sonda y
+    el hilo de trabajo va de verdad (para probar la señal de vuelta).
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import QApplication
+
+    from ui.config_tab import config_dialog as cd
+
+    global _CONFIG_APP
+    _CONFIG_APP = QApplication.instance() or QApplication([])
+    probed: list[str] = []
+    monkeypatch.setattr(cd, "find_siril", lambda: find_path)
+    monkeypatch.setattr(cd, "get_setting", lambda _key: "")
+    monkeypatch.setattr(cd, "load_api_key", lambda _key: "")
+    if not real_probe:
+        monkeypatch.setattr(cd._BRIDGE, "probe", lambda path: probed.append(path))
+    return cd, cd.ConfigDialog(), probed
+
+
+def test_config_dialog_check_is_async(tmp_path, monkeypatch):
+    """Configuración abre sin esperar a SirIL (estado «Comprobando…»).
+
+    Regresión del «lagaso» de ~1,5 s al pulsar ⚙: el constructor
+    ejecutaba ``siril-cli --version`` en el hilo de la interfaz (el
+    antivirus puede costar ~1 s el primer día en examinar el proceso)
+    y el diálogo tardaba en aparecer. Ahora la comprobación va por
+    ``_BRIDGE.probe`` (hilo de trabajo) y la UI se pinta con el estado
+    provisorio.
+    """
+    fake = tmp_path / "siril-cli.exe"
+    fake.write_text("", encoding="utf-8")
+
+    cd, dialog, probed = _config_dialog(monkeypatch, str(fake))
+
+    assert probed == [str(fake)]                         # la comprobación va al hilo
+    assert "Comprobando" in dialog._siril_status.text()  # ...y no ha vuelto aún
+    cd._BRIDGE.checked.disconnect(dialog._on_siril_result)
+
+
+def test_config_dialog_no_siril_warns_instantly(monkeypatch):
+    """Sin SirIL el aviso sale ya mismo: ni hilo ni subproceso."""
+    cd, dialog, probed = _config_dialog(monkeypatch, None)
+
+    assert probed == []
+    assert "No se encontró SirIL" in dialog._siril_status.text()
+    cd._BRIDGE.checked.disconnect(dialog._on_siril_result)
+
+
+def test_config_dialog_bad_path_errors_instantly(monkeypatch):
+    """Ruta inventada: «La ruta no existe» sin intentar arrancar nada."""
+    cd, dialog, probed = _config_dialog(
+        monkeypatch, r"C:\ruta\fantasma\siril-cli.exe"
+    )
+
+    assert probed == []
+    assert "La ruta no existe" in dialog._siril_status.text()
+    cd._BRIDGE.checked.disconnect(dialog._on_siril_result)
+
+
+def test_config_dialog_result_paints_status(tmp_path, monkeypatch):
+    """El resultado del hilo pinta verde con versión y ámbar si falla."""
+    fake = tmp_path / "siril-cli.exe"
+    fake.write_text("", encoding="utf-8")
+
+    cd, dialog, _probed = _config_dialog(monkeypatch, str(fake))
+
+    dialog._on_siril_result(str(fake), "siril 1.4.4")
+    assert dialog._siril_status.text() == "✓ siril 1.4.4 detectado y operativo."
+
+    dialog._on_siril_result(str(fake), "")
+    assert "no responde a --version" in dialog._siril_status.text()
+    cd._BRIDGE.checked.disconnect(dialog._on_siril_result)
+
+
+def test_config_dialog_probe_reaches_ui(tmp_path, monkeypatch):
+    """El hilo de trabajo devuelve la versión y la señal la pinta en la UI."""
+    import time
+
+    from PyQt6.QtWidgets import QApplication
+
+    from ui.config_tab import config_dialog as cd
+
+    fake = tmp_path / "siril-cli.exe"
+    fake.write_text("", encoding="utf-8")
+
+    monkeypatch.setattr(cd, "siril_version", lambda _path: "siril 9.9.9")
+    cd, dialog, _probed = _config_dialog(monkeypatch, str(fake), real_probe=True)
+
+    app = QApplication.instance()
+    for _ in range(300):  # hasta ~3 s: el hilo acaba y la señal se encola
+        app.processEvents()
+        if "siril 9.9.9" in dialog._siril_status.text():
+            break
+        time.sleep(0.01)
+    assert dialog._siril_status.text() == "✓ siril 9.9.9 detectado y operativo."
+    cd._BRIDGE.checked.disconnect(dialog._on_siril_result)
+
+
+def test_show_settings_keeps_one_dialog(monkeypatch):
+    """⚙ crea el diálogo una sola vez: reabrir solo lo refresca (``reload``)."""
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import QApplication
+
+    from ui.config_tab import ConfigDialog
+    from ui.config_tab import config_dialog as cd
+    from ui.main_window import MainWindow
+
+    app = QApplication.instance() or QApplication([])
+
+    monkeypatch.setattr(cd, "find_siril", lambda: None)
+    monkeypatch.setattr(cd, "get_setting", lambda _key: "")
+    monkeypatch.setattr(cd, "load_api_key", lambda _key: "")
+
+    created: list[object] = []
+    original_init = ConfigDialog.__init__
+
+    def counting_init(self, parent=None):
+        created.append(self)
+        original_init(self, parent)
+
+    reloaded: list[object] = []
+    original_reload = ConfigDialog.reload
+
+    def counting_reload(self):
+        reloaded.append(self)
+        original_reload(self)
+
+    monkeypatch.setattr(ConfigDialog, "__init__", counting_init)
+    monkeypatch.setattr(ConfigDialog, "reload", counting_reload)
+    monkeypatch.setattr(ConfigDialog, "exec", lambda self: None)  # sin modal
+
+    window = MainWindow()
+    window._show_settings()
+    window._show_settings()
+
+    assert len(created) == 1     # una sola construcción…
+    assert len(reloaded) == 2    # ...pero los valores se recargan al reabrir
+    window.close()
