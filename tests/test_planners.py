@@ -807,6 +807,7 @@ def test_ensure_catalog_revierte_el_delete_si_falla(monkeypatch):
     monkeypatch.setattr(catalog_loader, "get_connection", lambda: conn)
 
     def carga_rota():
+        """Sustituto de `load_catalog`: empieza a escribir y luego falla (disco lleno)."""
         conn.execute("DELETE FROM catalog")
         raise OSError("disco lleno")
 

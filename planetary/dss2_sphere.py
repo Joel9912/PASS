@@ -10,6 +10,7 @@ class Dss2Sphere:
     """Esfera con las imágenes del DSS2 como fondo."""
 
     def __init__(self, cache_dir: str = "data/dss2_cache") -> None:
+        """Guarda la carpeta donde se cachean los JPG del DSS2 descargados."""
         self.cache_dir = cache_dir  # los JPG descargados se cachean localmente
 
     def tiles_for_view(self, ra_hours: float, dec_deg: float, fov_deg: float) -> list[str]:

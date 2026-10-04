@@ -55,6 +55,7 @@ def test_calculate_fov_invalid_values_return_none(bad_value):
 
 
 def test_fov_to_arcmin():
+    """Grados → minutos de arco (×60)."""
     assert fov_to_arcmin(1.0) == 60.0
     assert fov_to_arcmin(2.5) == 150.0
 

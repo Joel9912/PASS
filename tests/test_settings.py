@@ -61,6 +61,7 @@ def test_siril_version_reads_first_line(memory_settings, monkeypatch):
     import subprocess as sp
 
     def fake_run(_cmd, **_kwargs):
+        """Sustituto de `subprocess.run`: SirIL responde con la 1.2.1 en stdout."""
         return sp.CompletedProcess(
             _cmd, 0, stdout="Siril 1.2.1\notra línea\n", stderr=""
         )
@@ -74,12 +75,14 @@ def test_siril_version_none_on_failure(memory_settings, monkeypatch):
     import subprocess as sp
 
     def fake_run(_cmd, **_kwargs):
+        """Sustituto de `subprocess.run`: SirIL devuelve código de salida 1 (fallo)."""
         return sp.CompletedProcess(_cmd, 1, stdout="", stderr="boom")
 
     monkeypatch.setattr(siril_finder.subprocess, "run", fake_run)
     assert siril_finder.siril_version("malo.exe") is None
 
     def raise_oserror(_cmd, **_kwargs):
+        """Sustituto de `subprocess.run` que revienta como si SirIL no existiera."""
         raise OSError("no existe")
 
     monkeypatch.setattr(siril_finder.subprocess, "run", raise_oserror)

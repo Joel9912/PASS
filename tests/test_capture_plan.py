@@ -196,6 +196,7 @@ def test_best_dates_cablea_la_altura_de_la_noche_al_score(monkeypatch):
     recibidas: list[float] = []
 
     def espia(altitude_deg, *resto, **kwargs):
+        """Sustituto de `_score_date`: anota la altura recibida y delega."""
         recibidas.append(altitude_deg)
         return original(altitude_deg, *resto, **kwargs)
 
@@ -259,6 +260,7 @@ def test_best_dates_pasa_el_huso_a_night_info(monkeypatch):
     original = capture_plan.night_info
 
     def espia(latitude, longitude, date_iso, **kwargs):
+        """Sustituto de `night_info`: anota el huso recibido y delega."""
         husos.append(kwargs.get("utc_offset_hours"))
         return original(latitude, longitude, date_iso, **kwargs)
 

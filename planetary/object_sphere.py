@@ -10,6 +10,7 @@ class ObjectSphere:
     """Esfera con los puntos de los objetos de los catálogos."""
 
     def __init__(self, objects: list[CelestialObject] | None = None) -> None:
+        """Catálogo a pintar; sin datos, la esfera empieza vacía."""
         self.objects = objects or []
 
     def visible_points(self, ra_hours: float, dec_deg: float, fov_deg: float) -> list[CelestialObject]:

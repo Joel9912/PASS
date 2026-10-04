@@ -315,6 +315,7 @@ def test_ephemeris_panel_fills_its_cell():
     page = window.content.widget(4).findChild(QTabWidget).widget(0)
 
     def find_grid(layout):
+        """Busca el primer QGridLayout anidado (los paneles envuelven sus widgets)."""
         for index in range(layout.count()):
             child = layout.itemAt(index).layout()
             if isinstance(child, QGridLayout):
@@ -618,6 +619,7 @@ def test_show_settings_keeps_one_dialog(monkeypatch):
     original_init = ConfigDialog.__init__
 
     def counting_init(self, parent=None):
+        """Sustituto de `ConfigDialog.__init__` que cuenta cuántas veces se construye."""
         created.append(self)
         original_init(self, parent)
 
@@ -625,6 +627,7 @@ def test_show_settings_keeps_one_dialog(monkeypatch):
     original_reload = ConfigDialog.reload
 
     def counting_reload(self):
+        """Sustituto de `ConfigDialog.reload` que cuenta cuántas veces se recarga."""
         reloaded.append(self)
         original_reload(self)
 
@@ -740,6 +743,7 @@ def test_reload_targets_actualiza_una_vez(monkeypatch):
     original = plan_tab.PlanificacionTab._on_target_changed
 
     def contando(self, *args, **kwargs):
+        """Sustituto de `_on_target_changed` que cuenta sus llamadas."""
         llamadas.append(1)
         return original(self, *args, **kwargs)
 
@@ -845,6 +849,7 @@ def test_calcular_plan_bloquea_la_reentrada(monkeypatch):
     estados: list[bool] = []
 
     def best_dates_falso(*args, **kwargs):
+        """Sustituto de `best_dates`: anota si el botón sigue activo y devuelve []."""
         estados.append(page._plan_button.isEnabled())
         return []
 
@@ -892,6 +897,7 @@ def test_quitar_objeto_emite_catalog_changed(monkeypatch):
 
     # Respuesta Sí al «¿Quitar…?» sin abrir QMessageBox.
     class _Caja:
+        """QMessageBox falso: el «¿Quitar…?» responde Sí sin abrir ventana."""
         StandardButton = cat_tab.QMessageBox.StandardButton
         question = staticmethod(lambda *args, **kwargs: _Caja.StandardButton.Yes)
 

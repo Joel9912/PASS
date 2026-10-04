@@ -103,6 +103,7 @@ def _iso_to_utc_hours(iso: str) -> float:
 
 
 def test_format_transit_hours():
+    """Horas decimales → HH:MM, con redondeo y módulo 24 (23.999 → 00:00)."""
     assert format_transit_hours(23.999) == "00:00"
     assert format_transit_hours(4.5) == "04:30"
     assert format_transit_hours(28.25) == "04:15"   # módulo 24
