@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from planners.moon_distance import min_moon_distance, POSSIBLE_MOON_MARGIN
+from planners.moon_distance import POSSIBLE_MOON_MARGIN, min_moon_distance
 from planners.transit import NightInfo, TransitInfo
 
 #: Factores climáticos disponibles (cuanto más alto, mejor para observar).

@@ -11,13 +11,13 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from planners.capture_plan import (  # noqa: E402
+from planners.capture_plan import (
     CaptureWeights,
-    best_dates,
     _moon_score,
     _score_date,
+    best_dates,
 )
-from planners.moon_distance import min_moon_distance  # noqa: E402
+from planners.moon_distance import min_moon_distance
 
 M42_RA, M42_DEC = 5.588139, -5.391111
 MADRID_LAT, MADRID_LON = 40.4, -3.7
@@ -253,7 +253,7 @@ def test_best_dates_pasa_el_huso_a_night_info(monkeypatch):
     huso inferido de la longitud y, con >3 h de desfase, el plan salía
     vacío mientras la curva miraba otra noche.
     """
-    import planners.capture_plan as capture_plan
+    from planners import capture_plan
 
     husos: list = []
     original = capture_plan.night_info

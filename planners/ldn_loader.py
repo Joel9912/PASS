@@ -21,7 +21,6 @@ from __future__ import annotations
 import csv
 import io
 import math
-import urllib.request
 from pathlib import Path
 
 from db.connection import get_connection

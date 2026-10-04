@@ -406,7 +406,7 @@ class BusquedaTab(QWidget):
         self._fill_table(rows)
         self._count.setText(
             f"{len(rows)} objetos"
-            + (" (máx. {} fila)".format(self.ROW_LIMIT) if len(rows) == self.ROW_LIMIT else "")
+            + (f" (máx. {self.ROW_LIMIT} fila)" if len(rows) == self.ROW_LIMIT else "")
         )
 
     def _fill_table(self, rows: list[dict]) -> None:

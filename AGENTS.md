@@ -1,7 +1,7 @@
 # AGENTS.md — PAS.S (Planning & Astronomical Stacking Suite)
 
 Proyecto en fase inicial: existe `main.py` (ventana con 6 pestañas), carpetas de código con sus `README.md` y esta documentación. `planners/` está implementado con catálogo real (OpenNGC + HYG + LDN); también `ui/planner_tab/` (4 subpestañas), `db/` y el diálogo de Configuración. Son stubs (`NotImplementedError` a propósito) las otras 5 pestañas, `stacks/`, `planetary/` y el CRUD de `equipment/`.
-No hay lint ni CI: `pytest` (la suite de `tests/`; el recuento vive en su README) es la única verificación disponible. Sí hay migraciones de esquema (`_MIGRATIONS` en `db/connection.py`).
+Sin CI: la verificación es `pytest` (la suite de `tests/`; el recuento vive en su README) + `ruff check` (lint, sin configuración propia). Sí hay migraciones de esquema (`_MIGRATIONS` en `db/connection.py`).
 
 ## Qué leer según la tarea
 
@@ -44,6 +44,6 @@ Toda carpeta con código (p. ej. `ui/<pestaña>/`, `planners/`) tiene su propio 
 ## Entorno
 - Windows + PowerShell; `.venv/` con Python 3.12.
   - Activar: `.venv\Scripts\Activate.ps1` → ejecutar: `python main.py` (ventana con 6 pestañas).
-  - Tests: `pytest` (desde la raíz, con el venv activado).
-- Instalado en el venv: **PyQt6** 6.11 (no PySide), astropy 8.0, numpy 2.5, PyYAML 6.0, pytest.
+  - Tests: `pytest` (desde la raíz, con el venv activado); si la salida de PowerShell muestra acentos rotos (mojibake), ejecutar `python -X utf8 -m pytest -q` o `$env:PYTHONUTF8=1`.
+- Instalado en el venv: **PyQt6** 6.11 (no PySide), astropy 8.0, numpy 2.5, PyYAML 6.0, pytest, ruff.
 - Manifest: `requirements.txt` — si añades una dependencia, actualizarlo (con la versión exacta del venv).

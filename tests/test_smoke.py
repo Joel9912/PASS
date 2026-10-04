@@ -96,7 +96,7 @@ def test_schema_applies():
 
 def test_tab_glyphs_cover_all_tabs():
     """Cada pestaña tiene su glifo de icono en la barra lateral."""
-    from ui.main_window import TABS, TAB_GLYPHS
+    from ui.main_window import TAB_GLYPHS, TABS
 
     for key, _title in TABS:
         assert TAB_GLYPHS.get(key), f"Falta glifo para {key}"
@@ -112,7 +112,7 @@ def test_main_window_layout():
 
     from ui.main_window import APP_VERSION, MainWindow
 
-    app = QApplication.instance() or QApplication([])
+    _app = QApplication.instance() or QApplication([])
     window = MainWindow()
 
     # Barra lateral: 6 pestañas + botón de configuración
@@ -212,15 +212,15 @@ def test_planner_search_tab_corrections():
         QDoubleSpinBox,
         QLabel,
         QPushButton,
-        QTabWidget,
         QTableWidget,
+        QTabWidget,
     )
 
     from ui.main_window import MainWindow
     from ui.planner_tab.busqueda import COLUMNS
     from ui.planner_tab.widgets import LocationBar
 
-    app = QApplication.instance() or QApplication([])
+    _app = QApplication.instance() or QApplication([])
     window = MainWindow()
     planner_tabs = window.content.widget(4).findChild(QTabWidget)
     planner_tabs.setCurrentIndex(0)  # Búsqueda
@@ -608,7 +608,7 @@ def test_show_settings_keeps_one_dialog(monkeypatch):
     from ui.config_tab import config_dialog as cd
     from ui.main_window import MainWindow
 
-    app = QApplication.instance() or QApplication([])
+    _app = QApplication.instance() or QApplication([])
 
     monkeypatch.setattr(cd, "find_siril", lambda: None)
     monkeypatch.setattr(cd, "get_setting", lambda _key: "")
@@ -770,7 +770,7 @@ def test_reload_setups_mantiene_la_seleccion(monkeypatch):
         {"id": 2, "name": "Setup planetario", "category": "planetario"},
     ]
     monkeypatch.setattr(plan_tab, "list_setups", lambda: setups)
-    monkeypatch.setattr(plan_tab.personal_catalog, "list_objects", lambda: [])
+    monkeypatch.setattr(plan_tab.personal_catalog, "list_objects", list)
 
     _app_ui()
     page = plan_tab.PlanificacionTab()

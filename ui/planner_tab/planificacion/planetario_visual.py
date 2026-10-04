@@ -284,7 +284,7 @@ class PlanetarioVisual(QWidget):
         return float(ras.min()), float(ras.max()), min(decs), max(decs)
 
     # -------------------------------------------------------------- eventos
-    def wheelEvent(self, event) -> None:  # noqa: N802 (API Qt)
+    def wheelEvent(self, event) -> None:
         """Rueda del ratón: acerca/aleja (logarítmico, acotado)."""
         steps = event.angleDelta().y() / 120.0
         if steps:
@@ -293,14 +293,14 @@ class PlanetarioVisual(QWidget):
             self._emit_view()
             self.update()
 
-    def mousePressEvent(self, event) -> None:  # noqa: N802 (API Qt)
+    def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
             self._dragging = True
             self._last_pos = event.position()
             self._moved_pixels = 0.0
             self.setCursor(Qt.CursorShape.ClosedHandCursor)
 
-    def mouseMoveEvent(self, event) -> None:  # noqa: N802 (API Qt)
+    def mouseMoveEvent(self, event) -> None:
         if not self._dragging:
             return
         pos = event.position()
@@ -318,7 +318,7 @@ class PlanetarioVisual(QWidget):
         self._emit_view()
         self.update()
 
-    def mouseReleaseEvent(self, event) -> None:  # noqa: N802 (API Qt)
+    def mouseReleaseEvent(self, event) -> None:
         if event.button() != Qt.MouseButton.LeftButton:
             return
         self._dragging = False
@@ -366,12 +366,12 @@ class PlanetarioVisual(QWidget):
         ra_deg, dec_deg = inverse_gnomonic(xi, eta, self._ra0, self._dec0)
         self.region_clicked.emit(ra_deg / 15.0, dec_deg)
 
-    def resizeEvent(self, event) -> None:  # noqa: N802 (API Qt)
+    def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self.update()
 
     # ---------------------------------------------------------------- pintura
-    def paintEvent(self, event) -> None:  # noqa: N802 (API Qt)
+    def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.fillRect(self.rect(), QColor("#05070d"))  # cielo casi negro

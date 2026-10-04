@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from PyQt6.QtCore import Qt, QDate, pyqtSignal
+from PyQt6.QtCore import QDate, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -56,8 +56,8 @@ from planners.framing import calculate_fov
 from planners.moon_distance import format_hour_range
 from planners.transit import night_curve
 
-from .planetario_visual import PlanetarioVisual
 from ..widgets import TransitCurve, window_lines
+from .planetario_visual import PlanetarioVisual
 
 #: Etiqueta de "sin encuadre" cuando el equipo no da FOV.
 NO_FRAMING_TEXT = "Sin encuadre: faltan datos de la cámara o del telescopio"
@@ -332,7 +332,6 @@ class PlanificacionTab(QWidget):
         self._target.blockSignals(True)
         self._target.clear()
         for row in self._targets:
-            catalog = str(row.get("catalog") or "")
             label = str(row.get("object_id") or "")
             if row.get("kind") == "region":
                 label += "  · región"

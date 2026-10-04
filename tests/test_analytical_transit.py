@@ -12,7 +12,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from planners.analytical_transit import (  # noqa: E402
+from planners.analytical_transit import (
     format_transit_hours,
     hours_above_altitude,
     is_circumpolar,

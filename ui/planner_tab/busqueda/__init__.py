@@ -6,4 +6,4 @@ vive en `tab.py`.
 """
 from .tab import COLUMNS, BusquedaTab
 
-__all__ = ["BusquedaTab", "COLUMNS"]
+__all__ = ["COLUMNS", "BusquedaTab"]

@@ -17,7 +17,7 @@ import math
 from datetime import datetime
 
 import pyqtgraph as pg
-from PyQt6.QtCore import QPointF, QRectF, Qt, QDate, pyqtSignal
+from PyQt6.QtCore import QDate, QPointF, QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import (
     QAbstractSpinBox,
@@ -213,7 +213,7 @@ def _type_label(type_code: str | None) -> str:
 
 #: Husos horarios ofrecidos en el selector (frente a UTC, horas).
 UTC_OFFSETS: tuple[float, ...] = tuple(
-    (step * 0.5 for step in range(-24, 29))   # -12.0 … +14.0 en pasos de 0.5
+    step * 0.5 for step in range(-24, 29)   # -12.0 … +14.0 en pasos de 0.5
 )
 
 
@@ -413,7 +413,7 @@ class LocationBar(QFrame):
             self._longitude.setValue(float(location.get("longitude") or 0.0))
             offset = location.get("utc_offset_hours")
             at = self._offset.findData(offset)
-            self._offset.setCurrentIndex(at if at >= 0 else 0)
+            self._offset.setCurrentIndex(max(at, 0))
             self._loading = False
         self._emit()
 
@@ -696,7 +696,7 @@ class MoonPhaseWidget(QWidget):
         self._waxing = bool(waxing)
         self.update()
 
-    def paintEvent(self, event) -> None:  # noqa: N802 (API de Qt)
+    def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
@@ -844,7 +844,7 @@ class DayNightBar(QWidget):
             return "unknown"
         return "day"
 
-    def paintEvent(self, event) -> None:  # noqa: N802 (API de Qt)
+    def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 

@@ -7,7 +7,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from planners import ldn_loader  # noqa: E402
+from planners import ldn_loader
 
 #: Cabecera tal y como la serializa el TAP en CSV (coordenadas con '_').
 TAP_HEADER = "LDN,_RA_icrs,_DE_icrs,Area,Opacity"
@@ -25,7 +25,7 @@ def test_parse_ldn_rows_builds_catalog_rows():
     rows = ldn_loader.parse_ldn_rows(csv_text)
 
     assert len(rows) == 2
-    object_id, catalog, m, n, i, name, obj_type, mag, ra, dec, major, minor, const = rows[0]
+    object_id, catalog, m, n, i, name, obj_type, mag, ra, dec, _, _, const = rows[0]
     assert object_id == "LDN 621" and catalog == "ldn"
     assert (m, n, i, name) == (None, None, None, None)   # sin cross-refs ni nombre
     assert obj_type == "DrkN" and mag is None            # nebulosa oscura sin magnitud

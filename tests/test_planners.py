@@ -13,7 +13,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from planners import catalog_loader  # noqa: E402
+from planners import catalog_loader
 
 # Cabecera real de OpenNGC (32 columnas separadas por ';')
 NGC_HEADER = (
@@ -568,8 +568,8 @@ def test_moon_sun_coarse_sampling_stays_within_hundredths_of_a_degree():
     alguien sube el paso o interpola en azimut en vez de en x/y/z (el
     azimut da vueltas de 180° al pasar por el cenit), se dispara.
     """
-    import numpy as np
     import astropy.units as u
+    import numpy as np
     from astropy.coordinates import AltAz, SkyCoord, angular_separation
 
     from planners import transit
@@ -595,7 +595,7 @@ def test_moon_sun_coarse_sampling_stays_within_hundredths_of_a_degree():
     assert np.max(np.abs(sep_coarse - sep_exact)) < 0.02
 
     # los bordes de la noche astronómica no se mueven
-    edges = lambda sun: np.flatnonzero(  # noqa: E731
+    edges = lambda sun: np.flatnonzero(
         np.diff((sun < transit.ASTRO_TWILIGHT_DEG).astype(int))
     ).tolist()
     assert edges(coarse_sun) == edges(exact_sun)

@@ -296,9 +296,9 @@ def window_hours(windows: dict, kind: str) -> float:
 
 
 __all__ = [
-    "CaptureWeights",
     "WINDOW_IDEAL",
     "WINDOW_POSSIBLE",
+    "CaptureWeights",
     "best_dates",
     "window_hours",
 ]
