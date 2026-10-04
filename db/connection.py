@@ -30,6 +30,9 @@ _MIGRATIONS: dict[str, tuple[str, ...]] = {
         "fov_minor_arcmin REAL",
         "tiles_x INTEGER",
         "tiles_y INTEGER",
+        # Estaba en el esquema y se inserta, pero no en la migración: una
+        # base creada antes no recibía la columna (M-21 de la auditoría).
+        "notes TEXT",
     ),
     "planned_sessions": (
         "target_kind TEXT NOT NULL DEFAULT 'catalog'",

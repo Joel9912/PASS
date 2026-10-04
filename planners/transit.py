@@ -147,19 +147,6 @@ class NightCurve:
         return min(visible) if visible else 0.0
 
 
-def _night_times(date_iso: str, longitude_deg: float, sample_min: int = SAMPLE_MIN) -> Time:
-    """Malla temporal de la noche de ``date_iso`` para ``longitude_deg``.
-
-    Ventana de 16 h centrada en la noche local: de ~17:00 a ~09:00 hora
-    local, muestreada cada ``sample_min`` minutos. Trabaja en UTC; el
-    desfase local se compensa con la longitud (este = positivo).
-    """
-    lon_hours = longitude_deg / 15.0
-    start = Time(date_iso) + (16.0 - lon_hours) * u.hour
-    steps = int(NIGHT_HOURS * 60 / sample_min) + 1
-    return start + np.arange(steps) * sample_min * u.min
-
-
 def _location(latitude_deg: float, longitude_deg: float) -> EarthLocation:
     return EarthLocation(lat=latitude_deg * u.deg, lon=longitude_deg * u.deg)
 

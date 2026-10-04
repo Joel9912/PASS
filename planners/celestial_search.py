@@ -138,7 +138,11 @@ def _order_clause(sort_by: str) -> str:
 def _annotate_transit(rows: list[dict], filters: SearchFilters) -> None:
     """Anota en cada fila ``max_altitude``, ``transit_local`` y ``hours_above_30``.
 
-    Sin ``latitude`` las columnas quedan en None (la UI las muestra vacías).
+    Sin ``latitude`` las tres columnas quedan en None (la UI las muestra
+    vacías). Con latitud pero sin ``date_iso``, la hora local del tránsito
+    también queda en None: antes se inventaba una fecha («2026-01-01»,
+    M-24). Una fila sin ``ra_hours`` o ``dec_deg`` no es calculable y
+    tampoco revienta la búsqueda entera.
     """
     if filters.latitude is None:
         for row in rows:
@@ -148,20 +152,23 @@ def _annotate_transit(rows: list[dict], filters: SearchFilters) -> None:
         return
 
     latitude = filters.latitude
-    date_iso = filters.date_iso or "2026-01-01"
+    date_iso = filters.date_iso
     longitude = filters.longitude or 0.0
     for row in rows:
         dec = row["dec_deg"]
-        if dec is None:
+        ra = row["ra_hours"]
+        if dec is None or ra is None:
             row["max_altitude"] = None
             row["transit_local"] = None
             row["hours_above_30"] = None
             continue
         row["max_altitude"] = round(max_altitude(latitude, dec), 1)
-        row["transit_local"] = format_transit_hours(
-            transit_local_hours(
-                row["ra_hours"], date_iso, longitude, filters.utc_offset_hours
+        row["transit_local"] = (
+            format_transit_hours(
+                transit_local_hours(ra, date_iso, longitude, filters.utc_offset_hours)
             )
+            if date_iso
+            else None
         )
         row["hours_above_30"] = hours_above_altitude(latitude, dec, 30.0)
 

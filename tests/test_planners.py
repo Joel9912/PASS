@@ -245,6 +245,35 @@ def test_personal_catalog_object_and_region_same_name_do_not_clash():
         personal_catalog.remove("M31", "region")
 
 
+def test_migra_notes_en_personal_catalog():
+    """M-21: una base antigua recibe la columna ``notes`` al abrir.
+
+    El esquema la crea y el INSERT la usa, pero `_MIGRATIONS` no la
+    traía: en una base creada antes, guardar notas fallaba lejos del
+    origen del error.
+    """
+    import sqlite3
+
+    from db import connection as db_conn
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        "CREATE TABLE personal_catalog ("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " object_id TEXT NOT NULL,"
+        " catalog TEXT NOT NULL DEFAULT 'messier')"
+    )
+
+    db_conn.init_db(conn)  # schema (IF NOT EXISTS → no toca la tabla) + migración
+
+    columnas = {row[1] for row in conn.execute("PRAGMA table_info(personal_catalog)")}
+    assert "notes" in columnas
+    assert "kind" in columnas          # la migración vieja sigue funcionando
+    assert "fov_major_arcmin" in columnas
+    conn.close()
+
+
 def test_planned_session_parameters_roundtrip():
     """Una sesión guarda encuadre y notas, y update_session los modifica."""
     from planners import planned_sessions
@@ -312,6 +341,39 @@ def test_search_annotates_analytical_transit(loaded_db):
     plain = search(SearchFilters(text="M42"))
     assert plain[0]["transit_local"] is None
     assert plain[0]["max_altitude"] is None
+
+
+def test_search_transit_sin_fecha_y_sin_coordenadas():
+    """M-24: sin ``date_iso`` no se inventa fecha; fila incompleta no revienta.
+
+    Antes ``date_iso=None`` caía en «2026-01-01» (fecha mágica que
+    devolvía horas de tránsito sin fundamento) y una fila sin ``ra_hours``
+    lanzaba ``TypeError`` dentro de ``search()``.
+    """
+    from planners.celestial_search import SearchFilters, _annotate_transit
+
+    filtros = SearchFilters(latitude=40.4, longitude=-3.7, utc_offset_hours=2.0)
+    filas = [
+        {"ra_hours": 5.588, "dec_deg": -5.39},   # completo
+        {"ra_hours": None, "dec_deg": 20.0},     # sin RA
+        {"ra_hours": 10.0, "dec_deg": None},     # sin dec
+    ]
+
+    _annotate_transit(filas, filtros)
+
+    assert filas[0]["max_altitude"] is not None  # la altitud no necesita fecha
+    assert filas[0]["transit_local"] is None     # …la hora local sí: sin fecha, vacía
+    assert filas[0]["hours_above_30"] is not None
+    assert filas[1]["max_altitude"] is None      # sin RA: nada es calculable
+    assert filas[1]["transit_local"] is None
+    assert filas[2]["max_altitude"] is None      # sin dec: idem
+
+    filtros.date_iso = "2026-10-03"
+    _annotate_transit(filas, filtros)
+
+    assert filas[0]["transit_local"] is not None  # con fecha, calculada
+    assert ":" in filas[0]["transit_local"]
+    assert filas[1]["transit_local"] is None      # la fila sin RA sigue vacía
 
 
 def test_search_transit_column_uses_the_location_offset(loaded_db):
