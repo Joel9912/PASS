@@ -19,13 +19,17 @@ def delete(setup_id: int) -> None:
     raise NotImplementedError
 
 
-def get(setup_id: int) -> EquipmentSetup | None:
-    """Carga un setup por id."""
+def get(setup_id: int) -> dict | None:
+    """Carga un setup por id (dict de fila, como ya espera la UI)."""
     raise NotImplementedError
 
 
-def list_setups(category: str | None = None) -> list[EquipmentSetup]:
-    """Lista todos los setups, opcionalmente por categoría."""
+def list_setups(category: str | None = None) -> list[dict]:
+    """Lista todos los setups (dicts de fila), opcionalmente por categoría.
+
+    El contrato real es **dict**, no ``EquipmentSetup``: la UI lee
+    ``setup.get("id")`` y así se anota desde la auditoría (C-2).
+    """
     conn = get_connection()
     if category:
         rows = conn.execute(

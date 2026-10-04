@@ -5,9 +5,10 @@ Modelos y persistencia del equipo del usuario: setups (telescopio + cámara + mo
 
 ## Estado actual
 - `models.py` — dataclasses: `Location`, `Telescope`, `Camera`, `Mount`, `EquipmentSetup`. Solo campos comparables (apertura, focal, resolución, bits, refrigeración).
+  - `Camera` incluye **`pixel_size_um`/`width_px`/`height_px`** (los que permiten el FOV; ya estaban en el esquema y faltaban en el modelo — C-1 de la auditoría).
   - `Location` lleva además **`utc_offset_hours`**: desfase de la hora de reloj frente a UTC (España en verano = 2). Si es `None`, la lógica de `planners/` infiere el huso de la longitud (`round(lon/15)`, huso estándar).
-- `manager.py` — CRUD de setups en SQLite (`equipment_setups`); `list_setups()` funciona y devuelve dicts con todas las columnas (la UI calcula el FOV a partir de ellos).
-- `localizations.py` — CRUD de localizaciones (`locations`); `list_locations()` y `delete()` funcionan.
+- `manager.py` — CRUD de setups en SQLite (`equipment_setups`); `list_setups()` funciona y devuelve dicts con todas las columnas (la UI calcula el FOV a partir de ellos). `get()`/`list_setups()` **anotan `dict`**, el contrato real que ya usa la UI (C-2; antes anotaban `EquipmentSetup`).
+- `localizations.py` — CRUD de localizaciones (`locations`); `list_locations()` (anota `list[dict]`, M-16) y `delete()` funcionan.
 - `images.py` — adjuntar imágenes al setup (`equipment_images`), **solo visuales**.
 - El resto de operaciones CRUD están pendientes (`NotImplementedError`).
 

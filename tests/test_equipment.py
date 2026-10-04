@@ -1,0 +1,84 @@
+"""Tests de equipo: modelos, lecturas de la base y anotaciones (auditoría).
+
+Cubren los hallazgos C-1 (Camera sin datos de FOV), C-2 y M-16 (funciones
+implementadas que anotaban ``EquipmentSetup``/``Location`` y devolvían dicts).
+"""
+import sqlite3
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+
+def _memoria() -> sqlite3.Connection:
+    """Conexión en memoria con el esquema completo."""
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript((ROOT / "db" / "schema.sql").read_text(encoding="utf-8"))
+    return conn
+
+
+def test_camera_expone_los_datos_del_fov():
+    """C-1: Camera lleva píxel y tamaño de sensor, ya presentes en el esquema."""
+    from equipment.models import Camera
+
+    cam = Camera(name="ASI2600", pixel_size_um=3.76, width_px=6248, height_px=4176)
+
+    assert (cam.pixel_size_um, cam.width_px, cam.height_px) == (3.76, 6248, 4176)
+    schema = (ROOT / "db" / "schema.sql").read_text(encoding="utf-8")
+    for columna in ("camera_pixel_size_um", "camera_width_px", "camera_height_px"):
+        assert columna in schema
+
+
+def test_anotaciones_de_equipo_coinciden_con_lo_devuelto():
+    """C-2/M-16: lo implementado anota dict, el contrato que ya usa la UI."""
+    from equipment import localizations, manager
+
+    assert manager.list_setups.__annotations__["return"] == list[dict]
+    assert manager.get.__annotations__["return"] == dict | None
+    assert localizations.list_locations.__annotations__["return"] == list[dict]
+
+
+def test_list_setups_devuelve_dicts_de_fila(monkeypatch):
+    """La tabla se lee como dicts completos (incluidas las columnas camera_*)."""
+    from equipment import manager
+
+    conn = _memoria()
+    conn.execute(
+        "INSERT INTO equipment_setups (name, category, camera_pixel_size_um,"
+        " camera_width_px, camera_height_px) VALUES (?, ?, ?, ?, ?)",
+        ("ASI2600", "nebulosas", 3.76, 6248, 4176),
+    )
+    conn.commit()
+    monkeypatch.setattr(manager, "get_connection", lambda: conn)
+
+    setups = manager.list_setups()
+
+    assert setups and all(isinstance(s, dict) for s in setups)
+    assert setups[0]["name"] == "ASI2600"
+    assert setups[0]["camera_pixel_size_um"] == pytest.approx(3.76)
+    assert manager.list_setups("campo_amplio") == []  # filtro por categoría
+    conn.close()
+
+
+def test_list_locations_devuelve_dicts_de_fila(monkeypatch):
+    """M-16: list_locations devuelve dicts (lo que anota y lo que espera la UI)."""
+    from equipment import localizations
+
+    conn = _memoria()
+    conn.execute(
+        "INSERT INTO locations (name, latitude, longitude) VALUES (?, ?, ?)",
+        ("Casa", 40.4, -3.7),
+    )
+    conn.commit()
+    monkeypatch.setattr(localizations, "get_connection", lambda: conn)
+
+    sitios = localizations.list_locations()
+
+    assert len(sitios) == 1 and isinstance(sitios[0], dict)
+    assert sitios[0]["name"] == "Casa"
+    assert sitios[0]["latitude"] == pytest.approx(40.4)
+    conn.close()

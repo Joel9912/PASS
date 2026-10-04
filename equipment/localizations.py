@@ -9,8 +9,8 @@ def create(location: Location) -> int:
     raise NotImplementedError
 
 
-def list_locations() -> list[Location]:
-    """Lista todas las localizaciones del usuario."""
+def list_locations() -> list[dict]:
+    """Lista todas las localizaciones (dicts de fila, como espera la UI)."""
     conn = get_connection()
     rows = conn.execute("SELECT * FROM locations ORDER BY name").fetchall()
     return [dict(row) for row in rows]

@@ -35,12 +35,21 @@ class Telescope:
 
 @dataclass
 class Camera:
-    """Cámara: datos fríos comparables."""
+    """Cámara: datos fríos comparables.
+
+    ``pixel_size_um``/``width_px``/``height_px`` son los que permiten
+    calcular el FOV; ya existen en el esquema
+    (``equipment_setups.camera_*``) pero faltaban en el modelo, con lo
+    que el dato guardado no era utilizable (C-1 de la auditoría).
+    """
 
     name: str = ""
     cooled: bool = False
     resolution: str = ""        # p. ej. '6248x4176'
     bit_depth: int = 16
+    pixel_size_um: float | None = None
+    width_px: int | None = None
+    height_px: int | None = None
 
 
 @dataclass
