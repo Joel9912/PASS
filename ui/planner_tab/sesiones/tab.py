@@ -296,6 +296,9 @@ class SesionesTab(QWidget):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             planned_sessions.update_session(int(row["id"]), **dialog.values())
             self.refresh()
+        # El diálogo se construye con padre: sin borrarlo se acumula como
+        # hijo oculto en cada clic (fuga medida en la auditoría, M-14).
+        dialog.deleteLater()
 
     def _on_complete(self) -> None:
         row = self._selected()

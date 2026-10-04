@@ -331,3 +331,6 @@ class CatalogoPersonalTab(QWidget):
             personal_catalog.add_region(**values)
             self.region_added.emit(values["name"])
             self.refresh()
+        # El diálogo se construye con padre: sin borrarlo se acumula como
+        # hijo oculto en cada clic (fuga medida en la auditoría, M-14).
+        dialog.deleteLater()
