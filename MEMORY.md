@@ -85,3 +85,4 @@ MES 1-3                          MES 4-6                          MES 7-12
 4. 🔌 i18n (`QTranslator` + `.ts/.qm`) empezando por `planner_tab/`
 5. 📂 Documentos de plan (fuera del repo): `plan-rediseno-planificacion.md` (rediseño de Planificación) e `informe-auditoria-codigo.md` (auditoría: Tanda A/B aplicadas).
 6. 🔜 Tanda C de la auditoría de código (M-17, M-18, M-20, D-5, D-6, D-8) — junto al paso 1 (Equipo).
+7. 🔧 Bajos de la auditoría de Markdown (3/10/2026): marcador de estado por pestaña en la tabla del README raíz (B-2); orden de subpestañas y clima en `PROGRAM.md` (B-3); rutas con prefijo `planner_tab/` en `ui/README` (B-4); precisar en `equipment/README` que la UI usa `list_setups()` (B-6); añadir M-20 a «Planes futuros» de `ui/equipment_tab` (B-7).
