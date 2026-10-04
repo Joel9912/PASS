@@ -2,7 +2,8 @@
 
 Cubren los hallazgos C-1 (Camera sin datos de FOV), C-2 y M-16 (funciones
 implementadas que anotaban ``EquipmentSetup``/``Location`` y devolvían dicts),
-más D-8: el fixture compartido ``memory_db`` con las FK activas.
+M-17 (``list_setups()`` con `location_name`) y D-8: el fixture compartido
+``memory_db`` con las FK activas.
 """
 import sqlite3
 import sys
@@ -52,6 +53,37 @@ def test_list_setups_devuelve_dicts_de_fila(memory_db):
     assert setups[0]["name"] == "ASI2600"
     assert setups[0]["camera_pixel_size_um"] == pytest.approx(3.76)
     assert manager.list_setups("campo_amplio") == []  # filtro por categoría
+
+
+def test_list_setups_trae_el_nombre_de_la_ubicacion(memory_db):
+    """M-17: el dict trae ``location_name`` (LEFT JOIN) para la tabla del plan.
+
+    Sin ubicación — o con la ubicación borrada, que el esquema desvincula con
+    ``ON DELETE SET NULL`` — la clave existe y vale ``None``: ``.get()`` sirve
+    para los dos casos.
+    """
+    from equipment import manager
+
+    cur = memory_db.execute(
+        "INSERT INTO locations (name, latitude, longitude) VALUES (?, ?, ?)",
+        ("Casa", 40.4, -3.7),
+    )
+    memory_db.execute(
+        "INSERT INTO equipment_setups (name, location_id) VALUES (?, ?)",
+        ("ASI2600", cur.lastrowid),
+    )
+    memory_db.execute("INSERT INTO equipment_setups (name) VALUES (?)", ("Sin sitio",))
+    memory_db.commit()
+
+    por_nombre = {s["name"]: s for s in manager.list_setups()}
+    assert por_nombre["ASI2600"]["location_name"] == "Casa"
+    assert por_nombre["Sin sitio"].get("location_name") is None
+
+    # Borrar la ubicación desvincula el setup (SET NULL): sigue sin nombre
+    memory_db.execute("DELETE FROM locations WHERE id = ?", (cur.lastrowid,))
+    memory_db.commit()
+    por_nombre = {s["name"]: s for s in manager.list_setups()}
+    assert por_nombre["ASI2600"]["location_name"] is None
 
 
 def test_list_locations_devuelve_dicts_de_fila(memory_db):

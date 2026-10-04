@@ -28,13 +28,19 @@ def list_setups(category: str | None = None) -> list[dict]:
     """Lista todos los setups (dicts de fila), opcionalmente por categoría.
 
     El contrato real es **dict**, no ``EquipmentSetup``: la UI lee
-    ``setup.get("id")`` y así se anota desde la auditoría (C-2).
+    ``setup.get("id")`` y así se anota desde la auditoría (C-2). El dict
+    trae además ``location_name`` (``LEFT JOIN`` a ``locations``): el nombre
+    de la ubicación, o ``None`` si no la tiene —lo que la tabla del plan
+    (Equipo paso 2) pinta como «ubicación» (M-17). Sin ubicación o con ella
+    borrada (``ON DELETE SET NULL``) la clave siempre está: ``.get()`` sirve
+    para ambos casos.
     """
     conn = get_connection()
-    if category:
-        rows = conn.execute(
-            "SELECT * FROM equipment_setups WHERE category = ? ORDER BY name", (category,)
-        ).fetchall()
-    else:
-        rows = conn.execute("SELECT * FROM equipment_setups ORDER BY name").fetchall()
+    sql = (
+        "SELECT e.*, l.name AS location_name FROM equipment_setups e"
+        " LEFT JOIN locations l ON l.id = e.location_id"
+        + (" WHERE e.category = ?" if category else "")
+        + " ORDER BY e.name"
+    )
+    rows = conn.execute(sql, (category,) if category else ()).fetchall()
     return [dict(row) for row in rows]
