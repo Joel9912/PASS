@@ -38,7 +38,7 @@ Toda carpeta con código (p. ej. `ui/<pestaña>/`, `planners/`) tiene su propio 
 - Las métricas de comparación de equipo las define el usuario; nunca imponer valores por defecto como verdad.
 - Mantener separación entre UI (`ui/`) y lógica backend (`planners/`, `stacks/`, etc.).
 - Documentación en español: todos los `.md` del proyecto se escriben en español.
-- Docstrings en código (en español): toda clase, función y módulo explica **qué hace y por qué**; `Args/Returns` solo si la firma no basta. Comentarios `#` inline solo donde la lógica no se entienda sola.
+- Docstrings en código (en español): toda clase, función y módulo explica **qué hace y por qué**; `Args/Returns` solo si la firma no basta. Comentarios `#` inline solo donde la lógica no se entienda sola. `ruff check` vigila los docstrings (D100-D104).
 - Para cambios estructurales o decisiones ambiguas: proponer al usuario en lugar de imponer.
 - **Al terminar una tarea con cambios que verificar**: lanzar la aplicación (`python main.py`, en segundo plano) para que el usuario la revise; si la tarea no tiene cambios visibles (p. ej. solo backend/tests), no hace falta.
 

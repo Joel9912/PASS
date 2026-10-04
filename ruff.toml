@@ -14,6 +14,10 @@
 #                   pairwise, next() vs slice[0], dict() vs {}): sin beneficio
 #                   suficiente para tocar código ya probado.
 [lint]
+# Docstrings exigidos: módulo (D100), clase (D101), método público (D102),
+# función pública (D103) y paquete (D104). `extend-select` SUMA a las reglas
+# por defecto; `select` las sustituiría entero (nunca usarlo aquí).
+extend-select = ["D100", "D101", "D102", "D103", "D104"]
 ignore = [
     "BLE001",
     "S110",
