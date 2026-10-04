@@ -20,7 +20,7 @@ Capa de interfaz de usuario (PyQt6). Una subcarpeta por pestaña principal de PA
 ## Planes futuros
 - Implementar el contenido de las 5 pestañas que faltan (Resumen, Planetario, Equipo, Planificador de Equipo, Apilador).
 - Aplicar i18n (`i18n/es.ts`, `i18n/en.ts`) a todos los textos visibles, empezando por `planner_tab/`.
-- **Arranque perezoso de las páginas (M-02)**: `MainWindow` construye las 6 páginas de golpe y el planetario carga sus 41 487 estrellas en el constructor. *Medido en la auditoría: el arranque total es 1,51 s y el planetario solo 110 ms de ellos (el grueso son los imports de astropy) → **bajado a «aquí no»**: solo si crece la lista de pestañas.*
+- **Arranque perezoso de las páginas (M-02)**: `MainWindow` construye las 6 páginas de golpe y el planetario carga todas las estrellas en el constructor. *Medido en la auditoría: el arranque total es 1,51 s y el planetario solo 110 ms de ellos (el grueso son los imports de astropy) → **bajado a «aquí no»**: solo si crece la lista de pestañas.*
 - **Bajos de la auditoría de código** (refactors pequeños, sin comportamiento nuevo):
   - `except Exception` amplios que tapan fallos de BD (`widgets.py` en la barra de ubicación, `sesiones/tab.py`).
   - Señales emitidas sin consumidor (`object_selected`, `target_changed`, `region_clicked` — este último rompe su propio docstring — y `sky_at_center()` sin llamantes): cablearlas o quitarlas.
