@@ -8,6 +8,7 @@ Planning-Stacking-Suite/
 ├── LICENSE               # GPL-3.0
 ├── requirements.txt      # PyQt6, pyqtgraph, astropy, numpy, PyYAML, pytest
 ├── .gitignore
+├── .opencode/skills/     # Skills de OpenCode: auditoria-pas, verificacion-fix
 ├── main.py               # Entry point: crea QApplication y la ventana principal
 │
 ├── db/                   # Capa SQLite (stdlib sqlite3)
@@ -61,6 +62,9 @@ Planning-Stacking-Suite/
 │   │                         #   PlannerPage = 4 subpestañas (LocationBar vive en
 │   │                         #   Búsqueda, fila 3 izquierda, y se comparte por señal)
 │   ├── style.py              # Tema oscuro azulado (QSS + fuente 13pt)
+│   ├── config_tab/           # Diálogo «Configuración General» (modal: SirIL/clima)
+│   │   ├── config_dialog.py
+│   │   └── README.md
 │   ├── planner_tab/          # ⭐ Implementado: 4 subpestañas (una carpeta
 │   │   │                     #   por subpestaña, CADA UNA CON SU README)
 │   │   ├── __init__.py           # Re-exporta las 4 clases (API pública intacta)
@@ -91,12 +95,24 @@ Planning-Stacking-Suite/
 │   ├── es.ts / en.ts
 │   └── README.md
 │
-├── tests/                # pytest
+├── tests/                # pytest: 12 test_*.py + conftest.py (detalle en su README)
 │   ├── test_smoke.py
+│   ├── test_settings.py
+│   ├── test_weather.py
+│   ├── test_planners.py
+│   ├── test_dialogos.py
+│   ├── test_equipment.py
+│   ├── test_analytical_transit.py
+│   ├── test_capture_plan.py
+│   ├── test_moon_distance.py
+│   ├── test_framing.py
+│   ├── test_ldn_loader.py
+│   ├── conftest.py
 │   └── README.md
 │
 ├── data/                 # Datos locales (NO versionados)
 │   ├── pass.db               # Base SQLite (se crea en runtime)
+│   ├── equipment_images/     # Copias de imágenes adjuntas por setup (D-1)
 │   ├── working/calibrados/   # Salida de calibración por sesión
 │   └── dss2_cache/           # Imágenes DSS2 descargadas
 │
