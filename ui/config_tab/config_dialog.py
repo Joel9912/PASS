@@ -280,7 +280,13 @@ class ConfigDialog(QDialog):
         _BRIDGE.probe(path)
 
     def _on_siril_result(self, path: str, version: str) -> None:
-        """Pinta lo que dijo ``siril_version`` (señal encolada desde el hilo)."""
+        """Pinta lo que dijo ``siril_version`` (señal encolada desde el hilo).
+
+        Solo si sigue mandando la ruta del campo: una sonda lenta de una
+        ruta vieja no debe pintar sobre la actual (M-23 de la auditoría).
+        """
+        if path != self._siril_path.text().strip():
+            return
         if version:
             self._set_siril_status(f"✓ {version} detectado y operativo.", _OK)
         else:

@@ -136,6 +136,38 @@ def test_main_window_layout():
     window.close()
 
 
+def test_ajustes_guardados_refrescan_clima_por_tipo(monkeypatch):
+    """M-15: tras guardar API keys, Búsqueda se busca por tipo, no por índice.
+
+    Con una página más delante del Planificador, `widget(4)` ya no lo es
+    y el clima de Búsqueda no se refrescaba (y con `widget(4)` en None,
+    crasheaba).
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import QLabel
+
+    from ui.main_window import MainWindow
+    from ui.planner_tab.busqueda import BusquedaTab
+
+    _app_ui()
+    window = MainWindow()
+    busq = window.content.findChild(BusquedaTab)
+    assert busq is not None
+
+    llamadas: list[int] = []
+    monkeypatch.setattr(busq, "refresh_weather", lambda: llamadas.append(1))
+
+    # Página nueva delante del Planificador: el índice 4 ya no es él
+    window.content.insertWidget(4, QLabel("pestaña extra"))
+    window._on_settings_saved()
+
+    assert llamadas == [1]
+    window.close()
+
+
 def test_capture_ideal_star_is_green():
     """La ★ de «Captura Ideal» va envuelta en span verde.
 
@@ -516,6 +548,27 @@ def test_config_dialog_result_paints_status(tmp_path, monkeypatch):
 
     dialog._on_siril_result(str(fake), "")
     assert "no responde a --version" in dialog._siril_status.text()
+    cd._BRIDGE.checked.disconnect(dialog._on_siril_result)
+
+
+def test_config_dialog_result_descarta_ruta_vieja(tmp_path, monkeypatch):
+    """M-23: una sonda lenta de una ruta vieja no pinta sobre la actual.
+
+    El usuario cambia de ruta mientras la comprobación anterior sigue en
+    el hilo de trabajo: su resultado («Encontrado en <vieja>…» o versión)
+    ya no representa el campo y se descarta.
+    """
+    fake = tmp_path / "siril-cli.exe"
+    fake.write_text("", encoding="utf-8")
+
+    cd, dialog, _probed = _config_dialog(monkeypatch, str(fake))
+
+    estado = dialog._siril_status.text()          # «Comprobando…» de la actual
+    dialog._on_siril_result(r"C:\vieja\siril-cli.exe", "siril 1.0")
+    assert dialog._siril_status.text() == estado  # resultado viejo: descartado
+
+    dialog._on_siril_result(str(fake), "siril 1.4.4")
+    assert "siril 1.4.4" in dialog._siril_status.text()   # la actual sí manda
     cd._BRIDGE.checked.disconnect(dialog._on_siril_result)
 
 

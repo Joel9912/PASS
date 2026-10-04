@@ -293,7 +293,9 @@ class MainWindow(QMainWindow):
 
     def _on_settings_saved(self) -> None:
         """Si cambiaron las API keys, el clima de Búsqueda se refresca ya."""
-        planner = self.content.widget(4)  # índice del Planificador en TABS
-        busq = planner.findChild(BusquedaTab)
+        # Buscado por tipo, no por índice de pestaña: el orden de TABS
+        # cambia al añadir páginas y widget(4) podía devolver None u otra
+        # cosa (M-15 de la auditoría).
+        busq = self.content.findChild(BusquedaTab)
         if busq is not None:
             busq.refresh_weather()
