@@ -1048,7 +1048,9 @@ class EphemerisPanel(QFrame):
         self._utc_offset_hours = utc_offset_hours
         self.set_date(date_iso)
 
-        info: NightInfo = night_info(latitude, longitude, date_iso)
+        info: NightInfo = night_info(
+            latitude, longitude, date_iso, utc_offset_hours=utc_offset_hours
+        )
         illumination = info.moon_illumination
 
         self._moon_icon.set_phase(illumination, info.waxing)

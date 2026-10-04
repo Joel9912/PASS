@@ -607,6 +607,53 @@ def test_rank_includes_weather_when_available():
     assert weather_none[0].score <= 100.0
 
 
+# ---------------------------------------------------------------- night_info
+def test_night_info_usa_el_huso_guardado():
+    """M-07: ``night_info`` centra su ventana con el huso, como ``night_curve``.
+
+    Caso del usuario (lon 85,4 con huso −6, muy distinto del inferido):
+    las efemérides y la curva tienen que verse la misma noche astronómica.
+    """
+    from planners.transit import night_curve, night_info
+
+    lat, lon, fecha, huso = 40.0, 85.4, "2026-10-02", -6.0
+    info = night_info(lat, lon, fecha, utc_offset_hours=huso)
+    curve = night_curve(6.0, 20.0, lat, lon, fecha, utc_offset_hours=huso)
+
+    # Tramo continuo más largo de la curva (misma malla, mismo sol)
+    tramos: list[int] = []
+    actual = 0
+    for esta in curve.astro_night:
+        if esta:
+            actual += 1
+        elif actual:
+            tramos.append(actual)
+            actual = 0
+    if actual:
+        tramos.append(actual)
+
+    assert tramos  # hay noche esa madrugada
+    assert info.astronomical_hours == pytest.approx(max(tramos) / 60.0, abs=0.03)
+    # Regresión: antes «cubrir el rango» contaba el día entre medias
+    # (16,02 h) y dawn salía como final de la ventana (14:00).
+    assert info.astronomical_hours < 5.0
+    assert info.astronomical_dawn != "2026-10-03 14:00:00.000"
+
+
+def test_night_info_reutiliza_iluminacion_cacheada(monkeypatch):
+    """M-09: la iluminación que guardó ``night_curve`` no se recalcula."""
+    from planners import transit
+
+    monkeypatch.setattr(transit, "_MOON_SUN_CACHE", {})
+    transit._remember_moon_sun(
+        (40.4, -3.7, "2026-10-02", 2.0), (None, None, None, 0.42)
+    )
+
+    info = transit.night_info(40.4, -3.7, "2026-10-02", utc_offset_hours=2.0)
+
+    assert info.moon_illumination == pytest.approx(0.42)
+
+
 # ---------------------------------------------------------------- sky_loader
 def _sky_connection() -> "object":
     """Conexión en memoria con las tablas que lee ``sky_loader``."""

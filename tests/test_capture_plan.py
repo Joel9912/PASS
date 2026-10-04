@@ -135,6 +135,32 @@ def test_best_dates_transit_local_uses_the_saved_offset():
         assert delta == pytest.approx(expected_delta, abs=0.02)
 
 
+def test_best_dates_pasa_el_huso_a_night_info(monkeypatch):
+    """M-07: el huso guardado centra la ventana de cada noche del plan.
+
+    Antes ``night_info`` no recibía el huso: la ventana se abría con el
+    huso inferido de la longitud y, con >3 h de desfase, el plan salía
+    vacío mientras la curva miraba otra noche.
+    """
+    import planners.capture_plan as capture_plan
+
+    husos: list = []
+    original = capture_plan.night_info
+
+    def espia(latitude, longitude, date_iso, **kwargs):
+        husos.append(kwargs.get("utc_offset_hours"))
+        return original(latitude, longitude, date_iso, **kwargs)
+
+    monkeypatch.setattr(capture_plan, "night_info", espia)
+    best_dates(
+        M42_RA, M42_DEC, MADRID_LAT, MADRID_LON,
+        start_date="2026-10-02", date_range_days=2, top_n=1,
+        utc_offset_hours=2.0,
+    )
+
+    assert husos == [2.0, 2.0]
+
+
 def _hhmm(text: str) -> float:
     """'23:45' → 23.75 horas decimales."""
     hours, minutes = text.split(":")

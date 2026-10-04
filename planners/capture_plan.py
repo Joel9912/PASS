@@ -138,8 +138,9 @@ def best_dates(
     ``score`` y ``windows``.
 
     ``utc_offset_hours`` (desfase de la ubicación, ver
-    ``analytical_transit.local_utc_offset``) solo afecta a las horas que se
-    muestran: ``transit_local`` y los rangos de ``windows``.
+    ``analytical_transit.local_utc_offset``) centra la ventana de
+    ``night_info`` (horas de noche) **y** las horas que se muestran:
+    ``transit_local`` y los rangos de ``windows``.
     """
     weights = weights or CaptureWeights()
     first = date.fromisoformat(start_date) if start_date else date.today()
@@ -153,7 +154,10 @@ def best_dates(
         day = (first + timedelta(days=offset)).isoformat()
         # Malla gruesa: al recorrer muchas noches solo hace falta estimar
         # las horas de noche; la malla fina se usa en las mejores fechas.
-        night = night_info(latitude, longitude, day, sample_min=30)
+        night = night_info(
+            latitude, longitude, day, sample_min=30,
+            utc_offset_hours=utc_offset_hours,
+        )
         if night.astronomical_hours <= 0.0:
             continue  # sin noche astronómica no hay captura
 

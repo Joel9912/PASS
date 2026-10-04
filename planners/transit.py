@@ -353,20 +353,28 @@ def night_info(
     longitude: float,
     date_iso: str,
     sample_min: int = SAMPLE_MIN,
+    utc_offset_hours: float | None = None,
 ) -> NightInfo:
     """Horas de noche astronómica y fase lunar para ``date_iso``.
 
-    - ``astronomical_dusk``/``dawn``: primer y último instante con el sol
-      bajo -18° (None si esa noche no llega a la noche astronómica).
+    - ``astronomical_dusk``/``dawn``: primer y último instante del **tramo
+      continuo más largo** con el sol bajo -18° (None si esa noche no
+      llega a la noche astronómica).
     - ``moon_phase``: fracción iluminada de la luna en el centro de la
       noche (0 = nueva, 1 = llena).
+
+    ``utc_offset_hours`` (desfase guardado, ver :func:`local_utc_offset`)
+    centra la ventana nocturna **igual que** :func:`night_curve`: sin él la
+    ventana se abría con el huso inferido de la longitud y, en ubicaciones
+    con huso político distinto, las efemérides y la curva miraban noches
+    distintas (la del plan salía vacía con >3 h de desfase).
 
     ``sample_min`` sube la malla (p. ej. 30) para baratar el cálculo cuando
     solo hace falta una estimación, como al recorrer 30 noches en el plan
     de captura. Por defecto usa la malla fina de :data:`SAMPLE_MIN`.
     """
     location = _location(latitude, longitude)
-    times = _night_times(date_iso, longitude, sample_min)
+    times = _night_times(date_iso, longitude, sample_min, utc_offset_hours=utc_offset_hours)
     frame = AltAz(obstime=times, location=location)
 
     sun_alt = get_sun(times).transform_to(frame).alt
@@ -375,18 +383,30 @@ def night_info(
     dusk = dawn = None
     hours = 0.0
     if np.any(astronomical):
+        # La noche es el tramo CONTINUO más largo de la ventana: con el
+        # huso guardado la ventana puede contener el final de una noche y
+        # el principio de la siguiente (con el día entre medias) y, si se
+        # cubre el rango de la primera a la última muestra, el día cuenta
+        # como noche (medido: 16 h de «noche» vs 0,78 h reales).
         indices = np.flatnonzero(astronomical)
-        # Una sola ventana continua esperada; si hay huecos, cubrimos el rango.
-        dusk = times[indices[0]].iso
-        dawn = times[indices[-1]].iso
-        hours = (indices[-1] - indices[0] + 1) * sample_min / 60.0
+        tramos = np.split(indices, np.flatnonzero(np.diff(indices) != 1) + 1)
+        run = max(tramos, key=len)
+        dusk = times[run[0]].iso
+        dawn = times[run[-1]].iso
+        hours = len(run) * sample_min / 60.0
 
-    # Fase lunar en el centro de la ventana (noche local aproximada)
+    # Fase lunar en el centro de la ventana (noche local aproximada).
+    # Si night_curve ya guardó esta noche la iluminación, se reutiliza:
+    # el centro de la malla cae en el mismo instante (start + 8 h) sea
+    # cual sea sample_min, y la clave de caché incluye el huso (M-09).
     mid = times[len(times) // 2]
-    moon = get_body("moon", mid, location)
-    sun = get_sun(mid)
-    elongation = angular_separation(moon.ra, moon.dec, sun.ra, sun.dec)
-    illumination = float((1.0 - np.cos(elongation.to_value(u.rad))) / 2.0)
+    key = (latitude, longitude, date_iso, utc_offset_hours)
+    with _CACHE_LOCK:
+        cached = _MOON_SUN_CACHE.get(key)
+    if cached is not None:
+        illumination = float(cached[3])
+    else:
+        illumination = _lunar_illumination(times, location)
 
     sun_alt_values = sun_alt.to_value(u.deg)
     sunset = _crossing_iso(
@@ -419,6 +439,7 @@ def transit_info(
     latitude: float,
     longitude: float,
     date_iso: str,
+    utc_offset_hours: float | None = None,
 ) -> TransitInfo:
     """Tránsito de un objeto y su mínima separación con la luna esa noche.
 
@@ -428,9 +449,13 @@ def transit_info(
     - ``hour_altitudes``: (ISO, altitud) cada SAMPLE_MIN min para graficar.
 
     Internamente delega en :func:`night_curve`, que es la misma malla que
-    alimenta la gráfica y las ventanas de captura.
+    alimenta la gráfica y las ventanas de captura; ``utc_offset_hours``
+    centra la ventana con el huso guardado (igual que ``night_info``).
     """
-    curve = night_curve(ra_hours, dec_deg, latitude, longitude, date_iso)
+    curve = night_curve(
+        ra_hours, dec_deg, latitude, longitude, date_iso,
+        utc_offset_hours=utc_offset_hours,
+    )
     return TransitInfo(
         transit_time=curve.transit_time,
         altitude_deg=round(curve.transit_altitude, 1),
