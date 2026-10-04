@@ -721,3 +721,40 @@ def test_sky_loader_tablas_vacias(monkeypatch):
     assert len(stars["ra"]) == 0 and len(stars["mag"]) == 0
     assert len(objects["ra"]) == 0 and objects["ids"] == []
     conn.close()
+
+
+def test_ensure_catalog_revierte_el_delete_si_falla(monkeypatch):
+    """M-10: un fallo tras el DELETE no deja la transacción abierta.
+
+    Sin ``rollback``, el borrado quedaría pendiente y el próximo commit
+    de cualquier otro módulo lo consignaría: catálogo vacío en la base.
+    """
+    import sqlite3
+
+    from planners import catalog_loader
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(
+        "CREATE TABLE catalog (object_id TEXT, catalog TEXT, magnitude REAL,"
+        " ra_hours REAL, dec_deg REAL);"
+        "CREATE TABLE stars (name TEXT, magnitude REAL, ra_hours REAL,"
+        " dec_deg REAL, color TEXT, constellation TEXT);"
+        "INSERT INTO catalog VALUES ('M42', 'messier', 4.0, 5.5, -5.4);"
+    )
+    monkeypatch.setattr(catalog_loader, "get_connection", lambda: conn)
+
+    def carga_rota():
+        conn.execute("DELETE FROM catalog")
+        raise OSError("disco lleno")
+
+    monkeypatch.setattr(catalog_loader, "load_catalog", carga_rota)
+    counts = catalog_loader.ensure_catalog(force=True)
+
+    # El DELETE quedó sin consignar: la fila sigue viva…
+    assert conn.execute("SELECT COUNT(*) FROM catalog").fetchone()[0] == 1
+    # …y un commit posterior de otro módulo tampoco la borra.
+    conn.commit()
+    assert conn.execute("SELECT COUNT(*) FROM catalog").fetchone()[0] == 1
+    assert counts["catalog"] == 1
+    conn.close()

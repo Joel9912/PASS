@@ -293,6 +293,13 @@ def ensure_catalog(force: bool = False) -> dict[str, int]:
             print("Descargando nebulosas oscuras LDN (VizieR VII/7A)...")
             counts["ldn"] = ldn_loader.load_ldn()
     except Exception as error:  # sin red u otro error: seguimos adelante
+        # El DELETE previo (y cualquier INSERT a medias) queda en una
+        # transacción abierta: sin rollback, el próximo commit de otro
+        # módulo la consignaría y el catálogo se quedaría vacío (M-10).
+        try:
+            get_connection().rollback()
+        except Exception:  # la conexión pudo ser la que falló
+            pass
         print(f"[aviso] No se pudieron cargar los catálogos: {error}")
     return counts
 
