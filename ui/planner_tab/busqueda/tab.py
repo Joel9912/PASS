@@ -97,12 +97,14 @@ ALTITUDE_OPTIONS: tuple[tuple[str, float | None], ...] = (
 # se mudó a `widgets.py` porque Catálogo Personal también lo necesita: aquí
 # nadie importa de una subpestaña a otra.
 def _constellation_label(code: str | None) -> str:
+    """Código IAU de constelación → nombre (``--`` si falta o es desconocido)."""
     if not code:
         return "--"
     return CONSTELLATIONS.get(code, code)
 
 
 def _number(value: float | None, template: str) -> str:
+    """Valor a texto con ``template``; sin valor, ``--`` (nunca formatea ``None``)."""
     return template.format(value) if value is not None else "--"
 
 
@@ -123,6 +125,7 @@ class BusquedaTab(QWidget):
     ROW_HEIGHT = 42
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Monta la rejilla 3×2 con sus paneles y arranca con un ``refresh()``."""
         super().__init__(parent)
 
         self._rows: list[dict] = []
@@ -168,6 +171,7 @@ class BusquedaTab(QWidget):
 
     # -- Construcción de los paneles ----------------------------------------
     def _build_filters(self) -> QWidget:
+        """Columna izquierda: los 7 filtros con «Aplicar filtros» (devuelve el panel)."""
         panel = QWidget()
         panel.setObjectName("GroupFrame")
         layout = QGridLayout(panel)
@@ -238,6 +242,7 @@ class BusquedaTab(QWidget):
         return panel
 
     def _build_results(self) -> QWidget:
+        """Columna derecha: tabla de resultados con contador y botón ⭐ Añadir."""
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -296,6 +301,7 @@ class BusquedaTab(QWidget):
         return panel
 
     def _build_ephemeris(self) -> QWidget:
+        """Efemérides Sol/Luna en la fila 2 izquierda (con su señal de fecha)."""
         # stretch=1: el panel llena su celda hasta la fila de Ubicación.
         # Antes iba un addStretch(1) después del panel, que se llevaba el
         # sobrante y dejaba el hueco que se veía sobre Ubicación. El
@@ -310,6 +316,7 @@ class BusquedaTab(QWidget):
         return container
 
     def _build_curve(self) -> QWidget:
+        """Curva de Tránsito en la fila 2 derecha."""
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -380,6 +387,7 @@ class BusquedaTab(QWidget):
 
     # -- Cálculos ------------------------------------------------------------
     def _filters(self) -> SearchFilters:
+        """Lee los 9 controles y devuelve los filtros listos para ``search``."""
         max_magnitude = self._magnitude.currentData()
         min_altitude = self._altitude.currentData()
         return SearchFilters(
@@ -401,6 +409,7 @@ class BusquedaTab(QWidget):
         )
 
     def _run_search(self) -> None:
+        """Ejecuta la búsqueda, rellena la tabla y actualiza el contador (máx. ``ROW_LIMIT``)."""
         rows = search(self._filters(), limit=self.ROW_LIMIT)
         self._rows = rows
         self._fill_table(rows)
@@ -410,6 +419,11 @@ class BusquedaTab(QWidget):
         )
 
     def _fill_table(self, rows: list[dict]) -> None:
+        """Vuelca ``rows`` a la tabla y reparte los anchos de columna.
+
+        ``ResizeToContents`` solo vive durante el llenado (medido: costaba
+        ~90 s con 500 filas); ver el comentario y :meth:`_spread_surplus`.
+        """
         header = self._table.horizontalHeader()
         # ResizeToContents recalcula el tamaño de TODAS las filas de la
         # columna en cada setItem (~36 ms/celda con 500 filas): la interfaz
@@ -492,6 +506,7 @@ class BusquedaTab(QWidget):
         return super().eventFilter(obj, event)
 
     def _refresh_ephemeris(self) -> None:
+        """Refresca efemérides si cambió lat/long/fecha/huso (caché ``_clave_ephemeris``)."""
         if self._latitude is None or self._longitude is None:
             return
         clave = (
@@ -509,6 +524,7 @@ class BusquedaTab(QWidget):
         )
 
     def _refresh_weather(self) -> None:
+        """Refresca el clima si cambió lat/long/fecha (caché ``_clave_clima``)."""
         if self._latitude is None or self._longitude is None:
             return
         clave = (self._latitude, self._longitude, self.current_date_iso())
@@ -520,6 +536,12 @@ class BusquedaTab(QWidget):
         )
 
     def _refresh_selected_curve(self) -> None:
+        """Dibuja la curva de la selección si cambió algo; si no, explica por qué no hay.
+
+        La clave de caché cubre los cuatro motivos de «sin curva» (sin
+        selección, sin coordenadas, sin ubicación) y el resto: objeto,
+        fecha y ubicación vigentes.
+        """
         row = self._selected_row()
         if row is None:
             clave = ("sin-seleccion",)
@@ -563,6 +585,7 @@ class BusquedaTab(QWidget):
 
     # -- Selección -----------------------------------------------------------
     def _selected_row(self) -> dict | None:
+        """Dict de la fila seleccionada en la tabla (``None`` si no hay o está fuera de rango)."""
         rows = self._table.selectionModel().selectedRows() if self._table.selectionModel() else []
         if not rows:
             return None
@@ -572,6 +595,7 @@ class BusquedaTab(QWidget):
         return None
 
     def _on_row_selected(self) -> None:
+        """Habilita el ⭐, emite ``object_selected`` y recalcula la curva de la selección."""
         row = self._selected_row()
         has_row = row is not None
         self._add_button.setEnabled(has_row)
@@ -580,11 +604,13 @@ class BusquedaTab(QWidget):
         self._refresh_selected_curve()
 
     def _on_add_clicked(self) -> None:
+        """Emite ``add_to_personal`` con la fila seleccionada (si la hay)."""
         row = self._selected_row()
         if row is not None:
             self.add_to_personal.emit(str(row["object_id"]), str(row["catalog"]))
 
     def _on_date_changed(self, _date_iso: str) -> None:
+        """Cambió la fecha: mismo recorrido que «Aplicar filtros» (ver comentario)."""
         # Mismo recorrido que «Aplicar filtros»: refresh() hace las 4
         # partes (esta copia literal del cuerpo se iba de sincronía).
         self.refresh()

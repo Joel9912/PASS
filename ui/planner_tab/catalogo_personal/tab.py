@@ -58,6 +58,7 @@ class RegionDialog(QDialog):
     """Diálogo para crear una región de interés (centro + encuadre + teselas)."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Formulario: nombre, centro RA/Dec, FOV, teselas y notas (Aceptar/Cancelar)."""
         super().__init__(parent)
         self.setWindowTitle("Añadir región de interés")
         self.setMinimumWidth(420)
@@ -119,13 +120,18 @@ class RegionDialog(QDialog):
         form.addRow(buttons)
 
     def _validate(self) -> None:
+        """Acepta solo con nombre; si falta, avisa y el diálogo sigue abierto."""
         if not self._name.text().strip():
             QMessageBox.warning(self, "Falta el nombre", "Dale nombre a la región.")
             return
         self.accept()
 
     def values(self) -> dict:
-        """Datos de la región en la forma que espera ``add_region``."""
+        """Datos de la región en la forma que espera ``add_region``.
+
+        FOV a 0 («Sin encuadre») se guarda como ``None`` y las teselas
+        solo se guardan si hay FOV mayor; sin él, la región es centro puro.
+        """
         major = self._fov_major.value() or None
         minor = self._fov_minor.value() or None
         return {
@@ -149,6 +155,7 @@ class CatalogoPersonalTab(QWidget):
     catalog_changed = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Monta tabla, acciones y aviso; arranca leyendo la base (``refresh``)."""
         super().__init__(parent)
         self._rows: list[dict] = []
 
@@ -237,6 +244,7 @@ class CatalogoPersonalTab(QWidget):
 
     # -- Relleno de la tabla -------------------------------------------------
     def _fill(self) -> None:
+        """Vuelca ``self._rows`` a la tabla (objetos y regiones en la misma)."""
         self._table.setRowCount(len(self._rows))
         for index, row in enumerate(self._rows):
             is_region = row.get("kind") == "region"
@@ -263,6 +271,7 @@ class CatalogoPersonalTab(QWidget):
 
     @staticmethod
     def _size_text(row: dict, is_region: bool) -> str:
+        """Texto de la celda: FOV(+teselas) en regiones, tamaño angular en objetos."""
         if is_region:
             major = row.get("fov_major_arcmin")
             minor = row.get("fov_minor_arcmin")
@@ -277,6 +286,7 @@ class CatalogoPersonalTab(QWidget):
 
     # -- Selección -----------------------------------------------------------
     def _selected(self) -> dict | None:
+        """Dict de la fila seleccionada (``None`` si no hay o está fuera de rango)."""
         rows = (
             self._table.selectionModel().selectedRows()
             if self._table.selectionModel()
@@ -288,6 +298,7 @@ class CatalogoPersonalTab(QWidget):
         return self._rows[index] if 0 <= index < len(self._rows) else None
 
     def _on_selection(self) -> None:
+        """Activa los botones y emite ``target_selected`` al marcar una fila."""
         row = self._selected()
         has_row = row is not None
         self._remove.setEnabled(has_row)
@@ -299,6 +310,7 @@ class CatalogoPersonalTab(QWidget):
 
     # -- Acciones ------------------------------------------------------------
     def _on_remove(self) -> None:
+        """Quita la fila seleccionada tras confirmar y avisa con ``catalog_changed``."""
         row = self._selected()
         if row is None:
             return
@@ -317,6 +329,7 @@ class CatalogoPersonalTab(QWidget):
             self.catalog_changed.emit()
 
     def _on_edit_notes(self) -> None:
+        """Abre el diálogo multilinea de notas y guarda si el usuario acepta."""
         row = self._selected()
         if row is None:
             return
@@ -333,6 +346,7 @@ class CatalogoPersonalTab(QWidget):
             self.refresh()
 
     def _on_add_region(self) -> None:
+        """Abre ``RegionDialog`` y, si se acepta, crea la región y refresca."""
         dialog = RegionDialog(self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             values = dialog.values()

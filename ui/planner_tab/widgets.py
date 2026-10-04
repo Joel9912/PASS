@@ -128,6 +128,10 @@ def window_lines(summary: dict[str, dict]) -> tuple[str, str]:
 
 
 def _window_text(summary: dict[str, dict], key: str, prefix: str) -> str:
+    """Leyenda de una ventana del resumen: «prefijo: rangos (duración)».
+
+    Sin tramos devuelve «prefijo: sin ventana» para no dejar la línea vacía.
+    """
     entry = summary.get(key) or {}
     ranges = entry.get("ranges") or []
     if not ranges:
@@ -236,6 +240,11 @@ class LocationBar(QFrame):
     location_changed = pyqtSignal(float, float, object)  # lat, lon, offset|None
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Monta las tres filas (ubicación, lat/long, huso) y carga el estado inicial.
+
+        Prioriza la ubicación guardada; sin ninguna se espera a que el
+        usuario escriba lat/long (nunca se inventa el punto 0,0).
+        """
         super().__init__(parent)
         self.setObjectName("GroupFrame")
 
@@ -327,9 +336,11 @@ class LocationBar(QFrame):
 
     # -- API ----------------------------------------------------------------
     def latitude(self) -> float:
+        """Latitud visible, en grados (-90 … 90)."""
         return self._latitude.value()
 
     def longitude(self) -> float:
+        """Longitud visible, en grados (-180 … 180)."""
         return self._longitude.value()
 
     def utc_offset_hours(self) -> float | None:
@@ -381,6 +392,11 @@ class LocationBar(QFrame):
 
     # -- Internos -----------------------------------------------------------
     def _reload_locations(self, select_first: bool = False) -> None:
+        """Vuelve a leer las ubicaciones de la base y repuebla el combo.
+
+        Con señales bloqueadas para no emitir a mitad de recarga; sin
+        ubicaciones guardadas «Manual» es la única opción.
+        """
         self._combo.blockSignals(True)
         self._combo.clear()
         try:
@@ -404,6 +420,11 @@ class LocationBar(QFrame):
             self._combo.setCurrentIndex(0)
 
     def _on_combo(self, index: int) -> None:
+        """Entrada del combo elegida: vierte sus datos y emite la ubicación.
+
+        En «Manual» (entrada sin dict) no hay datos que volcar y solo se
+        emite el estado actual de los campos.
+        """
         if self._loading:
             return
         location = self._combo.itemData(index)
@@ -443,6 +464,10 @@ class LocationBar(QFrame):
         return row
 
     def _on_manual(self, _value: float) -> None:
+        """Se editó lat/long a mano: el combo vuelve a «Manual» y se emite.
+
+        Las señales del combo se bloquean para no reentrar en ``_on_combo``.
+        """
         if self._loading:
             return
         self._combo.blockSignals(True)
@@ -451,6 +476,11 @@ class LocationBar(QFrame):
         self._emit()
 
     def _emit(self, *_args) -> None:
+        """Emite ``location_changed(lat, lon, offset)`` salvo durante una recarga.
+
+        ``_args`` absorbe los argumentos de las señales de Qt (valueChanged,
+        currentIndexChanged) para poder conectar la misma función a cualquiera.
+        """
         if self._loading:
             return
         self.location_changed.emit(
@@ -462,7 +492,11 @@ class LocationBar(QFrame):
 #                            T A R J E T A S                                   #
 # --------------------------------------------------------------------------- #
 class MetricCard(QFrame):
-    """Tarjeta título + valor (clima, seeing, métricas de plan)."""
+    """Tarjeta «título + valor» para métricas compactas (clima, seeing, plan).
+
+    El valor arranca en ``--``; :meth:`set_value` sabe atenuar lo no
+    disponible y teñir el texto cuando la tarjeta trae color propio.
+    """
 
     def __init__(
         self,
@@ -471,6 +505,7 @@ class MetricCard(QFrame):
         *,
         title_color: str | None = None,
     ) -> None:
+        """Tarjeta «título + valor»: valor inicial ``--`` y estilo ``#MetricCard``."""
         super().__init__(parent)
         self.setObjectName("MetricCard")
         self.setMinimumWidth(110)
@@ -564,6 +599,7 @@ class WeatherCards(QWidget):
     )
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Crea las 6 tarjetas de ``CARDS`` y la etiqueta de nota (oculta al inicio)."""
         super().__init__(parent)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -686,17 +722,20 @@ class MoonPhaseWidget(QWidget):
     """Disco lunar con su fase (iluminación 0-1 y sentido de crecimiento)."""
 
     def __init__(self, size: int = 56, parent: QWidget | None = None) -> None:
+        """Disco cuadrado de ``size`` px con fase inicial al 50 % creciente."""
         super().__init__(parent)
         self._illumination = 0.5
         self._waxing = True
         self.setFixedSize(size, size)
 
     def set_phase(self, illumination: float, waxing: bool) -> None:
+        """Fija la fase (iluminación recortada a 0-1) y repinta."""
         self._illumination = max(0.0, min(1.0, float(illumination)))
         self._waxing = bool(waxing)
         self.update()
 
     def paintEvent(self, event) -> None:
+        """Pinta fondo, porción iluminada (:func:`_lit_path`) y borde."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
@@ -749,6 +788,7 @@ class DayNightBar(QWidget):
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Barra de 44 px, con marcas y rango vacíos hasta ``set_marks``."""
         super().__init__(parent)
         # Fija: no se estira con el sobrante del panel (petición del usuario).
         self.setFixedHeight(DAY_NIGHT_BAR_HEIGHT)
@@ -766,6 +806,12 @@ class DayNightBar(QWidget):
         dawn: float | None,
         sunrise: float | None,
     ) -> None:
+        """Guarda los 4 hitos (hora local) y recalcula el rango visible.
+
+        Rango = puesta - 1 h … salida + 1 h (si la salida es al día
+        siguiente se desenvuelve); sin puesta/salida no hay rango y la
+        barra pinta el día completo, de 00 h a 24 h.
+        """
         self._marks = {"sunset": sunset, "dusk": dusk, "dawn": dawn, "sunrise": sunrise}
         # Eje dinámico: de 1 h antes de la puesta a 1 h después de la salida.
         if sunset is not None and sunrise is not None:
@@ -819,6 +865,11 @@ class DayNightBar(QWidget):
         return hour >= start or hour < end
 
     def _kind(self, hour: float) -> str:
+        """Franja de esa hora: «night», «twilight», «day» o «unknown».
+
+        La noche prefiere ocaso→amanecer astronómicos (si existen) y si no
+        usa puesta→salida; «unknown» cuando faltan las marcas necesarias.
+        """
         marks = self._marks
         night = None
         if marks["dusk"] is not None and marks["dawn"] is not None:
@@ -845,6 +896,11 @@ class DayNightBar(QWidget):
         return "day"
 
     def paintEvent(self, event) -> None:
+        """Pinta un píxel por hora del rango, las marcas de hora y los 4 hitos.
+
+        Un hito fuera del rango no se pinta; la salida del día siguiente
+        se desenvuelve +24 h para poder situarla dentro.
+        """
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
@@ -951,6 +1007,7 @@ class EphemerisPanel(QFrame):
     date_changed = pyqtSignal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Monta fecha (◀/▶ y «Hoy»), fase lunar, barra y rótulos de horas."""
         super().__init__(parent)
         self.setObjectName("GroupFrame")
 
@@ -1089,6 +1146,7 @@ class EphemerisPanel(QFrame):
         )
 
         def _local(iso: str | None) -> float | None:
+            """ISO UTC → horas locales con la ubicación y el desfase vigentes."""
             return iso_to_local_hours(iso, longitude, utc_offset_hours)
 
         self._bar.set_marks(
@@ -1125,6 +1183,7 @@ class EphemerisPanel(QFrame):
 
     # -- Señales ------------------------------------------------------------
     def _emit_date(self, _date: QDate) -> None:
+        """Adelanta la fecha del editor como señal ``date_changed`` al exterior."""
         self.date_changed.emit(self.current_date_iso())
 
     def _step_day(self, days: int) -> None:
@@ -1172,6 +1231,7 @@ class TransitCurve(QWidget):
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Monta cabecera, gráfico y bandas/curvas en estado vacío (:meth:`clear`)."""
         super().__init__(parent)
         self.setObjectName("GroupFrame")
 
@@ -1422,6 +1482,7 @@ class _BandPool:
     """
 
     def __init__(self, plot_item, brush, pen, z_value: int) -> None:
+        """Guarda el estilo de la banda; las regiones empiezan vacías (ver ``set_spans``)."""
         self._plot_item = plot_item
         self._brush = brush
         self._pen = pen
