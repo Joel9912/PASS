@@ -60,14 +60,25 @@ Planning-Stacking-Suite/
 │   │                         #   PlannerPage = 4 subpestañas (LocationBar vive en
 │   │                         #   Búsqueda, fila 3 izquierda, y se comparte por señal)
 │   ├── style.py              # Tema oscuro azulado (QSS + fuente 13pt)
-│   ├── planner_tab/          # ⭐ Implementado: 4 subpestañas
-│   │   ├── widgets.py            # LocationBar, efemérides, curva (PyQtGraph), tarjetas
-│   │   ├── busqueda.py           # Rejilla 3×2: filtros + tabla + efemérides + curva + ubicación + clima
-│   │   ├── catalogo_personal.py  # Objetos y regiones guardados
-│   │   ├── planificacion.py      # Planetario + encuadre + plan de captura + sesión
-│   │   ├── sesiones.py           # Sesiones: editar / completar / eliminar
-│   │   ├── planetario_visual.py  # Lienzo de cielo (QPainter, gnomónica)
-│   │   └── README.md
+│   ├── planner_tab/          # ⭐ Implementado: 4 subpestañas (una carpeta
+│   │   │                     #   por subpestaña, CADA UNA CON SU README)
+│   │   ├── __init__.py           # Re-exporta las 4 clases (API pública intacta)
+│   │   ├── widgets.py            # Compartidos: LocationBar, efemérides, curva,
+│   │   │                         #   tarjetas y formato de catálogo (shared)
+│   │   ├── README.md             # Índice del Planificador
+│   │   ├── busqueda/             # Rejilla 3×2: filtros + tabla + efemérides +
+│   │   │   ├── tab.py            #   curva + ubicación + clima
+│   │   │   └── README.md         #   (con esquema ASCII del estado actual)
+│   │   ├── catalogo_personal/    # Objetos y regiones guardados
+│   │   │   ├── tab.py
+│   │   │   └── README.md
+│   │   ├── planificacion/        # Planetario + encuadre + plan + sesión
+│   │   │   ├── tab.py
+│   │   │   ├── planetario_visual.py  # Lienzo de cielo (QPainter, gnomónica)
+│   │   │   └── README.md
+│   │   └── sesiones/             # Sesiones: editar / completar / eliminar
+│   │       ├── tab.py
+│   │       └── README.md
 │   ├── summary_tab/README.md     # Progreso de captura, sesión activa
 │   ├── planetary_tab/README.md   # Renderizado de las dos esferas
 │   ├── equipment_tab/README.md   # Gestión de setups/localizaciones
