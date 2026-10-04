@@ -53,6 +53,7 @@ from planners.transit import night_curve
 
 from ...style import PALETTE
 from ..widgets import (
+    CATALOG_LABELS,
     EphemerisPanel,
     LocationBar,
     TransitCurve,
@@ -77,11 +78,7 @@ COLUMNS: tuple[tuple[str, str], ...] = (
     ("Horas >30°", "90"),
 )
 
-#: Catálogos → etiqueta.
-CATALOG_LABELS: dict[str, str] = {
-    "messier": "Messier", "ngc": "NGC", "ic": "IC", "barnard": "Barnard",
-    "caldwell": "Caldwell", "ldn": "LDN (nebulosas oscuras)", "other": "Otros",
-}
+#: Catálogos → etiqueta (vive en `../widgets.py`, compartida — M-12).
 
 #: Opciones de filtro con su valor (o None para "sin límite").
 MAGNITUDE_OPTIONS: tuple[tuple[str, float | None], ...] = (

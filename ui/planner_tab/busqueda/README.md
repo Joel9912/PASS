@@ -5,7 +5,7 @@ Primer paso del flujo de PAS.S: filtrar el catálogo (OpenNGC + HYG + LDN) y ver
 
 ## Estado actual
 - `tab.py` — `BusquedaTab` (antes `ui/planner_tab/busqueda.py`; el módulo es `tab.py` dentro de esta carpeta). Señales `object_selected` (objeto elegido en la tabla) y `add_to_personal` (botón «⭐ Añadir a Mi Lista», escribe en Catálogo Personal desde `PlannerPage`, nunca directo en la base).
-- Constantes y helpers propios: `COLUMNS` (10 columnas), `CATALOG_LABELS`, `MAGNITUDE_OPTIONS`, `ALTITUDE_OPTIONS`, `_constellation_label`, `_number`.
+- Constantes y helpers propios: `COLUMNS` (10 columnas), `MAGNITUDE_OPTIONS`, `ALTITUDE_OPTIONS`, `_constellation_label`, `_number`. `CATALOG_LABELS` es ahora **compartido de `../widgets.py`** (M-12: estaba duplicado con valores divergentes de Catálogo Personal).
 - El formato de datos compartido (`format_ra/dec/size`, `_type_label`, `TYPE_LABELS`) se mudó a `../widgets.py` (lo usan también Búsqueda y Catálogo Personal) — así ninguna subpestaña importa de otra.
 - Compartidos de `../widgets.py`: `LocationBar`, `EphemerisPanel` (+ `DayNightBar`), `TransitCurve`, `WeatherCards`.
 - Rejilla 3×2 repartida 3:3:1; tabla con celdas centradas, filas a 42 px y ancho sobrante proporcional (`_spread_surplus`).

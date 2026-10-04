@@ -158,6 +158,20 @@ TYPE_LABELS: dict[str, str] = {
     "*": "Estrella", "**": "Estrella doble", "Nova": "Nova",
 }
 
+#: Catálogo → etiqueta legible. Compartida por Búsqueda (opción del combo
+#: «Catálogo») y Catálogo Personal (celda de la tabla), como TYPE_LABELS.
+#: Estaba duplicada en ambos con valores ya divergidos («LDN (nebulosas
+#: oscuras)»/«LDN», «Otros»/«Otro» — M-12 de la auditoría). Los canónicos
+#: son los cortos: en la tabla del Personal el tipo («Nebulosa oscura»)
+#: ya va en su propia columna.
+CATALOG_LABELS: dict[str, str] = {
+    "region": "Región",
+    "messier": "Messier", "ngc": "NGC", "ic": "IC",
+    "barnard": "Barnard", "caldwell": "Caldwell",
+    "ldn": "LDN",
+    "other": "Otros",
+}
+
 
 def format_ra(ra_hours: float | None) -> str:
     """RA decimal en horas a sexagesimal: ``00h42m44s`` (``--`` si falta)."""

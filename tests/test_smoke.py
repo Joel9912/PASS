@@ -857,6 +857,24 @@ def test_calcular_plan_bloquea_la_reentrada(monkeypatch):
     page.deleteLater()
 
 
+def test_catalog_labels_fuente_unica(monkeypatch):
+    """M-12: una sola `CATALOG_LABELS` (en `widgets.py`) para las dos pestañas.
+
+    Estaba duplicada con valores ya divergidos: el mismo catálogo se
+    llamaba «LDN (nebulosas oscuras)»/«LDN» o «Otros»/«Otro» según
+    dónde se mirara.
+    """
+    from ui.planner_tab.busqueda import tab as busq_tab
+    from ui.planner_tab.catalogo_personal import tab as cat_tab
+    from ui.planner_tab.widgets import CATALOG_LABELS
+
+    assert busq_tab.CATALOG_LABELS is CATALOG_LABELS
+    assert cat_tab.CATALOG_LABELS is CATALOG_LABELS
+    assert CATALOG_LABELS["ldn"] == "LDN"
+    assert CATALOG_LABELS["other"] == "Otros"
+    assert CATALOG_LABELS["region"] == "Región"
+
+
 def test_quitar_objeto_emite_catalog_changed(monkeypatch):
     """M-05: quitar del catálogo personal avisa a Planificación (señal nueva).
 

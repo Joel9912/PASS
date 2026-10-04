@@ -37,18 +37,21 @@ from PyQt6.QtWidgets import (
 
 from planners import personal_catalog
 
-from ..widgets import _type_label, format_dec, format_ra, format_size
+from ..widgets import (
+    CATALOG_LABELS,
+    _type_label,
+    format_dec,
+    format_ra,
+    format_size,
+)
 
 #: Columnas de la tabla (mockup del usuario).
 COLUMNS: tuple[str, ...] = (
     "#", "Nombre", "Tipo", "Catálogo", "Mag", "RA", "Dec", "Tamaño", "Notas",
 )
 
-#: Catálogo interno -> etiqueta legible.
-CATALOG_LABELS: dict[str, str] = {
-    "region": "Región", "messier": "Messier", "ngc": "NGC", "ic": "IC",
-    "barnard": "Barnard", "caldwell": "Caldwell", "ldn": "LDN", "other": "Otro",
-}
+#: Catálogos → etiqueta: compartida desde `../widgets.py` (M-12; antes
+#: estaba duplicada aquí con valores divergentes de los de Búsqueda).
 
 
 class RegionDialog(QDialog):
