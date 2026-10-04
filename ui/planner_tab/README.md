@@ -13,7 +13,7 @@ El núcleo de PAS.S: buscar objetos, evaluar cuándo fotografiarlos, guardar los
 | `sesiones/` | 4. Sesiones Planificadas | Tabla de sesiones + Editar / completar / eliminar. |
 
 ## Estado actual
-Carpeta **implementada** y probada (105 tests + render offscreen + arranque real de `python main.py`), reorganizada en **una carpeta por subpestaña** (cada una con su README y su esquema):
+Carpeta **implementada** y probada (suite completa + render offscreen + arranque real de `python main.py`), reorganizada en **una carpeta por subpestaña** (cada una con su README y su esquema):
 
 - `__init__.py` — re-exporta `BusquedaTab`, `CatalogoPersonalTab`, `PlanificacionTab`, `SesionesTab` y `LocationBar`: la API pública no cambió (`from ui.planner_tab import …` sigue igual que antes de la reorganización).
 - `widgets.py` (raíz) — **compartido por las 4 subpestañas**, con su sección aquí:

@@ -4,7 +4,7 @@
 Lógica de planificación de PAS.S: catálogo de objetos, búsqueda, tránsito/luna/noche astronómica, ranking de recomendaciones, encuadre/FOV, plan de captura y gestión de catálogo personal y sesiones planificadas.
 
 ## Estado actual
-Todo implementado; **142 tests** en `tests/` son la verificación disponible.
+Todo implementado; la suite de `tests/` es la verificación disponible.
 
 ### Catálogo y búsqueda
 - `catalog_loader.py` — descarga y carga en SQLite: OpenNGC (`NGC.csv` + `addendum.csv`, ~13 372 objetos NGC/IC/Messier/Barnard/Caldwell), HYG (estrellas con magnitud ≤ 8, ~41 487) y **LDN** desde VizieR (`VII/7A/ldn`, **1 787** nebulosas oscuras). Ficheros cacheados en `data/downloads/`; refresco completo (DELETE+INSERT) y **`rollback` si algo falla a medias** (sin él, el próximo commit de otro módulo consignaba el borrado y el catálogo quedaba vacío). `ensure_catalog()` lo ejecuta `main.py` si las tablas están vacías (sin red: aviso y sigue); manual: `python -m planners.catalog_loader [--force]`.
