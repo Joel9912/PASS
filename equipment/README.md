@@ -22,3 +22,6 @@ Modelos y persistencia del equipo del usuario: setups (telescopio + cámara + mo
 1. Completar CRUD de setups y localizaciones.
 2. Exportar/importar setups (JSON) para compartir configuraciones.
 3. Categoría `planetario` (astrofotografía planetaria) como añadido futuro.
+4. **De la auditoría (Equipo paso 1)**: `list_setups()` con `LEFT JOIN locations` (clave `location_name`) para poder mostrar la ubicación en la tabla del plan (M-17); confirmación al borrar un setup con el nº de sesiones planificadas afectadas, porque `ON DELETE SET NULL` las desvincula en silencio (M-20).
+5. **Pendiente de decisión del usuario (D-1)**: destino de las imágenes adjuntas — copiar a `data/equipment_images/<setup_id>/` o conservar la ruta absoluta del usuario.
+6. **Precio/peso (D-3)**: no hay columnas `price_eur`/`weight_kg`; añadirlas ya con su migración o hacerlo explícitamente en el paso 6 — decidir al empezar Equipo.

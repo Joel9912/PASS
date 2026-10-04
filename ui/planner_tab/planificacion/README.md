@@ -55,3 +55,4 @@ El corazón de la subpestaña: mirar el target en el planetario, ajustar el encu
 2. Ranking de objetos en esta subpestaña con pesos editables (`planners/ranking.py`).
 3. Editor de encuadre con mosaicos y vista previa de teselas reales.
 4. i18n de todos los textos (`i18n/es.ts`, `i18n/en.ts`).
+5. **Pintura del planetario (M-06, medido en la auditoría)**: `paintEvent` proyecta las 56k figuras en cada repinto → **48-55 ms/pintada (≈20 fps máx. durante el arrastre)**. Cachear la capa en `QPixmap`, invalidada solo con cambio de vista/zoom; `_find_object_index` (0,55 ms) no es el cuello de botella y puede quedarse como está.

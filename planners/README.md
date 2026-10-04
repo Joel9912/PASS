@@ -4,7 +4,7 @@
 Lógica de planificación de PAS.S: catálogo de objetos, búsqueda, tránsito/luna/noche astronómica, ranking de recomendaciones, encuadre/FOV, plan de captura y gestión de catálogo personal y sesiones planificadas.
 
 ## Estado actual
-Todo implementado; **94 tests** en `tests/` son la verificación disponible.
+Todo implementado; **136 tests** en `tests/` son la verificación disponible.
 
 ### Catálogo y búsqueda
 - `catalog_loader.py` — descarga y carga en SQLite: OpenNGC (`NGC.csv` + `addendum.csv`, ~13 372 objetos NGC/IC/Messier/Barnard/Caldwell), HYG (estrellas con magnitud ≤ 8, ~41 487) y **LDN** desde VizieR (`VII/7A/ldn`, **1 787** nebulosas oscuras). Ficheros cacheados en `data/downloads/`; refresco completo (DELETE+INSERT) y **`rollback` si algo falla a medias** (sin él, el próximo commit de otro módulo consignaba el borrado y el catálogo quedaba vacío). `ensure_catalog()` lo ejecuta `main.py` si las tablas están vacías (sin red: aviso y sigue); manual: `python -m planners.catalog_loader [--force]`.
@@ -54,3 +54,5 @@ Todo implementado; **94 tests** en `tests/` son la verificación disponible.
 2. Ranking de objetos en la UI de Planificación con controles para `RankingWeights`.
 3. Pesos de `CaptureWeights` expuestos en la UI.
 4. Completar el CRUD pendiente de `equipment/` que consume esta lógica (`manager.create/update/delete`).
+5. **Bajos de la auditoría de código** (refactors pequeños, sin cambio de comportamiento): 4 copias del formateador `HH:MM`; `_moon_score` con literal `10.0` en vez de `POSSIBLE_MOON_MARGIN`; motor de puntuación duplicado (`capture_plan` vs `ranking`) y `.total` sin llamantes; utilidades duplicadas entre `catalog_loader`/`ldn_loader` (`CACHE_DIR`, `_USER_AGENT`, `_float_or_none`); `transit_utc` y `hours_above_30` recalculados dentro del bucle de 30 noches; `NightInfo.moon_phase`/`moon_illumination` son el mismo número en dos campos; `min_separation_moon_deg` devuelve `0.0` cuando el objeto nunca sube (indistinguible de «0°»); sin llamantes: `window_hours`, `list_constellations`, `ldn_count`, `WEATHER_FACTORS`, `fov_to_arcmin`, `calculate_mosaic_extent`.
+6. **Métrica «Altura» del plan (M-11/D-2, pendiente de decisión del usuario)**: el factor es constante en las 30 noches (culminación = f(lat, dec)) y su peso solo escala la puntuación, así que **nunca cambia el orden**: el peso del usuario no llega a decidir qué noche gana. Opciones: puntuar altura que varíe por noche, usarla solo en desempate, o documentar la constante.

@@ -20,3 +20,14 @@ Capa de interfaz de usuario (PyQt6). Una subcarpeta por pestaña principal de PA
 ## Planes futuros
 - Implementar el contenido de las 5 pestañas que faltan (Resumen, Planetario, Equipo, Planificador de Equipo, Apilador).
 - Aplicar i18n (`i18n/es.ts`, `i18n/en.ts`) a todos los textos visibles, empezando por `planner_tab/`.
+- **Arranque perezoso de las páginas (M-02)**: `MainWindow` construye las 6 páginas de golpe y el planetario carga sus 41 487 estrellas en el constructor. *Medido en la auditoría: el arranque total es 1,51 s y el planetario solo 110 ms de ellos (el grueso son los imports de astropy) → **bajado a «aquí no»**: solo si crece la lista de pestañas.*
+- **Bajos de la auditoría de código** (refactors pequeños, sin comportamiento nuevo):
+  - `except Exception` amplios que tapan fallos de BD (`widgets.py` en la barra de ubicación, `sesiones/tab.py`).
+  - Señales emitidas sin consumidor (`object_selected`, `target_changed`, `region_clicked` — este último rompe su propio docstring — y `sky_at_center()` sin llamantes): cablearlas o quitarlas.
+  - `_on_date_changed` es copia literal de `refresh()`; la búsqueda por `object_id` está duplicada en `select_target` y en el clic del planetario.
+  - Patrones repetidos → helpers en `widgets.py`: «fila seleccionada → dict» ×4, bloque de config de `QTableWidget` ×4, mapa `setup_id → nombre` ×2.
+  - Colores de estado escritos a mano pese a `PALETTE` (5 archivos), `ROW_H = 46` duplicado, variable muerta `catalog` (`planificacion/tab.py`).
+  - `_transparency`/`phase_name` (reglas de negocio) viven en `widgets.py` en vez de en `planners/`.
+  - `WeatherCards.refresh()` llamará la API real en el hilo de UI (hoy mocks; revisar al activar las keys).
+  - Dos fechas independientes Búsqueda/Planificación sin sincronizar (¿intencional? documentar).
+  - `fmt_hhmm` vs `_format_hours`: elegir una sola.

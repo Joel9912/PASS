@@ -11,7 +11,7 @@ Integración de PAS.S con **SirIL** para calibrar, auditar y apilar sesiones com
 - `registration.py` — registro con SirIL desde el pool.
 - `metrics.py` — métricas de SirIL (FWHM, redondez, transparencia), gráficas, ranking y descarte de extremos.
 - `stacker.py` — apilado con todas las opciones de SirIL (drizzle, rechazo, ponderación, integración) + multihilo.
-- Módulos con `NotImplementedError`: la lógica real se implementa en la fase del Apilador.
+- **Solo `siril_finder.py` está operativo**: `session_parser`, `calibrator`, `global_pool`, `registration`, `metrics` y `stacker` son hoy stubs (`NotImplementedError`) — las líneas anteriores describen el diseño previsto para la fase del Apilador, no el estado actual.
 
 ## Qué hacer aquí
 - **Reglas duras (no negociables):**

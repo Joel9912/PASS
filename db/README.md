@@ -20,3 +20,4 @@ Capa de persistencia de PAS.S: conexión única a **SQLite** (módulo `sqlite3` 
 ## Planes futuros
 - Migraciones versionadas con número de revisión si el esquema crece más.
 - Tablas de sesiones completadas/apiladas cuando el Apilador las necesite.
+- **Bajos de la auditoría de código**: índices en columnas filtradas/ordenadas (`catalog.catalog`, `planned_sessions.session_date`…; 15k filas, coste hoy en ms); `_migrate_columns` traga el error de `PRAGMA` en vez de avisar; `init_db()` duplica `_apply_schema()` y no tiene llamantes (unificar o borrar).
