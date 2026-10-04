@@ -22,6 +22,7 @@ class Session:
 
     @property
     def n_lights(self) -> int:
+        """Nº de frames de luz detectados (0 si la sesión no tiene ``lights/``)."""
         return len(self.frames.get("lights", []))
 
 

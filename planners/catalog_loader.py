@@ -60,6 +60,7 @@ def _download(url: str) -> bytes:
 
 # ------------------------------------------------------------------ parsers
 def _float_or_none(value: str) -> float | None:
+    """Cadena del CSV → ``float``; vacía o no numérica → ``None`` (sin excepción)."""
     value = (value or "").strip()
     if not value:
         return None
@@ -70,6 +71,7 @@ def _float_or_none(value: str) -> float | None:
 
 
 def _int_or_none(value: str) -> int | None:
+    """Cadena del CSV → ``int``; vacía o no numérica → ``None`` (sin excepción)."""
     value = (value or "").strip()
     if not value:
         return None

@@ -12,6 +12,11 @@ class ClearOutside(WeatherProvider):
     settings_key = "clear_outside_api_key"
 
     def forecast(self, latitude: float, longitude: float, date_iso: str) -> WeatherForecast:
+        """Pronóstico astronómico (nubes/viento/humedad) de Clear Outside.
+
+        Sin key —o mientras la llamada real siga pendiente— devuelve
+        ``available=False`` con nota: el clima nunca debe romper la UI.
+        """
         key = load_api_key(self.settings_key)
         if not key:
             return WeatherForecast(

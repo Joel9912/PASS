@@ -61,6 +61,7 @@ class CaptureWeights:
 
     @property
     def total(self) -> float:
+        """Suma de los tres pesos en valor absoluto (denominador de un reparto por %)."""
         return abs(self.altitude) + abs(self.moon_separation) + abs(self.night)
 
 

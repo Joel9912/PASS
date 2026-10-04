@@ -12,6 +12,10 @@ from ui.style import apply_style
 
 
 def main() -> None:
+    """Precarga el catálogo, monta la ventana principal y ejecuta el bucle de Qt.
+
+    No retorna: termina con ``sys.exit`` cuando el usuario cierra la ventana.
+    """
     # Primera ejecución: descarga y carga OpenNGC + estrellas HYG (~18 MB).
     # Si no hay red, se imprime un aviso y el programa sigue funcionando.
     ensure_catalog()

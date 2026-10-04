@@ -148,6 +148,7 @@ class NightCurve:
 
 
 def _location(latitude_deg: float, longitude_deg: float) -> EarthLocation:
+    """Grados → ``EarthLocation`` de astropy, el punto de partida de todo AltAz."""
     return EarthLocation(lat=latitude_deg * u.deg, lon=longitude_deg * u.deg)
 
 

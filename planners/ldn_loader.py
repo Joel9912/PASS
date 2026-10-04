@@ -63,6 +63,7 @@ def _download_tap(query: str, cache_name: str) -> bytes:
 
 
 def _float_or_none(value: str | None) -> float | None:
+    """Cadena (o ``None``) → ``float``; vacía o no numérica → ``None`` (sin excepción)."""
     value = (value or "").strip()
     if not value:
         return None

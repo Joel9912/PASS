@@ -12,6 +12,11 @@ class Meteoblue(WeatherProvider):
     settings_key = "meteoblue_api_key"
 
     def forecast(self, latitude: float, longitude: float, date_iso: str) -> WeatherForecast:
+        """Seeing (arcseg) de Meteoblue para ``date_iso``; mismo contrato que Clear Outside.
+
+        Sin key —o con la llamada pendiente— devuelve ``available=False`` con
+        nota explicativa en vez de fallar.
+        """
         key = load_api_key(self.settings_key)
         if not key:
             return WeatherForecast(

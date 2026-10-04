@@ -16,6 +16,8 @@ def find_siril() -> str | None:
 
     Orden: 1) PATH del sistema, 2) ruta guardada por el usuario en ``settings``.
     """
+    # Nombres del binario según instalación: 'siril'/'siril-cli' (PATH de Unix)
+    # y 'Siril.exe' (instalador de Windows); se prueban los tres por ese orden.
     path = which("siril") or which("siril-cli") or which("Siril.exe")
     if path:
         return path
@@ -44,5 +46,7 @@ def siril_version(path: str) -> str | None:
         return None
     if result.returncode != 0:
         return None
+    # SirIL imprime la versión por stdout o por stderr según el build:
+    # se mira stdout primero y se cae a stderr antes de rendirse.
     lines = (result.stdout or result.stderr or "").strip().splitlines()
     return lines[0].strip() if lines else None
