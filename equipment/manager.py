@@ -5,12 +5,24 @@ from .models import EquipmentSetup
 
 
 def create(setup: EquipmentSetup) -> int:
-    """Guarda un setup y devuelve su id."""
+    """Guarda un setup y devuelve su id.
+
+    Contrato D-5: al insertar **re-sincroniza** ``setup.images`` —la lista es
+    la verdad al guardar—: adjunta sus imágenes (copiadas a ``data/``, D-1).
+    El diálogo solo edita la lista en memoria (cancelar no toca ficheros) y
+    llama a ``create`` al confirmar.
+    """
     raise NotImplementedError
 
 
 def update(setup: EquipmentSetup) -> None:
-    """Actualiza un setup existente."""
+    """Actualiza un setup existente.
+
+    Contrato D-5: **re-sincroniza** ``setup.images`` —la lista es la verdad
+    al guardar—: adjunta las que falte y quita las que sobren (``remove``),
+    sin tocar el ``kind`` de las que siguen. Parte siempre de la lista que
+    devuelva ``images.list_images()``; una lista vacía vacía las imágenes.
+    """
     raise NotImplementedError
 
 

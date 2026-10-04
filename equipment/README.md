@@ -11,7 +11,7 @@ Modelos y persistencia del equipo del usuario: setups (telescopio + cámara + mo
 - `localizations.py` — CRUD de localizaciones (`locations`); `list_locations()` (anota `list[dict]`, M-16) y `delete()` funcionan.
 - `images.py` — adjuntar imágenes al setup (`equipment_images`), **solo visuales**. `attach()` **copia** el fichero a `data/equipment_images/<setup_id>/` (decisión D-1): la imagen persiste aunque el original se mueva o se borre; si la copia falla, guarda la ruta original.
 - Esquema: `equipment_setups` incluye **`price_eur`** y **`weight_kg`** (decisión D-3).
-- El resto de operaciones CRUD están pendientes (`NotImplementedError`).
+- El resto de operaciones CRUD están pendientes (`NotImplementedError`); su contrato de imágenes ya está fijado (D-5): `create`/`update` **re-sincronizan `setup.images`** —la lista es la verdad al guardar— y el diálogo solo la edita en memoria (cancelar no toca ficheros).
 
 ## Qué hacer aquí
 - Aquí SOLO datos y persistencia: **sin PyQt6 ni cálculos de planificación**.
