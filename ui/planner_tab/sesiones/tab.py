@@ -80,6 +80,7 @@ class EditSessionDialog(QDialog):
     """Edita los parámetros editables de una sesión (nombre, fecha, exp…)."""
 
     def __init__(self, session: dict, parent: QWidget | None = None) -> None:
+        """Formulario con los campos editables precargados de ``session``."""
         super().__init__(parent)
         self.setWindowTitle(f"Editar sesión — {session.get('target_name') or ''}")
         self.setMinimumWidth(420)
@@ -160,6 +161,7 @@ class SesionesTab(QWidget):
     sessions_changed = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Monta tabla, botones y aviso; arranca con ``refresh()`` (lee la base)."""
         super().__init__(parent)
         self._rows: list[dict] = []
         self._setup_names: dict[int, str] = {}
@@ -235,6 +237,7 @@ class SesionesTab(QWidget):
 
     # -- Relleno -------------------------------------------------------------
     def _fill(self) -> None:
+        """Vuelca ``self._rows`` con el color de estado y la alineación de columnas."""
         self._table.setRowCount(len(self._rows))
         for index, row in enumerate(self._rows):
             values = (
@@ -268,6 +271,7 @@ class SesionesTab(QWidget):
 
     # -- Selección -----------------------------------------------------------
     def _selected(self) -> dict | None:
+        """Fila seleccionada (``None`` si no hay o su índice está fuera de ``_rows``)."""
         rows = (
             self._table.selectionModel().selectedRows()
             if self._table.selectionModel()
@@ -279,6 +283,7 @@ class SesionesTab(QWidget):
         return self._rows[index] if 0 <= index < len(self._rows) else None
 
     def _on_selection(self) -> None:
+        """Habilita los botones según la fila: la ya «completada» no se puede completar."""
         row = self._selected()
         has_row = row is not None
         self._edit.setEnabled(has_row)
@@ -289,6 +294,7 @@ class SesionesTab(QWidget):
 
     # -- Acciones ------------------------------------------------------------
     def _on_edit(self) -> None:
+        """Abre el diálogo con la fila y, si se acepta, actualiza la sesión y refresca."""
         row = self._selected()
         if row is None:
             return
@@ -301,6 +307,7 @@ class SesionesTab(QWidget):
         dialog.deleteLater()
 
     def _on_complete(self) -> None:
+        """Pasa la sesión a «completada» (entra en el flujo del Apilador) y refresca."""
         row = self._selected()
         if row is None:
             return
@@ -308,6 +315,7 @@ class SesionesTab(QWidget):
         self.refresh()
 
     def _on_delete(self) -> None:
+        """Elimina la sesión **tras confirmar** (no se puede deshacer) y refresca."""
         row = self._selected()
         if row is None:
             return

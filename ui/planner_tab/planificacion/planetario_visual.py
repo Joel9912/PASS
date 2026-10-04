@@ -146,6 +146,7 @@ class PlanetarioVisual(QWidget):
     view_changed = pyqtSignal(float, float, float)
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Estado inicial: vista central, sin arrastre ni encuadre, y datos de la base."""
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
         self.setMinimumSize(320, 240)
@@ -235,6 +236,7 @@ class PlanetarioVisual(QWidget):
         return self._ra0 / 15.0, self._dec0
 
     def _find_object_index(self, object_id: str, catalog: str | None) -> int | None:
+        """Índice de ``object_id`` (y catálogo si se indica); ``None`` si no está."""
         ids = self._objects["ids"]
         for i, oid in enumerate(ids):
             if oid == object_id and (catalog is None or self._objects["catalogs"][i] == catalog):
@@ -242,6 +244,7 @@ class PlanetarioVisual(QWidget):
         return None
 
     def _emit_view(self) -> None:
+        """Avisa de que la vista cambió (centro en horas, campo en grados)."""
         self.view_changed.emit(self._ra0 / 15.0, self._dec0, self._fov_deg)
 
     # ------------------------------------------------------------- geometría
@@ -294,6 +297,7 @@ class PlanetarioVisual(QWidget):
             self.update()
 
     def mousePressEvent(self, event) -> None:
+        """Botón izquierdo: empieza el arrastre (aún no se sabe si acabará en clic)."""
         if event.button() == Qt.MouseButton.LeftButton:
             self._dragging = True
             self._last_pos = event.position()
@@ -301,6 +305,7 @@ class PlanetarioVisual(QWidget):
             self.setCursor(Qt.CursorShape.ClosedHandCursor)
 
     def mouseMoveEvent(self, event) -> None:
+        """Desplaza la vista mientras hay arrastre (el centro va en sentido contrario al cursor)."""
         if not self._dragging:
             return
         pos = event.position()
@@ -319,6 +324,7 @@ class PlanetarioVisual(QWidget):
         self.update()
 
     def mouseReleaseEvent(self, event) -> None:
+        """Suelta el arrastre; si el recorrido fue mínimo (< 10 px), el gesto cuenta como clic."""
         if event.button() != Qt.MouseButton.LeftButton:
             return
         self._dragging = False
@@ -367,11 +373,13 @@ class PlanetarioVisual(QWidget):
         self.region_clicked.emit(ra_deg / 15.0, dec_deg)
 
     def resizeEvent(self, event) -> None:
+        """Cambio de tamaño → repintar: la escala de la proyección depende del alto."""
         super().resizeEvent(event)
         self.update()
 
     # ---------------------------------------------------------------- pintura
     def paintEvent(self, event) -> None:
+        """Pinta por capas: fondo, rejilla, estrellas, objetos, encuadre, selección, rosa y etiqueta."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.fillRect(self.rect(), QColor("#05070d"))  # cielo casi negro
@@ -437,6 +445,7 @@ class PlanetarioVisual(QWidget):
 
     # ----------------------------------------------------------- dibujos
     def _draw_stars(self, painter: QPainter, ppr: float) -> None:
+        """Círculos con radio/opacidad según magnitud (máx. ``MAX_STARS_DRAWN`` por refresco)."""
         stars = self._stars
         if not len(stars["ra"]):
             return
@@ -467,6 +476,7 @@ class PlanetarioVisual(QWidget):
             )
 
     def _draw_objects(self, painter: QPainter, ppr: float) -> None:
+        """Marcadores de catálogo con su color; etiqueta solo si brillante (mag ≤ 9) o Messier."""
         objs = self._objects
         if not len(objs["ra"]):
             return

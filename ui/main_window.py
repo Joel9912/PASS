@@ -102,6 +102,7 @@ class PlannerPage(QWidget):
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Crea las 4 subpestañas, las monta en pestañas y las cablea entre sí."""
         super().__init__(parent)
         layout = QVBoxLayout(self)
         # Márgenes justos: cada píxel de aquí es de la rejilla de Búsqueda.
@@ -130,6 +131,7 @@ class PlannerPage(QWidget):
             self.location_bar.reemit()
 
     def _wire(self) -> None:
+        """Cablea las señales entre subpestañas (ver el mapa del docstring de la clase)."""
         # Ubicación (el panel vive en Búsqueda y ya la alimenta) → Planificación
         self.location_bar.location_changed.connect(self.planificacion.set_location)
 
@@ -147,10 +149,12 @@ class PlannerPage(QWidget):
         )
 
     def _add_to_personal(self, object_id: str, catalog: str) -> None:
+        """Guarda el objeto en Catálogo Personal y recarga los targets de Planificación."""
         self.catalogo.add_object(object_id, catalog)
         self.planificacion.reload_targets()
 
     def _on_region_added(self, _name: str) -> None:
+        """Creada una región: Planificación debe repoblar su combo de targets."""
         self.planificacion.reload_targets()
 
 
@@ -166,6 +170,7 @@ class _Sidebar(QWidget):
     COLLAPSED_W = 56
 
     def __init__(self, on_select, parent: QWidget | None = None) -> None:
+        """Barra de 230 px: botón ☰, lista de pestañas (``on_select``) y ⚙ al pie."""
         super().__init__(parent)
         self.setObjectName("Sidebar")
         self._expanded = True
@@ -207,7 +212,7 @@ class _Sidebar(QWidget):
         layout.addWidget(self.settings_button, 0, Qt.AlignmentFlag.AlignHCenter)
 
     def toggle(self) -> None:
-        """Colapsa (solo iconos) o expandiere (icono + texto) la barra."""
+        """Colapsa (solo iconos) o expande (icono + texto) la barra."""
         self._expanded = not self._expanded
         target = self.EXPANDED_W if self._expanded else self.COLLAPSED_W
         for row, (_key, title) in enumerate(TABS):
@@ -231,9 +236,14 @@ class _Sidebar(QWidget):
 
 
 class MainWindow(QMainWindow):
-    """Ventana principal de PAS.S."""
+    """Ventana principal: barra lateral, páginas apiladas y pie de página.
+
+    Solo el Planificador tiene página real; el resto son provisionales
+    (``_placeholder_page``) hasta que se implementen.
+    """
 
     def __init__(self) -> None:
+        """Monta sidebar, páginas y pie, y maximiza la ventana tras el primer layout."""
         super().__init__()
         self.setWindowTitle(f"PAS.S {APP_VERSION}")
         self.setMinimumSize(1024, 640)
@@ -273,6 +283,7 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(0, self.showMaximized)
 
     def _select_tab(self, index: int) -> None:
+        """Cambia la página visible (índice fuera de rango → se ignora)."""
         if 0 <= index < self.content.count():
             self.content.setCurrentIndex(index)
 

@@ -69,6 +69,7 @@ class _SirilBridge(QObject):
         future.add_done_callback(lambda fut: self._emit(path, fut))
 
     def _emit(self, path: str, future) -> None:
+        """Entrega (ruta, versión) a la señal; cualquier fallo crudo queda como «sin versión»."""
         try:
             version = future.result()
         except Exception:  # el hilo de trabajo jamás debe tumbar la UI
@@ -90,6 +91,7 @@ class ConfigDialog(QDialog):
     saved = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Monta nav + páginas + pie y conecta la comprobación de SirIL."""
         super().__init__(parent)
         self.setWindowTitle("Configuración General de la Aplicación")
         self.setMinimumSize(860, 520)
@@ -170,6 +172,7 @@ class ConfigDialog(QDialog):
         return wrapper
 
     def _build_general_page(self) -> QWidget:
+        """Página «General»: motor SirIL (ruta + estado) y carpeta base de proyectos."""
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -210,6 +213,7 @@ class ConfigDialog(QDialog):
         return page
 
     def _build_clima_page(self) -> QWidget:
+        """Página «Clima»: API keys ocultas con la opción de mostrarlas."""
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -295,11 +299,13 @@ class ConfigDialog(QDialog):
             )
 
     def _set_siril_status(self, text: str, color: str) -> None:
+        """Pinta el mensaje de SirIL teñido con su color de estado."""
         self._siril_status.setText(text)
         self._siril_status.setStyleSheet(f"color: {color};")
 
     # ------------------------------------------------------------------ acciones
     def _browse_siril(self) -> None:
+        """Selector de fichero para la ruta de SirIL; al elegirla se comprueba ya."""
         start = self._siril_path.text().strip() or None
         path, _ = QFileDialog.getOpenFileName(
             self,
@@ -312,6 +318,7 @@ class ConfigDialog(QDialog):
             self._check_siril(path)
 
     def _browse_project_root(self) -> None:
+        """Selector de carpeta para la raíz de proyectos (solo escribe la ruta)."""
         start = self._project_root.text().strip() or None
         path = QFileDialog.getExistingDirectory(
             self, "Seleccionar la carpeta base de proyectos", start or ""
@@ -320,6 +327,7 @@ class ConfigDialog(QDialog):
             self._project_root.setText(path)
 
     def _toggle_keys(self, checked: bool) -> None:
+        """«Mostrar las claves»: alterna las dos contraseñas entre visible y oculta."""
         mode = (
             QLineEdit.EchoMode.Normal
             if checked

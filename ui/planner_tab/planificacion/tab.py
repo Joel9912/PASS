@@ -82,6 +82,7 @@ class PlanificacionTab(QWidget):
     PLAN_TOP = 5
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Estado inicial, barra de herramientas y las dos columnas (planetario | temporal)."""
         super().__init__(parent)
 
         self._latitude: float | None = None
@@ -114,6 +115,7 @@ class PlanificacionTab(QWidget):
     #                            B A R R A                                #
     # ------------------------------------------------------------------ #
     def _build_toolbar(self) -> QHBoxLayout:
+        """Barra superior: Target, Fecha y Equipo (los tres disparan recálculos)."""
         bar = QHBoxLayout()
         bar.setSpacing(8)
 
@@ -144,6 +146,7 @@ class PlanificacionTab(QWidget):
     #                        C O L U M N A   I Z Q                        #
     # ------------------------------------------------------------------ #
     def _build_left(self) -> QWidget:
+        """Columna izquierda: planetario (con «Reset vista») y editor de encuadre."""
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -172,6 +175,7 @@ class PlanificacionTab(QWidget):
         return panel
 
     def _build_framing_editor(self) -> QGroupBox:
+        """RA/Dec y teselas a mano, aviso de FOV y «Actualizar desde planetario»."""
         box = QGroupBox("Editor de encuadre")
         form = QFormLayout(box)
         form.setSpacing(8)
@@ -224,6 +228,7 @@ class PlanificacionTab(QWidget):
     #                       C O L U M N A   D E R E C H A                 #
     # ------------------------------------------------------------------ #
     def _build_right(self) -> QWidget:
+        """Columna derecha: curva de tránsito, plan de captura y formulario de sesión."""
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -237,6 +242,7 @@ class PlanificacionTab(QWidget):
         return panel
 
     def _build_capture_plan(self) -> QGroupBox:
+        """Tabla de las mejores noches con su botón «Calcular plan» y ventana ★."""
         box = QGroupBox("Plan de captura")
         layout = QVBoxLayout(box)
         layout.setSpacing(6)
@@ -282,6 +288,7 @@ class PlanificacionTab(QWidget):
         return box
 
     def _build_session_form(self) -> QGroupBox:
+        """Nombre, exposición y notas con el botón «💾 Guardar sesión»."""
         box = QGroupBox("Parámetros de sesión")
         form = QFormLayout(box)
         # Espaciado justito: la columna derecha está al límite de su altura
@@ -318,7 +325,7 @@ class PlanificacionTab(QWidget):
     def set_location(
         self, latitude: float, longitude: float, utc_offset_hours: float | None
     ) -> None:
-        """Recibe la ubicación de la barra compartida."""
+        """Recibe la ubicación de la barra compartida: refresca curva e invalida plan."""
         self._latitude = latitude
         self._longitude = longitude
         self._utc_offset_hours = utc_offset_hours
@@ -393,23 +400,32 @@ class PlanificacionTab(QWidget):
     #                        E S T A D O   I N T E R N O                  #
     # ------------------------------------------------------------------ #
     def _current_target(self) -> dict | None:
+        """Fila del combo Target (``None`` si no hay o es «(sin elementos)»)."""
         data = self._target.currentData()
         return data if isinstance(data, dict) else None
 
     def _current_setup(self) -> dict | None:
+        """Fila del combo Equipo (``None`` si no hay setup seleccionado)."""
         data = self._setup.currentData()
         return data if isinstance(data, dict) else None
 
     def _date_iso(self) -> str:
+        """Fecha visible en ISO ``yyyy-MM-dd`` (el formato que usan los cálculos)."""
         return self._date.date().toString("yyyy-MM-dd")
 
     def _has_location(self) -> bool:
+        """¿Hay lat y long? Sin ellas no hay curva ni plan (nunca se inventa ubicación)."""
         return self._latitude is not None and self._longitude is not None
 
     # ------------------------------------------------------------------ #
     #                        R E A C C I O N E S                          #
     # ------------------------------------------------------------------ #
     def _on_target_changed(self, *_args) -> None:
+        """Nuevo target: centra el planetario, vuelca RA/Dec y recalcula curva y plan.
+
+        Emite ``target_changed`` al final para que el resto de la página
+        (p. ej. Búsqueda) pueda reaccionar.
+        """
         target = self._current_target()
         if target is None:
             self._curve.clear()
@@ -434,10 +450,12 @@ class PlanificacionTab(QWidget):
         self.target_changed.emit(object_id, catalog)
 
     def _on_date_changed(self, _qdate: QDate) -> None:
+        """Cambio de fecha: la curva se recalcula y el plan calculado deja de valer."""
         self._refresh_curve()
         self._invalidate_plan()
 
     def _on_setup_changed(self, *_args) -> None:
+        """Nuevo equipo: recalcula el FOV, habilita/deshabilita teselas y redibuja el encuadre."""
         setup = self._current_setup()
         self._fov = calculate_fov(setup) if setup else None
         if self._fov:
@@ -489,6 +507,7 @@ class PlanificacionTab(QWidget):
                 return
 
     def _copy_from_planetarium(self) -> None:
+        """«Actualizar desde planetario»: el centro del cielo pasa al editor de encuadre."""
         ra_hours, dec_deg, _fov = self._planetario.view
         self._updating_view = True
         self._ra.setValue(ra_hours)
@@ -515,6 +534,10 @@ class PlanificacionTab(QWidget):
     #                         C Á L C U L O S                             #
     # ------------------------------------------------------------------ #
     def _refresh_curve(self) -> None:
+        """Redibuja la curva; si faltan datos, explica el motivo en vez de dejarla vacía.
+
+        Motivos en orden: sin target, sin ubicación, sin coordenadas.
+        """
         target = self._current_target()
         if target is None:
             self._curve.clear()
@@ -545,6 +568,7 @@ class PlanificacionTab(QWidget):
         )
 
     def _calculate_plan(self) -> None:
+        """Ranking de las próximas 30 noches, con espera visible (puede tardar unos s)."""
         target = self._current_target()
         if target is None:
             return
@@ -584,6 +608,7 @@ class PlanificacionTab(QWidget):
         self._fill_plan()
 
     def _fill_plan(self) -> None:
+        """Vuelca ``self._plan`` a la tabla y selecciona la primera noche."""
         self._plan_table.setRowCount(len(self._plan))
         for index, item in enumerate(self._plan):
             ideal = item.get("windows", {}).get("ideal") or {}
@@ -627,6 +652,7 @@ class PlanificacionTab(QWidget):
         return f"{moment.day} {months[moment.month - 1]}"
 
     def _on_plan_selected(self) -> None:
+        """Fila elegida → desglose de esa noche (noche, luna y ventanas) bajo la tabla."""
         rows = (
             self._plan_table.selectionModel().selectedRows()
             if self._plan_table.selectionModel()
@@ -651,6 +677,11 @@ class PlanificacionTab(QWidget):
     #                       G U A R D A R   S E S I Ó N                   #
     # ------------------------------------------------------------------ #
     def _on_save_session(self) -> None:
+        """Crea la sesión en ``planned_sessions`` y avisa a Sesiones (``session_saved``).
+
+        Sin nombre propio se usa «objeto · fecha»; el FOV y las teselas solo
+        se guardan si el equipo aporta encuadre.
+        """
         target = self._current_target()
         if target is None:
             QMessageBox.information(
