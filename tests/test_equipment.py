@@ -1,7 +1,8 @@
 """Tests de equipo: modelos, lecturas de la base y anotaciones (auditoría).
 
 Cubren los hallazgos C-1 (Camera sin datos de FOV), C-2 y M-16 (funciones
-implementadas que anotaban ``EquipmentSetup``/``Location`` y devolvían dicts).
+implementadas que anotaban ``EquipmentSetup``/``Location`` y devolvían dicts),
+más D-8: el fixture compartido ``memory_db`` con las FK activas.
 """
 import sqlite3
 import sys
@@ -11,14 +12,6 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-
-
-def _memoria() -> sqlite3.Connection:
-    """Conexión en memoria con el esquema completo."""
-    conn = sqlite3.connect(":memory:")
-    conn.row_factory = sqlite3.Row
-    conn.executescript((ROOT / "db" / "schema.sql").read_text(encoding="utf-8"))
-    return conn
 
 
 def test_camera_expone_los_datos_del_fov():
@@ -42,18 +35,16 @@ def test_anotaciones_de_equipo_coinciden_con_lo_devuelto():
     assert localizations.list_locations.__annotations__["return"] == list[dict]
 
 
-def test_list_setups_devuelve_dicts_de_fila(monkeypatch):
+def test_list_setups_devuelve_dicts_de_fila(memory_db):
     """La tabla se lee como dicts completos (incluidas las columnas camera_*)."""
     from equipment import manager
 
-    conn = _memoria()
-    conn.execute(
+    memory_db.execute(
         "INSERT INTO equipment_setups (name, category, camera_pixel_size_um,"
         " camera_width_px, camera_height_px) VALUES (?, ?, ?, ?, ?)",
         ("ASI2600", "nebulosas", 3.76, 6248, 4176),
     )
-    conn.commit()
-    monkeypatch.setattr(manager, "get_connection", lambda: conn)
+    memory_db.commit()
 
     setups = manager.list_setups()
 
@@ -61,37 +52,31 @@ def test_list_setups_devuelve_dicts_de_fila(monkeypatch):
     assert setups[0]["name"] == "ASI2600"
     assert setups[0]["camera_pixel_size_um"] == pytest.approx(3.76)
     assert manager.list_setups("campo_amplio") == []  # filtro por categoría
-    conn.close()
 
 
-def test_list_locations_devuelve_dicts_de_fila(monkeypatch):
+def test_list_locations_devuelve_dicts_de_fila(memory_db):
     """M-16: list_locations devuelve dicts (lo que anota y lo que espera la UI)."""
     from equipment import localizations
 
-    conn = _memoria()
-    conn.execute(
+    memory_db.execute(
         "INSERT INTO locations (name, latitude, longitude) VALUES (?, ?, ?)",
         ("Casa", 40.4, -3.7),
     )
-    conn.commit()
-    monkeypatch.setattr(localizations, "get_connection", lambda: conn)
+    memory_db.commit()
 
     sitios = localizations.list_locations()
 
     assert len(sitios) == 1 and isinstance(sitios[0], dict)
     assert sitios[0]["name"] == "Casa"
     assert sitios[0]["latitude"] == pytest.approx(40.4)
-    conn.close()
 
 
-def test_migra_precio_y_peso_del_equipo():
+def test_migra_precio_y_peso_del_equipo(memory_db):
     """D-3: una base antigua recibe `price_eur`/`weight_kg` al abrir.
 
     Las columnas las pide la comparativa del paso 6; se añadieron ya
     (decisión del usuario) para que `equipment_setups` se migre una sola vez.
     """
-    import sqlite3
-
     from db import connection as db_conn
 
     conn = sqlite3.connect(":memory:")
@@ -108,12 +93,12 @@ def test_migra_precio_y_peso_del_equipo():
     assert "price_eur" in columnas
     assert "weight_kg" in columnas
     # El esquema de una base nueva también los trae
-    frescas = {row[1] for row in _memoria().execute("PRAGMA table_info(equipment_setups)")}
+    frescas = {row[1] for row in memory_db.execute("PRAGMA table_info(equipment_setups)")}
     assert {"price_eur", "weight_kg"} <= frescas
     conn.close()
 
 
-def test_attach_copia_la_imagen_a_data(monkeypatch, tmp_path):
+def test_attach_copia_la_imagen_a_data(memory_db, monkeypatch, tmp_path):
     """D-1: `attach()` copia el fichero a `data/equipment_images/<id>/`.
 
     Antes se persistía la ruta absoluta del `QFileDialog`: si el usuario
@@ -121,10 +106,8 @@ def test_attach_copia_la_imagen_a_data(monkeypatch, tmp_path):
     """
     from equipment import images
 
-    conn = _memoria()
-    conn.execute("INSERT INTO equipment_setups (name) VALUES (?)", ("ASI2600",))
-    conn.commit()
-    monkeypatch.setattr(images, "get_connection", lambda: conn)
+    memory_db.execute("INSERT INTO equipment_setups (name) VALUES (?)", ("ASI2600",))
+    memory_db.commit()
     monkeypatch.setattr(images, "IMAGES_ROOT", tmp_path / "equipment_images")
 
     original = tmp_path / "originales" / "spot.png"
@@ -146,4 +129,30 @@ def test_attach_copia_la_imagen_a_data(monkeypatch, tmp_path):
     fantasma = tmp_path / "borrado.png"
     images.attach(1, str(fantasma), "otra")
     assert images.list_images(1)[2]["path"] == str(fantasma)
-    conn.close()
+
+
+def test_memory_db_dispara_los_on_delete_del_esquema(memory_db):
+    """D-8: el fixture trae las FK activas y el ``SET NULL`` se aplica.
+
+    Sin ``PRAGMA foreign_keys`` (SQLite lo trae desactivado), borrar un setup
+    dejaría sus ``planned_sessions`` colgando de él y ningún test lo notaría.
+    """
+    cur = memory_db.execute(
+        "INSERT INTO equipment_setups (name) VALUES (?)", ("ASI2600",)
+    )
+    memory_db.execute(
+        "INSERT INTO planned_sessions (object_id, session_date, setup_id)"
+        " VALUES (?, ?, ?)",
+        ("M31", "2026-09-01", cur.lastrowid),
+    )
+    memory_db.commit()
+
+    memory_db.execute(
+        "DELETE FROM equipment_setups WHERE id = ?", (cur.lastrowid,)
+    )
+    memory_db.commit()
+
+    fila = memory_db.execute(
+        "SELECT setup_id FROM planned_sessions WHERE object_id = ?", ("M31",)
+    ).fetchone()
+    assert fila["setup_id"] is None  # SET NULL disparado: las FK están activas

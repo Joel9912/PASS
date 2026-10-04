@@ -1,7 +1,7 @@
 # tests/
 
 ## Qué es
-Tests de PAS.S con **pytest** (142 tests): validan que la estructura y la base del programa están sanas y que la lógica de `planners/` da los valores correctos.
+Tests de PAS.S con **pytest** (143 tests): validan que la estructura y la base del programa están sanas y que la lógica de `planners/` da los valores correctos.
 
 ## Estado actual
 - `test_smoke.py` — arranque y estructura: `main.py` importa, las 6 pestañas, **todos los README con sus 4 secciones** (lista explícita con las 4 subcarpetas del Planificador), esquema SQLite (`catalog`/`stars`) y `MainWindow` offscreen (barra lateral, contenido, pie). Regresiones de **Búsqueda**: título «Catálogo», celdas centradas, ◀/▶ de Lat/Lon sin flechitas, ★ de Captura Ideal en span verde, Efemérides sin pellizcar Filtros/Ubicación, barra día/noche de altura fija, eje dinámico de `DayNightBar` y línea de ventanas reservada. **Configuración**: SirIL en hilo aparte, avisos de ruta al instante y una sola construcción. Cableado de la auditoría: «Hoy» una emisión (M-03), `refresh()` por partes (M-01), botón «Calcular plan» (M-08), recargas sin doble llamada (M-04/M-19), `catalog_changed` (M-05), `LocationBar.reload()` por id (C-4), `CATALOG_LABELS` único (M-12), clima por tipo (M-15) y SirIL de ruta vieja descartado (M-23).
@@ -15,7 +15,7 @@ Tests de PAS.S con **pytest** (142 tests): validan que la estructura y la base d
 - `test_weather.py` — proveedores de clima **nunca lanzan**: sin key → `available=False` con nota de key; con key → nota «llamada real pendiente» (regresión del crash al guardar una key).
 - `test_dialogos.py` — diálogos abiertos por clic (`RegionDialog`, `EditSessionDialog`, `SessionDialog`…): montan y **no acumulan hijos ocultos** al cerrar (fuga medida 20/20, ahora `deleteLater()`, M-14). Corrección `QDateEdit` de «Editar» (N-1).
 - `test_equipment.py` — `equipment/` contra BD en memoria: campos de FOV de `Camera` (C-1), anotaciones `dict` de lo implementado (C-2/M-16) y `list_setups()`/`list_locations()` como dicts de fila.
-- `conftest.py` — fixture compartido `memory_settings` (tabla `settings` en memoria para `test_settings.py` y `test_weather.py`).
+- `conftest.py` — fixtures compartidos: `memory_db` (base en memoria con esquema completo y FK activas; parchea la conexión global `db.connection._connection`) y `memory_settings` (alias suyo, para `test_settings.py` y `test_weather.py`).
 
 ## Qué hacer aquí
 - Ejecutar: `pytest` desde la raíz (con el venv activado). Sin flags: los tests de UI se hacen aparte.
