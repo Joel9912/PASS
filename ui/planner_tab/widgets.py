@@ -340,15 +340,30 @@ class LocationBar(QFrame):
         self._emit()
 
     def reload(self) -> None:
-        """Vuelve a leer las ubicaciones guardadas (tras crear una nueva)."""
-        current = self._combo.currentData()
+        """Vuelve a leer las ubicaciones guardadas (tras crear o editar una).
+
+        La reselección es **por id**, no por dict completo (C-4): al editar
+        una ubicación su dict cambia y `findData` no la encontraba, el combo
+        caía a «(Manual)» y los campos conservaban lat/long vieja. En modo
+        manual no se toca nada de lo escrito a mano.
+        """
+        actual = self._combo.currentData()
+        actual_id = actual.get("id") if isinstance(actual, dict) else None
         self._loading = True
         self._reload_locations()
-        if current is not None:
-            index = self._combo.findData(current)
-            if index >= 0:
-                self._combo.setCurrentIndex(index)
+        indice = 0  # por defecto, Manual
+        if actual_id is not None:
+            for index in range(1, self._combo.count()):
+                location = self._combo.itemData(index)
+                if isinstance(location, dict) and location.get("id") == actual_id:
+                    indice = index
+                    break
+        self._combo.setCurrentIndex(indice)
         self._loading = False
+        if indice:
+            # Ubicación guardada: aplicar (posiblemente editados) lat/long/
+            # huso y avisar a quien escuche. Manual: sin cambios, sin aviso.
+            self._on_combo(indice)
 
     # -- Internos -----------------------------------------------------------
     def _reload_locations(self, select_first: bool = False) -> None:

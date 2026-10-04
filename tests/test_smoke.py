@@ -627,6 +627,53 @@ def test_hoy_emite_una_sola_vez():
     panel.deleteLater()
 
 
+def test_location_bar_reload_reselecciona_por_id(monkeypatch):
+    """C-4: `reload()` reselecciona por id y aplica los valores (re)leídos.
+
+    Antes buscaba el dict entero con `findData`: tras editar una
+    ubicación el dict ya no coincidía, el combo caía a «(Manual)» y los
+    campos conservaban la lat/long vieja como si fueran manuales.
+    """
+    import equipment.localizations as localiz
+    from ui.planner_tab.widgets import LocationBar
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript((ROOT / "db" / "schema.sql").read_text(encoding="utf-8"))
+    conn.execute(
+        "INSERT INTO locations (name, latitude, longitude, utc_offset_hours)"
+        " VALUES (?, ?, ?, ?)",
+        ("Casa", 40.4, -3.7, 2.0),
+    )
+    conn.commit()
+    monkeypatch.setattr(localiz, "get_connection", lambda: conn)
+
+    _app_ui()
+    bar = LocationBar()
+    assert bar.has_saved_location()      # selecciona la primera guardada
+    assert bar.latitude() == 40.4
+
+    # Editar la ubicación: nombre y latitud cambian (el dict ya no coincide)
+    conn.execute("UPDATE locations SET name = 'Casa nueva', latitude = 41.5 WHERE id = 1")
+    conn.commit()
+
+    bar.reload()
+
+    assert bar.has_saved_location()      # sigue en la ubicación, no en Manual
+    assert bar._combo.currentText() == "Casa nueva"
+    assert bar.latitude() == 41.5        # con los valores ya editados
+
+    # Modo manual: reload() no toca lo escrito a mano
+    bar._combo.setCurrentIndex(0)
+    bar._latitude.setValue(12.345)
+    bar.reload()
+    assert not bar.has_saved_location()
+    assert bar.latitude() == 12.345
+
+    conn.close()
+    bar.deleteLater()
+
+
 def test_reload_targets_actualiza_una_vez(monkeypatch):
     """M-04: repoblar el combo de targets dispara `_on_target_changed` una vez.
 
