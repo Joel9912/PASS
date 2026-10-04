@@ -59,11 +59,6 @@ class CaptureWeights:
     moon_separation: float = 30.0
     night: float = 20.0
 
-    @property
-    def total(self) -> float:
-        """Suma de los tres pesos en valor absoluto (denominador de un reparto por %)."""
-        return abs(self.altitude) + abs(self.moon_separation) + abs(self.night)
-
 
 def _moon_separation_at_transit(
     ra_hours: float,

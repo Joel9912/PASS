@@ -32,11 +32,6 @@ class RankingWeights:
     moon_separation: float = 30.0
     weather: float = 20.0
 
-    @property
-    def total(self) -> float:
-        """Suma de los tres pesos en valor absoluto (denominador de un reparto por %)."""
-        return abs(self.altitude) + abs(self.moon_separation) + abs(self.weather)
-
 
 @dataclass
 class RankedObject:
