@@ -66,6 +66,70 @@ def test_score_date_never_exceeds_100():
     assert 0.0 <= perfect <= 100.0
 
 
+# ------------------------------------------------------------ altura por noche
+def test_altitude_at_utc_coincide_con_la_culminacion():
+    """La fórmula analítica en el instante de la culminación da `max_altitude`."""
+    from datetime import datetime, timedelta
+
+    from planners.analytical_transit import (
+        altitude_at_utc,
+        max_altitude,
+        transit_utc_hours,
+    )
+
+    day = "2026-10-02"
+    transit = datetime.fromisoformat(day) + timedelta(
+        hours=transit_utc_hours(M42_RA, day, MADRID_LON)
+    )
+
+    alt = altitude_at_utc(M42_RA, M42_DEC, MADRID_LAT, MADRID_LON, transit)
+
+    assert alt == pytest.approx(max_altitude(MADRID_LAT, M42_DEC), abs=0.3)
+
+
+def test_altura_por_noche_dentro_y_fuera_de_la_ventana():
+    """D-2 (M-11): se puntúa la altura de ESA noche, no la culminación fija.
+
+    Con la culminación dentro de la ventana la noche la alcanza; con la
+    culminación a mediodía (fuera de la noche) manda el mejor extremo, y
+    dos ventanas distintas dan altitudes distintas — antes las 30 noches
+    recibían exactamente el mismo valor.
+    """
+    from planners.capture_plan import _night_max_altitude
+
+    day = "2026-10-02"
+    culminacion = 44.2
+    args = (M42_RA, M42_DEC, MADRID_LAT, MADRID_LON, day)
+
+    dentro = _night_max_altitude(
+        *args, transit_utc=23.5,
+        dusk_iso="2026-10-02 20:00:00", dawn_iso="2026-10-03 06:00:00",
+        culmination=culminacion,
+    )
+    assert dentro == culminacion            # la ventana envuelve la culminación
+
+    fuera = _night_max_altitude(
+        *args, transit_utc=12.0,
+        dusk_iso="2026-10-02 20:00:00", dawn_iso="2026-10-03 06:00:00",
+        culmination=culminacion,
+    )
+    assert fuera < culminacion              # fuera de la noche: extremo inferior
+
+    otra_ventana = _night_max_altitude(
+        *args, transit_utc=12.0,
+        dusk_iso="2026-10-02 21:00:00", dawn_iso="2026-10-03 05:00:00",
+        culmination=culminacion,
+    )
+    assert otra_ventana != fuera            # misma culminación, noche distinta
+
+    sin_bordes = _night_max_altitude(
+        *args, transit_utc=23.5,
+        dusk_iso=None, dawn_iso=None,
+        culmination=culminacion,
+    )
+    assert sin_bordes == culminacion        # sin bordes: valor seguro
+
+
 # ----------------------------------------------------------------- best_dates
 def test_best_dates_returns_sorted_plan_with_windows():
     """Plan para M42 en Madrid: fechas ordenadas por puntuación y con ventanas."""
@@ -77,12 +141,14 @@ def test_best_dates_returns_sorted_plan_with_windows():
     scores = [item["score"] for item in plan]
     assert scores == sorted(scores, reverse=True)
 
-    required = {"date", "transit_local", "max_altitude_deg", "moon_illumination",
-                "moon_separation_deg", "min_moon_distance_deg",
+    required = {"date", "transit_local", "max_altitude_deg", "night_altitude_deg",
+                "moon_illumination", "moon_separation_deg", "min_moon_distance_deg",
                 "astronomical_hours", "hours_above_30", "score", "windows"}
     for item in plan:
         assert required <= item.keys()
         assert 0.0 <= item["score"] <= 100.0
+        # La altura de la noche no puede superar la culminación global
+        assert item["night_altitude_deg"] <= item["max_altitude_deg"] + 0.1
         # El umbral debe corresponder a la iluminación de esa noche
         assert item["min_moon_distance_deg"] == pytest.approx(
             min_moon_distance(item["moon_illumination"]), abs=0.1
@@ -98,6 +164,51 @@ def test_best_dates_empty_without_astronomical_night():
         start_date="2026-06-15", date_range_days=5, top_n=5,
     )
     assert plan == []
+
+
+def test_best_dates_puntua_la_altura_de_cada_noche():
+    """D-2 (M-11): la puntuación usa la altura de ESA noche.
+
+    Antes el factor «Altura» era la culminación, idéntica en las 30
+    noches: su peso solo escalaba la puntuación y nunca reordenaba, así
+    que el peso del usuario no llegaba a decidir qué noche gana.
+    """
+    plan = best_dates(
+        M42_RA, M42_DEC, MADRID_LAT, MADRID_LON,
+        start_date="2026-10-02", date_range_days=6, top_n=3,
+    )
+    assert plan
+    for item in plan:
+        assert "night_altitude_deg" in item
+        assert item["night_altitude_deg"] <= item["max_altitude_deg"] + 0.1
+
+
+def test_best_dates_cablea_la_altura_de_la_noche_al_score(monkeypatch):
+    """El cableado: `_score_date` recibe `night_altitude_deg` (variable),
+    no la culminación constante de todas las noches.
+
+    Espía el primer argumento de `_score_date`: si volviera a la
+    culminación, todas las noches puntuarían con el mismo número.
+    """
+    from planners import capture_plan
+
+    original = capture_plan._score_date
+    recibidas: list[float] = []
+
+    def espia(altitude_deg, *resto, **kwargs):
+        recibidas.append(altitude_deg)
+        return original(altitude_deg, *resto, **kwargs)
+
+    monkeypatch.setattr(capture_plan, "_score_date", espia)
+
+    plan = best_dates(
+        M42_RA, M42_DEC, MADRID_LAT, MADRID_LON,
+        start_date="2026-10-02", date_range_days=6, top_n=3,
+    )
+
+    assert recibidas
+    assert len(set(recibidas)) > 1          # varía de noche a noche
+    assert {item["night_altitude_deg"] for item in plan} <= set(recibidas)
 
 
 def test_best_dates_empty_when_object_never_rises():

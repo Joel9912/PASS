@@ -62,9 +62,11 @@ from ..widgets import TransitCurve, window_lines
 #: Etiqueta de "sin encuadre" cuando el equipo no da FOV.
 NO_FRAMING_TEXT = "Sin encuadre: faltan datos de la cámara o del telescopio"
 
-#: Columnas del plan de captura.
+#: Columnas del plan de captura. «Alt. noche» es la altura máxima que el
+#: objeto alcanza dentro de la ventana de ESA noche: es lo que puntúa
+#: (decisión D-2; la culminación sola sería la misma en todas las filas).
 PLAN_COLUMNS: tuple[str, ...] = (
-    "#", "Fecha", "Tránsito", "Alt máx", "Sep. lunar", "Luna", "★ Ideal",
+    "#", "Fecha", "Tránsito", "Alt. noche", "Sep. lunar", "Luna", "★ Ideal",
 )
 
 
@@ -597,7 +599,7 @@ class PlanificacionTab(QWidget):
                 str(index + 1),
                 self._format_date(item["date"]),
                 str(item.get("transit_local") or "--"),
-                f"{item['max_altitude_deg']:.0f}°",
+                f"{item['night_altitude_deg']:.0f}°",
                 f"{item['moon_separation_deg']:.0f}°",
                 f"{item['moon_illumination']:.0f} %",
                 ideal_text,

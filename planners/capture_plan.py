@@ -3,7 +3,11 @@
 Una vez elegido el objeto y el lugar, el programa recorre las próximas
 ``date_range_days`` noches y puntúa cada una según:
 
-- **Altura** del objeto en su culminación (cuanto más alto, mejor).
+- **Altura** del objeto **durante la ventana de esa noche**: la
+  culminación es idéntica en todas las noches (decisión D-2 / M-11), así
+  que se puntúa la altura máxima que el objeto alcanza dentro del
+  [crepúsculo, alba] de cada noche, que sí cambia al desplazarse la
+  ventana.
 - **Separación lunar** frente al umbral de la fase de esa noche
   (:func:`planners.moon_distance.min_moon_distance`).
 - **Horas de noche astronómica** disponibles.
@@ -16,13 +20,14 @@ y se clasifican las ventanas Ideal/Posible con sus rangos horarios.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from astropy import units as u
 from astropy.coordinates import AltAz, EarthLocation, SkyCoord, get_body
 from astropy.time import Time
 
 from planners.analytical_transit import (
+    altitude_at_utc,
     hours_above_altitude,
     local_utc_offset,
     max_altitude,
@@ -113,6 +118,45 @@ def _score_date(
     return 100.0 * sum(w * s for w, s in parts) / total_weight
 
 
+def _night_max_altitude(
+    ra_hours: float,
+    dec_deg: float,
+    latitude: float,
+    longitude: float,
+    day: str,
+    transit_utc: float,
+    dusk_iso: str | None,
+    dawn_iso: str | None,
+    culmination: float,
+) -> float:
+    """Altitud máxima del objeto **durante esa noche** (decisión D-2 / M-11).
+
+    La culminación es idéntica en las 30 noches del rango (depende solo de
+    latitud y declinación), con lo que el factor «Altura» solo escalaba la
+    puntuación y **nunca cambiaba el orden**: el peso del usuario no
+    llegaba a decidir qué noche gana. Lo que sí varía de noche a noche es
+    la ventana [crepúsculo, alba] (la puesta de sol se desplaza), y con
+    ella si la culminación cae dentro de la noche en que se captura:
+
+    - culminación dentro de la ventana → esa noche se alcanza la culminación;
+    - si no, la curva es monótona en el tramo → el máximo está en un
+      extremo (crepúsculo o alba), evaluado con :func:`altitude_at_utc`.
+
+    Sin bordes calculables se devuelve la culminación (valor seguro).
+    """
+    if not dusk_iso or not dawn_iso:
+        return culmination
+    dusk = datetime.fromisoformat(dusk_iso)
+    dawn = datetime.fromisoformat(dawn_iso)
+    transit = datetime.fromisoformat(day) + timedelta(hours=transit_utc)
+    if dusk <= transit <= dawn:
+        return culmination
+    return max(
+        altitude_at_utc(ra_hours, dec_deg, latitude, longitude, dusk),
+        altitude_at_utc(ra_hours, dec_deg, latitude, longitude, dawn),
+    )
+
+
 def best_dates(
     target_ra_hours: float,
     target_dec_deg: float,
@@ -133,7 +177,9 @@ def best_dates(
     mejores, añade las ventanas de captura (Ideal/Posible) con sus rangos.
 
     Devuelve una lista de dicts con: ``date``, ``transit_local``,
-    ``max_altitude_deg``, ``moon_illumination`` (%), ``moon_separation_deg``,
+    ``max_altitude_deg`` (culminación), ``night_altitude_deg`` (altura
+    máxima **dentro de la ventana de esa noche**, la que puntúa — D-2),
+    ``moon_illumination`` (%), ``moon_separation_deg``,
     ``min_moon_distance_deg``, ``astronomical_hours``, ``hours_above_30``,
     ``score`` y ``windows``.
 
@@ -161,17 +207,26 @@ def best_dates(
         if night.astronomical_hours <= 0.0:
             continue  # sin noche astronómica no hay captura
 
+        transit_utc = transit_utc_hours(target_ra_hours, day, longitude)
         separation = _moon_separation_at_transit(
             target_ra_hours, target_dec_deg, latitude, longitude, day,
-            transit_utc_hours(target_ra_hours, day, longitude),
+            transit_utc,
         )
         illumination_pct = night.moon_illumination * 100.0
         min_dist = min_moon_distance(illumination_pct)
+        # Altura de ESA noche dentro de su ventana (D-2 / M-11): la
+        # culminación es la misma en las 30 noches y no llega a ordenar.
+        night_alt = _night_max_altitude(
+            target_ra_hours, target_dec_deg, latitude, longitude,
+            day, transit_utc,
+            night.astronomical_dusk, night.astronomical_dawn, max_alt,
+        )
 
         candidates.append({
             "date": day,
-            "transit_utc_hours": transit_utc_hours(target_ra_hours, day, longitude),
+            "transit_utc_hours": transit_utc,
             "max_altitude_deg": round(max_alt, 1),
+            "night_altitude_deg": round(night_alt, 1),
             "moon_illumination": round(illumination_pct, 1),
             "moon_separation_deg": round(separation, 1),
             "min_moon_distance_deg": round(min_dist, 1),
@@ -188,7 +243,7 @@ def best_dates(
     for item in candidates:
         item["score"] = round(
             _score_date(
-                item["max_altitude_deg"],
+                item["night_altitude_deg"],  # altura de ESA noche (D-2), no la culminación
                 item["moon_separation_deg"],
                 item["_min_dist"],
                 item["astronomical_hours"],

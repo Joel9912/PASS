@@ -11,6 +11,7 @@ es la que el usuario mira con detalle.
 from __future__ import annotations
 
 import math
+from datetime import datetime
 
 #: Tasa sideral: la hora sidereal avanza 1.0027379 h por hora solar.
 _SIDEREAL_RATE = 1.0027379
@@ -133,6 +134,39 @@ def hours_above_altitude(latitude_deg: float, dec_deg: float, min_alt_deg: float
         return 24.0
     arc_hours = math.degrees(math.acos(cos_h)) / 15.0
     return round(2.0 * arc_hours, 2)
+
+
+def altitude_at_utc(
+    ra_hours: float,
+    dec_deg: float,
+    latitude_deg: float,
+    longitude_deg: float,
+    instant: datetime,
+) -> float:
+    """Altitud (grados) del objeto en ``instant`` (UTC, sin zona horaria).
+
+    Sin astropy: GMST con la fórmula continua del Almanac (la misma que
+    :func:`gmst_0h_hours`) y la fórmula clásica::
+
+        sin(alt) = sinφ·sinδ + cosφ·cosδ·cos(H),   H = LST − RA
+
+    La usa ``best_dates`` para medir la altura de cada noche dentro de su
+    propia ventana (decisión D-2 / M-11): la culminación sola es la misma
+    en las 30 noches y no llega a ordenar nada.
+    """
+    jd = (
+        instant.toordinal() + 1721424.5
+        + (instant.hour + instant.minute / 60.0 + instant.second / 3600.0) / 24.0
+    )
+    gmst_hours = (_GMST_J2000_H + _GMST_RATE_PER_DAY * (jd - _JD_J2000)) % 24.0
+    lst_hours = gmst_hours + longitude_deg / 15.0
+    hour_angle_deg = (lst_hours - ra_hours) * 15.0
+    sin_alt = (
+        math.sin(math.radians(latitude_deg)) * math.sin(math.radians(dec_deg))
+        + math.cos(math.radians(latitude_deg)) * math.cos(math.radians(dec_deg))
+        * math.cos(math.radians(hour_angle_deg))
+    )
+    return math.degrees(math.asin(max(-1.0, min(1.0, sin_alt))))
 
 
 def format_transit_hours(hour_decimal: float) -> str:
