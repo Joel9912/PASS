@@ -44,7 +44,7 @@ pytest
 ## Estructura
 
 ```
-Planning-Stacking-Suite/
+Planning Stacking Suite/
 ├── README.md / AGENTS.md / PROGRAM.md / MEMORY.md / STRUCTURE.md
 ├── main.py            # Entry point (PyQt6)
 ├── db/                # Capa SQLite (conexión y esquema)

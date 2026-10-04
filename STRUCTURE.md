@@ -95,7 +95,7 @@ Planning-Stacking-Suite/
 │   ├── es.ts / en.ts
 │   └── README.md
 │
-├── tests/                # pytest: 12 test_*.py + conftest.py (detalle en su README)
+├── tests/                # pytest: ficheros test_*.py + conftest.py (detalle en su README)
 │   ├── test_smoke.py
 │   ├── test_settings.py
 │   ├── test_weather.py

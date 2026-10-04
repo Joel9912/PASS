@@ -8,10 +8,10 @@
 | **Estructura de carpetas** | ✅ Creada: `db/`, `planners/`, `stacks/`, `equipment/`, `planetary/`, `ui/` (6 pestañas), `i18n/`, `tests/`, `data/` |
 | **Docs** | ✅ Raíz: README, AGENTS, PROGRAM, MEMORY, STRUCTURE + LICENSE GPL-3.0 + requirements.txt |
 | **Entry point** | ✅ `main.py` con tema oscuro, barra lateral colapsable, pie `v0.1` y las 6 pestañas; carga catálogos al arrancar; se abre **maximizado** |
-| **Tests** | ✅ pytest: **142 tests** (`test_smoke`, `test_settings`, `test_weather`, `test_planners`, `test_dialogos`, `test_equipment` + módulos `moon_distance`, `framing`, `analytical_transit`, `capture_plan`, `ldn_loader`) |
+| **Tests** | ✅ pytest: **142 tests** (lista por módulo en `tests/README`) |
 | **Librerías Python** | Instaladas en venv: PyQt6 6.11, **pyqtgraph 0.14.0**, astropy 8.0, numpy 2.5, PyYAML 6.0, pytest |
-| **Catálogos astronómicos** | ✅ OpenNGC (13,372 objetos) + HYG (41,487 estrellas mag ≤ 8) + **LDN (1,787)** en `data/pass.db` |
-| **Pestaña Planificador** | ✅ `ui/planner_tab/`: Búsqueda → Catálogo Personal → Planificación → Sesiones Planificadas, planetario QPainter, curva de tránsito PyQtGraph (doble eje), plan de captura, barra de ubicación compartida |
+| **Catálogos astronómicos** | ✅ OpenNGC (13 372 objetos) + HYG (41 487 estrellas mag ≤ 8) + **LDN (1 787)** en `data/pass.db` |
+| **Pestaña Planificador** | ✅ `ui/planner_tab/`: Búsqueda → Catálogo Personal → Planificación → Sesiones Planificadas, planetario QPainter, curva de tránsito PyQtGraph (un eje), plan de captura, barra de ubicación compartida |
 | **Integración SirIL** | Diseñada en `stacks/` (detección PATH + ruta usuario); sin implementar |
 | **APIs clima/seeing** | Clear Outside + Meteoblue con mocks (sin API keys todavía) → tarjetas "Sin datos" |
 | **Persistencia** | ✅ SQLite (stdlib) con esquema completo + migración de columnas (`_MIGRATIONS` en `db/connection.py`) |
@@ -42,7 +42,7 @@
 
 2. **Planetario virtual avanzado (Stellarium-like)**
    - Renderizado 3D de cielo en tiempo real
-    - Integración con bases de datos de objetos Deep Sky
+   - Integración con bases de datos de objetos Deep Sky
    - Herramientas de mosaico y planificación de campo
 
 3. **Integración profunda con SirIL**
@@ -67,13 +67,12 @@
 ## 📊 Roadmap Visual
 
 ```
-MES 1-3                          MES 4-6                          MES 7-12
-│                                  │                                  │
-│   Estructura base         │   UI funcional                   │   Feature avanzadas
-│   MDs por carpeta        │   Navegación tabs                │   Comparativas completas
-│   Gestión equipos         │   Búsquedas básicas              │   Inteligencia artificial
-│   APIs astronómicas       │   Planetario básico              │   Integración SirIL profunda
-│                          │                                  │   Recomendaciones automáticas
+  MES 1-3                      MES 4-6                      MES 7-12
+│ Estructura base              │ UI funcional                │ Feature avanzadas
+│ MDs por carpeta              │ Navegación tabs             │ Comparativas completas
+│ Gestión equipos              │ Búsquedas básicas           │ Inteligencia artificial
+│ APIs astronómicas            │ Planetario básico           │ Integración SirIL profunda
+│                              │                             │ Recomendaciones automáticas
 ```
 
 ## 💡 Próximos Pasos Inmediatos
