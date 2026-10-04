@@ -1,6 +1,6 @@
 # AGENTS.md — PAS.S (Planning & Astronomical Stacking Suite)
 
-Proyecto en fase inicial: existe `main.py` (ventana con 6 pestañas), carpetas de código con sus `README.md` y esta documentación. `planners/` está implementado con catálogo real (OpenNGC + HYG + LDN) y `ui/planner_tab/` con sus 4 subpestañas; el resto de módulos y pestañas aún son stubs (`NotImplementedError` a propósito).
+Proyecto en fase inicial: existe `main.py` (ventana con 6 pestañas), carpetas de código con sus `README.md` y esta documentación. `planners/` está implementado con catálogo real (OpenNGC + HYG + LDN); también `ui/planner_tab/` (4 subpestañas), `db/` y el diálogo de Configuración. Son stubs (`NotImplementedError` a propósito) las otras 5 pestañas, `stacks/`, `planetary/` y el CRUD de `equipment/`.
 No hay lint ni CI: `pytest` (la suite de `tests/`; el recuento vive en su README) es la única verificación disponible. Sí hay migraciones de esquema (`_MIGRATIONS` en `db/connection.py`).
 
 ## Qué leer según la tarea
@@ -8,6 +8,7 @@ No hay lint ni CI: `pytest` (la suite de `tests/`; el recuento vive en su README
 | Tarea | Leer primero |
 |---|---|
 | Primera vez en la sesión / cualquier tarea | Este archivo → `PROGRAM.md` |
+| Auditoría o fix con test de regresión | Skills `@auditoria-pas` (método) y `@verificacion-fix` (revert-verify) |
 | Crear o modificar una carpeta/pestaña | `STRUCTURE.md` + el `README.md` de la carpeta afectada |
 | Saber el estado general, prioridades o roadmap | `MEMORY.md` |
 | Cambiar arquitectura o estructura de carpetas | `STRUCTURE.md` (y actualizarlo en la misma tarea) |
@@ -28,6 +29,8 @@ Toda carpeta con código (p. ej. `ui/<pestaña>/`, `planners/`) tiene su propio 
 - Crear el `README.md` **en la misma tarea** en que se crea la carpeta.
 - Actualizar la sección "Estado actual" **en la misma tarea** en que se modifique la carpeta.
 - Un solo archivo por carpeta: no separar contexto/estado/planes en archivos distintos.
+- **Fuente única (R2)**: un dato global (recuento de tests, totales de catálogo) solo en su fichero dueño (`tests/README.md`, `planners/README.md`); los demás docs no repiten cifras.
+- **Brevedad y poda (R3)**: 5 palabras si bastan; nada obsoleto — lo completado se quita de los planes (la historia es git).
 
 ## Reglas duras del proyecto
 - **Prohibido** implementar motor propio de calibrado/apilado: solo integrar **SirIL** como herramienta externa (CLI).
