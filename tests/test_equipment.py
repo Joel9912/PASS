@@ -82,3 +82,32 @@ def test_list_locations_devuelve_dicts_de_fila(monkeypatch):
     assert sitios[0]["name"] == "Casa"
     assert sitios[0]["latitude"] == pytest.approx(40.4)
     conn.close()
+
+
+def test_migra_precio_y_peso_del_equipo():
+    """D-3: una base antigua recibe `price_eur`/`weight_kg` al abrir.
+
+    Las columnas las pide la comparativa del paso 6; se añadieron ya
+    (decisión del usuario) para que `equipment_setups` se migre una sola vez.
+    """
+    import sqlite3
+
+    from db import connection as db_conn
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        "CREATE TABLE equipment_setups ("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " name TEXT NOT NULL)"
+    )
+
+    db_conn.init_db(conn)  # schema (IF NOT EXISTS → no toca la tabla) + migración
+
+    columnas = {row[1] for row in conn.execute("PRAGMA table_info(equipment_setups)")}
+    assert "price_eur" in columnas
+    assert "weight_kg" in columnas
+    # El esquema de una base nueva también los trae
+    frescas = {row[1] for row in _memoria().execute("PRAGMA table_info(equipment_setups)")}
+    assert {"price_eur", "weight_kg"} <= frescas
+    conn.close()

@@ -21,6 +21,10 @@ _MIGRATIONS: dict[str, tuple[str, ...]] = {
         "camera_pixel_size_um REAL",
         "camera_width_px INTEGER",
         "camera_height_px INTEGER",
+        # Precio/peso de la comparativa (D-3): añadidos antes del paso 6
+        # para que el esquema se migre una sola vez.
+        "price_eur REAL",
+        "weight_kg REAL",
     ),
     "personal_catalog": (
         "kind TEXT NOT NULL DEFAULT 'catalog'",

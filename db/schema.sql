@@ -31,6 +31,10 @@ CREATE TABLE IF NOT EXISTS equipment_setups (
     camera_width_px     INTEGER,    -- resolución horizontal (px) → FOV
     camera_height_px    INTEGER,    -- resolución vertical (px) → FOV
     mount_name          TEXT,
+    -- Precio y peso del setup: los exige la comparativa (paso 6); se
+    -- añadieron ya (decisión D-3) para migrar el esquema una sola vez.
+    price_eur           REAL,
+    weight_kg           REAL,
     notes               TEXT,
     created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );

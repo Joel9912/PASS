@@ -10,6 +10,7 @@ Modelos y persistencia del equipo del usuario: setups (telescopio + cámara + mo
 - `manager.py` — CRUD de setups en SQLite (`equipment_setups`); `list_setups()` funciona y devuelve dicts con todas las columnas (la UI calcula el FOV a partir de ellos). `get()`/`list_setups()` **anotan `dict`**, el contrato real que ya usa la UI (C-2; antes anotaban `EquipmentSetup`).
 - `localizations.py` — CRUD de localizaciones (`locations`); `list_locations()` (anota `list[dict]`, M-16) y `delete()` funcionan.
 - `images.py` — adjuntar imágenes al setup (`equipment_images`), **solo visuales**.
+- Esquema: `equipment_setups` incluye ya **`price_eur`** y **`weight_kg`** (decisión D-3: añadidos antes del paso 6 para migrar una sola vez).
 - El resto de operaciones CRUD están pendientes (`NotImplementedError`).
 
 ## Qué hacer aquí
@@ -24,4 +25,3 @@ Modelos y persistencia del equipo del usuario: setups (telescopio + cámara + mo
 3. Categoría `planetario` (astrofotografía planetaria) como añadido futuro.
 4. **De la auditoría (Equipo paso 1)**: `list_setups()` con `LEFT JOIN locations` (clave `location_name`) para poder mostrar la ubicación en la tabla del plan (M-17); confirmación al borrar un setup con el nº de sesiones planificadas afectadas, porque `ON DELETE SET NULL` las desvincula en silencio (M-20).
 5. **Pendiente de decisión del usuario (D-1)**: destino de las imágenes adjuntas — copiar a `data/equipment_images/<setup_id>/` o conservar la ruta absoluta del usuario.
-6. **Precio/peso (D-3)**: no hay columnas `price_eur`/`weight_kg`; añadirlas ya con su migración o hacerlo explícitamente en el paso 6 — decidir al empezar Equipo.
