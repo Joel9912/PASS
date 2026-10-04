@@ -682,6 +682,45 @@ def test_reload_setups_mantiene_la_seleccion(monkeypatch):
     page.deleteLater()
 
 
+def test_refresh_no_repite_lo_que_no_cambio(monkeypatch):
+    """M-01: aplicar filtros/Enter no vuelve a calcular astropy.
+
+    Antes cada `refresh()` (clic «Aplicar filtros», Enter, reordenar,
+    «Hoy») recalculaba las 4 partes aunque solo los filtros hubieran
+    cambiado: ~1,1 s de efemérides+curva por clic. Ahora la búsqueda
+    corre siempre (los filtros pueden haber cambiado) y las partes
+    caras se saltan si su clave (objeto/noche/ubicación/huso) no cambió.
+    """
+    from ui.planner_tab.busqueda import tab as busq_tab
+
+    _app_ui()
+    page = busq_tab.BusquedaTab()
+
+    busquedas: list[int] = []
+    efemerides: list[int] = []
+    clima: list[int] = []
+    limpiezas: list[int] = []
+    monkeypatch.setattr(page, "_run_search", lambda *a, **k: busquedas.append(1))
+    monkeypatch.setattr(
+        page._ephemeris, "refresh", lambda *a, **k: efemerides.append(1)
+    )
+    monkeypatch.setattr(page._weather, "refresh", lambda *a, **k: clima.append(1))
+    monkeypatch.setattr(page._curve, "clear", lambda *a, **k: limpiezas.append(1))
+
+    page.set_location(40.4, -3.7, 2.0)      # primera vez: todo corre
+    assert len(efemerides) == 1 and len(clima) == 1
+
+    page.refresh()                          # «Aplicar filtros» sin más cambios
+    assert len(busquedas) == 2              # la búsqueda sí corre siempre…
+    assert len(efemerides) == 1             # …pero efemérides no…
+    assert len(clima) == 1                  # …ni clima…
+    assert len(limpiezas) == 0              # …ni la curva (sin selección)
+
+    page.set_location(41.0, -3.7, 2.0)      # cambia la latitud → sí recalcula
+    assert len(efemerides) == 2 and len(clima) == 2
+    page.deleteLater()
+
+
 def test_quitar_objeto_emite_catalog_changed(monkeypatch):
     """M-05: quitar del catálogo personal avisa a Planificación (señal nueva).
 

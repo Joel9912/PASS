@@ -132,6 +132,10 @@ class BusquedaTab(QWidget):
         self._latitude: float | None = None
         self._longitude: float | None = None
         self._utc_offset_hours: float | None = None
+        # Claves de lo ya calculado: refresh() no repite lo que no cambió.
+        self._clave_ephemeris: tuple | None = None
+        self._clave_curva: tuple | None = None
+        self._clave_clima: tuple | None = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -354,7 +358,13 @@ class BusquedaTab(QWidget):
         return self._ephemeris.current_date_iso()
 
     def refresh(self) -> None:
-        """Aplica los filtros, refresca efemérides, curva y clima."""
+        """Aplica los filtros, refresca efemérides, curva y clima.
+
+        La búsqueda corre siempre (los filtros pueden haber cambiado),
+        pero las otras tres partes **se saltan si sus entradas no
+        cambiaron**: cambiar solo un filtro o pulsar Enter dos veces no
+        vuelve a calcular ~1,1 s de efemérides+curva (M-01).
+        """
         self._run_search()
         self._refresh_ephemeris()
         self._refresh_selected_curve()
@@ -365,8 +375,10 @@ class BusquedaTab(QWidget):
 
         Lo usa la ventana principal tras guardar API keys en
         Configuración, para que el «Falta conectar la API» desaparezca
-        sin esperar al siguiente «Aplicar filtros».
+        sin esperar al siguiente «Aplicar filtros»: por eso fuerza el
+        recálculo aunque la ubicación no haya cambiado.
         """
+        self._clave_clima = None
         self._refresh_weather()
 
     # -- Cálculos ------------------------------------------------------------
@@ -485,6 +497,13 @@ class BusquedaTab(QWidget):
     def _refresh_ephemeris(self) -> None:
         if self._latitude is None or self._longitude is None:
             return
+        clave = (
+            self._latitude, self._longitude,
+            self.current_date_iso(), self._utc_offset_hours,
+        )
+        if clave == self._clave_ephemeris:
+            return  # efemérides ya calculadas para esta ventana y huso
+        self._clave_ephemeris = clave
         self._ephemeris.refresh(
             self._latitude,
             self._longitude,
@@ -495,12 +514,33 @@ class BusquedaTab(QWidget):
     def _refresh_weather(self) -> None:
         if self._latitude is None or self._longitude is None:
             return
+        clave = (self._latitude, self._longitude, self.current_date_iso())
+        if clave == self._clave_clima:
+            return
+        self._clave_clima = clave
         self._weather.refresh(
             self._latitude, self._longitude, self.current_date_iso()
         )
 
     def _refresh_selected_curve(self) -> None:
         row = self._selected_row()
+        if row is None:
+            clave = ("sin-seleccion",)
+        elif row.get("ra_hours") is None:
+            clave = ("sin-coordenadas", str(row.get("object_id")))
+        elif self._latitude is None or self._longitude is None:
+            clave = ("sin-ubicacion",)
+        else:
+            clave = (
+                "curva", str(row.get("object_id")), str(row.get("catalog")),
+                row["ra_hours"], row["dec_deg"],
+                self._latitude, self._longitude,
+                self.current_date_iso(), self._utc_offset_hours,
+            )
+        if clave == self._clave_curva:
+            return  # la misma noche, objeto y ubicación: ya está dibujada
+        self._clave_curva = clave
+
         if row is None:
             self._curve.clear()
             return

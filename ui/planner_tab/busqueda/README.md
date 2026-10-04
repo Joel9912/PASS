@@ -9,6 +9,7 @@ Primer paso del flujo de PAS.S: filtrar el catálogo (OpenNGC + HYG + LDN) y ver
 - El formato de datos compartido (`format_ra/dec/size`, `_type_label`, `TYPE_LABELS`) se mudó a `../widgets.py` (lo usan también Búsqueda y Catálogo Personal) — así ninguna subpestaña importa de otra.
 - Compartidos de `../widgets.py`: `LocationBar`, `EphemerisPanel` (+ `DayNightBar`), `TransitCurve`, `WeatherCards`.
 - Rejilla 3×2 repartida 3:3:1; tabla con celdas centradas, filas a 42 px y ancho sobrante proporcional (`_spread_surplus`).
+- `refresh()` corre la **búsqueda siempre**, pero efemérides, curva y clima **se saltan si su clave no cambió** (objeto/noche/ubicación/huso; M-01 de la auditoría): cambiar solo un filtro o pulsar Enter dos veces ya no repite ~1,1 s de astropy. `refresh_weather()` (API keys guardadas) fuerza el recálculo.
 
 ### Esquema actual (a 1280×800: filas 309 / 309 / 103 px)
 
