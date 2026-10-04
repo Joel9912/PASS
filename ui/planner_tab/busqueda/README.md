@@ -46,11 +46,11 @@ Primer paso del flujo de PAS.S: filtrar el catálogo (OpenNGC + HYG + LDN) y ver
 - Filtros → tabla vía `planners.celestial_search.search(SearchFilters, limit=500)`.
 - Seleccionar fila → `planners.transit.night_curve` (malla de 1 min) alimenta curva y ventanas.
 - Cambios de fecha/ubicación/objeto refrescan efemérides y curva sin mover el resto de la rejilla.
+- `LocationBar` solo **selecciona** ubicación: crear o editarlas corresponde a la pestaña Equipo (decisión aprobada: sin botón «+» en Búsqueda).
 - El cuadro de Efemérides **llena su celda** (`addWidget(panel, 1)`, aire interior 1/3/3) y su `DayNightBar` es de **altura fija 44 px**: si hay que dejar sitio, se lo llevan los rótulos, no la barra.
 - La línea «★ Captura Ideal / ⚠ Captura Posible» de la curva se reserva con texto en blanco desde el arranque: ocultarla cambiaba el mínimo del panel (+21 px) y refluía la rejilla entera.
 - Sin datos → `--` / «Sin datos»; nunca inventar valores.
 
 ## Planes futuros
 1. APIs reales de clima/seeing (Clear Outside + Meteoblue) para las 6 tarjetas.
-2. Añadir ubicación desde la propia `LocationBar` (hoy se crean solo en pestaña Equipo).
-3. i18n de los textos (`i18n/es.ts`, `i18n/en.ts`).
+2. i18n de los textos (`i18n/es.ts`, `i18n/en.ts`).
