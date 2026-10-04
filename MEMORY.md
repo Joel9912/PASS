@@ -1,13 +1,13 @@
 # Estado Actual y Planes del Programa PAS.S
 
-## 📅 Situación Actual (2 de Octubre 2026)
+## 📅 Situación Actual (3 de Octubre 2026)
 
 | Aspecto | Estado |
 |---------|--------|
 | **Etapa de desarrollo** | Esqueleto completo + **`planners/` implementado** + **pestaña Planificador implementada** (4 subpestañas); resto de pestañas aún placeholder |
 | **Estructura de carpetas** | ✅ Creada: `db/`, `planners/`, `stacks/`, `equipment/`, `planetary/`, `ui/` (6 pestañas), `i18n/`, `tests/`, `data/` |
 | **Docs** | ✅ Raíz: README, AGENTS, PROGRAM, MEMORY, STRUCTURE + LICENSE GPL-3.0 + requirements.txt |
-| **Entry point** | ✅ `main.py` con tema oscuro, barra lateral colapsable, pie `v0.1` y las 6 pestañas; carga catálogos al arrancar; se abre **maximizado sin bug de render** |
+| **Entry point** | ✅ `main.py` con tema oscuro, barra lateral colapsable, pie `v0.1` y las 6 pestañas; carga catálogos al arrancar; se abre **maximizado** |
 | **Tests** | ✅ pytest: **142 tests** (`test_smoke`, `test_settings`, `test_weather`, `test_planners`, `test_dialogos`, `test_equipment` + módulos `moon_distance`, `framing`, `analytical_transit`, `capture_plan`, `ldn_loader`) |
 | **Librerías Python** | Instaladas en venv: PyQt6 6.11, **pyqtgraph 0.14.0**, astropy 8.0, numpy 2.5, PyYAML 6.0, pytest |
 | **Catálogos astronómicos** | ✅ OpenNGC (13,372 objetos) + HYG (41,487 estrellas mag ≤ 8) + **LDN (1,787)** en `data/pass.db` |
@@ -20,25 +20,14 @@
 ## 📋 Planes Corto Plazo (Próximos 1-3 meses)
 
 ### Objetivos Principales
-1. **Estructura definitiva de carpetas y READMEs**
-   - ✅ 4 docs base en raíz: AGENTS, PROGRAM, MEMORY, STRUCTURE
-   - Crear `ui/<pestaña>/` con su `README.md` (4 secciones fijas, ver AGENTS.md)
-   - Establecer convenciones de nombrado consistentes
+1. **UI de las pestañas pendientes** — estado y detalle en «Próximos Pasos» y en el README de cada carpeta.
 
-2. **Implementar UI básica con pestañas principales**
-   - `ui/summary_tab/` → Resumen: estado del plan, equipo y planes
-   - `ui/planetary_tab/` → Planetario: visualización y encuadre
-   - `ui/equipment_tab/` → Equipo: setups y localizaciones
-   - `ui/planner_equip_tab/` → Planificador de Equipos: comparativas y presupuesto
-   - `ui/planner_tab/` → Planificador de Objetos: búsqueda por criterios
-   - `ui/stacker_tab/` → Apilador: integración SirIL (calibrar, auditar, apilar)
-
-3. **Sistema básico de gestión de equipos**
+2. **Sistema básico de gestión de equipos**
    - CRUD básico (Crear, Leer, Actualizar, Borrar) de setups de equipo
    - Guardar equipos en formato local/JSON/archivo de texto
    - Asociación de localizaciones geográficas
 
-4. **Integración con APIs astronómicas**
+3. **Integración con APIs astronómicas**
    - API abierta para búsqueda de objetos (posición, fecha)
    - Integración con servicios de clima astronómico
    - API para ver seeing y condiciones atmosféricas
@@ -88,12 +77,9 @@ MES 1-3                          MES 4-6                          MES 7-12
 ```
 
 ## 💡 Próximos Pasos Inmediatos
+*(solo pendientes: lo completado vive en «Situación Actual»)*
 
-1. ✅ Docs base + estructura completa de carpetas con READMEs — **COMPLETADO**
-2. ✅ `main.py` con las 6 pestañas placeholder + smoke tests — **COMPLETADO**
-3. ✅ `planners/` implementado: cargador OpenNGC+HYG+LDN (auto al arrancar), búsqueda con filtros, tránsito/luna/noche con astropy, encuadre, plan de captura y ranking con pesos configurables — **COMPLETADO** (73 tests)
-4. ✅ UI del Planificador: 4 subpestañas conectadas a `planners/`, planetario visual y curva de tránsito — **COMPLETADO** (verificado offscreen + arranque real)
-5. 🔜 UI de `equipment_tab`: crear/editar localizaciones (con su `utc_offset_hours`) y setups — hace falta para que `LocationBar` deje de estar vacía
-6. 🔜 UI de `planner_equip_tab`: comparativa con las métricas que defina el usuario (`RankingWeights`, `CaptureWeights` expuestos)
-7. 🔌 Llamadas reales a Clear Outside/Meteoblue cuando haya API keys
-8. 🔌 i18n (`QTranslator` + `.ts/.qm`) empezando por `planner_tab/`
+1. 🔜 UI de `equipment_tab`: crear/editar localizaciones (con su `utc_offset_hours`) y setups — hace falta para que `LocationBar` deje de estar vacía
+2. 🔜 UI de `planner_equip_tab`: comparativa con las métricas que defina el usuario (`RankingWeights`, `CaptureWeights` expuestos)
+3. 🔌 Llamadas reales a Clear Outside/Meteoblue cuando haya API keys
+4. 🔌 i18n (`QTranslator` + `.ts/.qm`) empezando por `planner_tab/`
