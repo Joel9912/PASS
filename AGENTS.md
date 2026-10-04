@@ -10,7 +10,7 @@ No hay lint ni CI: `pytest` (la suite de `tests/`; el recuento vive en su README
 | Primera vez en la sesión / cualquier tarea | Este archivo → `PROGRAM.md` |
 | Crear o modificar una carpeta/pestaña | `STRUCTURE.md` + el `README.md` de la carpeta afectada |
 | Saber el estado general, prioridades o roadmap | `MEMORY.md` |
-| Cambiar arquitectura o convenciones | `STRUCTURE.md` (y actualizarlo en la misma tarea) |
+| Cambiar arquitectura o estructura de carpetas | `STRUCTURE.md` (y actualizarlo en la misma tarea) |
 | Entender por qué existe el programa o cada pestaña | `PROGRAM.md` |
 
 ## Convención: un solo `README.md` por carpeta

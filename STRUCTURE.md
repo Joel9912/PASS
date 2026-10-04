@@ -121,19 +121,7 @@ Planning-Stacking-Suite/
 
 ## 📏 Convención de README por carpeta (obligatoria)
 
-Cada carpeta con código tiene **un solo** `README.md` con 4 secciones fijas:
-
-```markdown
-# <nombre carpeta>
-## Qué es            → propósito de la carpeta y nada más
-## Estado actual      → archivos existentes y qué hacen hoy
-## Qué hacer aquí     → tareas típicas y reglas concretas aplicables aquí
-## Planes futuros     → próximas funcionalidades previstas
-```
-
-- Se crea **en la misma tarea** en que se crea la carpeta.
-- Se actualiza ("Estado actual") **en la misma tarea** en que se modifica la carpeta.
-- Un único archivo por carpeta: no separar contexto/estado/planes.
+Cada carpeta con código tiene **un solo** `README.md` con 4 secciones fijas, creado y actualizado en la misma tarea. Plantilla y reglas completas: **ver `AGENTS.md`** (fuente única, R2).
 
 ## 🗂️ Reglas de separación por carpeta
 
