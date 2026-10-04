@@ -1,7 +1,7 @@
 # tests/
 
 ## Qué es
-Tests de PAS.S con **pytest** (144 tests): validan que la estructura y la base del programa están sanas y que la lógica de `planners/` da los valores correctos.
+Tests de PAS.S con **pytest** (145 tests): validan que la estructura y la base del programa están sanas y que la lógica de `planners/` da los valores correctos.
 
 ## Estado actual
 - `test_smoke.py` — arranque y estructura: `main.py` importa, las 6 pestañas, **todos los README con sus 4 secciones** (lista explícita con las 4 subcarpetas del Planificador), esquema SQLite (`catalog`/`stars`) y `MainWindow` offscreen (barra lateral, contenido, pie). Regresiones de **Búsqueda**: título «Catálogo», celdas centradas, ◀/▶ de Lat/Lon sin flechitas, ★ de Captura Ideal en span verde, Efemérides sin pellizcar Filtros/Ubicación, barra día/noche de altura fija, eje dinámico de `DayNightBar` y línea de ventanas reservada. **Configuración**: SirIL en hilo aparte, avisos de ruta al instante y una sola construcción. Cableado de la auditoría: «Hoy» una emisión (M-03), `refresh()` por partes (M-01), botón «Calcular plan» (M-08), recargas sin doble llamada (M-04/M-19), `catalog_changed` (M-05), `LocationBar.reload()` por id (C-4), `CATALOG_LABELS` único (M-12), clima por tipo (M-15) y SirIL de ruta vieja descartado (M-23).

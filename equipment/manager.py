@@ -15,7 +15,12 @@ def update(setup: EquipmentSetup) -> None:
 
 
 def delete(setup_id: int) -> None:
-    """Elimina un setup (sus imágenes adjuntas se borran en cascada)."""
+    """Elimina un setup (sus imágenes adjuntas se borran en cascada).
+
+    Al borrarse, las ``planned_sessions`` que apuntaban a él quedan
+    desvinculadas en silencio (``ON DELETE SET NULL``, M-20): la confirmación
+    del borrado debe avisar antes con ``count_sessions``.
+    """
     raise NotImplementedError
 
 
@@ -44,3 +49,17 @@ def list_setups(category: str | None = None) -> list[dict]:
     )
     rows = conn.execute(sql, (category,) if category else ()).fetchall()
     return [dict(row) for row in rows]
+
+
+def count_sessions(setup_id: int) -> int:
+    """Nº de sesiones planificadas que apuntan a este setup (aviso de M-20).
+
+    El esquema desvincula esas sesiones con ``ON DELETE SET NULL`` al borrar
+    el setup; este conteo es lo que la confirmación del borrado debe mostrar
+    para que no pase en silencio. Con ``setup_id`` inexistente devuelve 0.
+    """
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT COUNT(*) FROM planned_sessions WHERE setup_id = ?", (setup_id,)
+    ).fetchone()
+    return int(row[0])

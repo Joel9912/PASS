@@ -2,8 +2,8 @@
 
 Cubren los hallazgos C-1 (Camera sin datos de FOV), C-2 y M-16 (funciones
 implementadas que anotaban ``EquipmentSetup``/``Location`` y devolvían dicts),
-M-17 (``list_setups()`` con `location_name`) y D-8: el fixture compartido
-``memory_db`` con las FK activas.
+M-17 (``list_setups()`` con `location_name`), M-20 (``count_sessions()``) y
+D-8: el fixture compartido ``memory_db`` con las FK activas.
 """
 import sqlite3
 import sys
@@ -188,3 +188,36 @@ def test_memory_db_dispara_los_on_delete_del_esquema(memory_db):
         "SELECT setup_id FROM planned_sessions WHERE object_id = ?", ("M31",)
     ).fetchone()
     assert fila["setup_id"] is None  # SET NULL disparado: las FK están activas
+
+
+def test_count_sessions_cuenta_antes_y_tras_el_set_null(memory_db):
+    """M-20: ``count_sessions`` es el nº que la confirmación de borrado muestra.
+
+    Refleja el contrato del esquema: al borrar el setup las sesiones **no se
+    borran**, quedan desvinculadas (``ON DELETE SET NULL``) y el conteo pasa a
+    0 — por eso hay que avisar *antes*. ``delete()`` aún es stub, así que el
+    borrado se simula con SQL.
+    """
+    from equipment import manager
+
+    cur = memory_db.execute(
+        "INSERT INTO equipment_setups (name) VALUES (?)", ("ASI2600",)
+    )
+    setup_pk = cur.lastrowid
+    for fecha in ("2026-09-01", "2026-09-02"):
+        memory_db.execute(
+            "INSERT INTO planned_sessions (object_id, session_date, setup_id)"
+            " VALUES (?, ?, ?)",
+            ("M31", fecha, setup_pk),
+        )
+    memory_db.commit()
+    assert manager.count_sessions(setup_pk) == 2
+
+    memory_db.execute("DELETE FROM equipment_setups WHERE id = ?", (setup_pk,))
+    memory_db.commit()
+
+    assert manager.count_sessions(setup_pk) == 0  # desvinculadas, no borradas
+    total = memory_db.execute(
+        "SELECT COUNT(*) FROM planned_sessions"
+    ).fetchone()[0]
+    assert total == 2  # las sesiones siguen existiendo
