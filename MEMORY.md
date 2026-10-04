@@ -83,3 +83,5 @@ MES 1-3                          MES 4-6                          MES 7-12
 2. 🔜 UI de `planner_equip_tab`: comparativa con las métricas que defina el usuario (`RankingWeights`, `CaptureWeights` expuestos)
 3. 🔌 Llamadas reales a Clear Outside/Meteoblue cuando haya API keys
 4. 🔌 i18n (`QTranslator` + `.ts/.qm`) empezando por `planner_tab/`
+5. 📂 Documentos de plan (fuera del repo): `plan-rediseno-planificacion.md` (rediseño de Planificación) e `informe-auditoria-codigo.md` (auditoría: Tanda A/B aplicadas).
+6. 🔜 Tanda C de la auditoría de código (M-17, M-18, M-20, D-5, D-6, D-8) — junto al paso 1 (Equipo).
