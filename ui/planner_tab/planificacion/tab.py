@@ -245,14 +245,14 @@ class PlanificacionTab(QWidget):
         hint.setObjectName("HintLabel")
         head.addWidget(hint)
         head.addStretch(1)
-        button = QPushButton("Calcular plan")
-        button.setObjectName("ApplyFilters")
-        button.setToolTip(
+        self._plan_button = QPushButton("Calcular plan")
+        self._plan_button.setObjectName("ApplyFilters")
+        self._plan_button.setToolTip(
             "Recorre 30 noches con la malla gruesa y detalla las "
             f"mejores {self.PLAN_TOP}: puede tardar unos segundos."
         )
-        button.clicked.connect(self._calculate_plan)
-        head.addWidget(button)
+        self._plan_button.clicked.connect(self._calculate_plan)
+        head.addWidget(self._plan_button)
         layout.addLayout(head)
 
         self._plan_table = QTableWidget(0, len(PLAN_COLUMNS))
@@ -560,6 +560,10 @@ class PlanificacionTab(QWidget):
             return
 
         self._window_label.setText("Calculando…")
+        # Botón desactivado ANTES de processEvents: si no, el clic
+        # encolado se entrega dentro de este mismo método y el plan se
+        # calcula dos veces en reentrada (M-08).
+        self._plan_button.setEnabled(False)
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         QApplication.processEvents()
         try:
@@ -575,6 +579,7 @@ class PlanificacionTab(QWidget):
             )
         finally:
             QApplication.restoreOverrideCursor()
+            self._plan_button.setEnabled(True)
         self._fill_plan()
 
     def _fill_plan(self) -> None:

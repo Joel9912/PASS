@@ -721,6 +721,42 @@ def test_refresh_no_repite_lo_que_no_cambio(monkeypatch):
     page.deleteLater()
 
 
+def test_calcular_plan_bloquea_la_reentrada(monkeypatch):
+    """M-08: «Calcular plan» desactiva el botón mientras calcula.
+
+    `processEvents()` dejaba entregar un segundo clic dentro del mismo
+    método: dos `best_dates` en reentrada (y las 30 noches calculadas
+    dos veces, ~2 s perdidos).
+    """
+    from ui.planner_tab.planificacion import tab as plan_tab
+
+    filas = [
+        {
+            "object_id": "M42", "catalog": "messier",
+            "ra_hours": 5.588139, "dec_deg": -5.391111,
+        },
+    ]
+    monkeypatch.setattr(plan_tab.personal_catalog, "list_objects", lambda: filas)
+
+    _app_ui()
+    page = plan_tab.PlanificacionTab()
+    page.set_location(40.4, -3.7, 2.0)
+
+    estados: list[bool] = []
+
+    def best_dates_falso(*args, **kwargs):
+        estados.append(page._plan_button.isEnabled())
+        return []
+
+    monkeypatch.setattr(plan_tab, "best_dates", best_dates_falso)
+
+    page._calculate_plan()
+
+    assert estados == [False]           # botón desactivado mientras calcula
+    assert page._plan_button.isEnabled()  # y reactivado al terminar
+    page.deleteLater()
+
+
 def test_quitar_objeto_emite_catalog_changed(monkeypatch):
     """M-05: quitar del catálogo personal avisa a Planificación (señal nueva).
 
