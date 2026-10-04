@@ -605,6 +605,28 @@ def _app_ui():
 _UI_APP = None
 
 
+def test_hoy_emite_una_sola_vez():
+    """M-03: «Hoy» emite `date_changed` una vez (no dos, como antes).
+
+    Regresión: `setDate` ya dispara `dateChanged`→`_emit_date` y además
+    se emitía a mano, con lo que Búsqueda refrescaba dos veces.
+    """
+    from ui.planner_tab.widgets import EphemerisPanel
+
+    _app_ui()
+    panel = EphemerisPanel()
+    panel.set_date("2026-10-01")
+    emitidas: list[str] = []
+    panel.date_changed.connect(emitidas.append)
+
+    panel._go_today()
+
+    assert emitidas == [panel.current_date_iso()]
+    panel._go_today()  # ya en hoy: nada cambió, nada se emite
+    assert len(emitidas) == 1
+    panel.deleteLater()
+
+
 def test_reload_targets_actualiza_una_vez(monkeypatch):
     """M-04: repoblar el combo de targets dispara `_on_target_changed` una vez.
 

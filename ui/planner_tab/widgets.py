@@ -1103,8 +1103,15 @@ class EphemerisPanel(QFrame):
         self._date.setDate(self._date.date().addDays(days))
 
     def _go_today(self) -> None:
-        self._date.setDate(QDate.currentDate())
-        self.date_changed.emit(self.current_date_iso())
+        """Vuelve a hoy.
+
+        Si la fecha cambia, ``dateChanged`` → ``_emit_date`` ya emite:
+        emitir a mano además (como se hacía) disparaba ``refresh()`` dos
+        veces. Si ya estamos en hoy, no cambia nada y no se emite.
+        """
+        hoy = QDate.currentDate()
+        if self._date.date() != hoy:
+            self._date.setDate(hoy)
 
 
 # --------------------------------------------------------------------------- #

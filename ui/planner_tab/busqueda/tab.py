@@ -547,8 +547,7 @@ class BusquedaTab(QWidget):
         if row is not None:
             self.add_to_personal.emit(str(row["object_id"]), str(row["catalog"]))
 
-    def _on_date_changed(self, date_iso: str) -> None:
-        self._run_search()
-        self._refresh_ephemeris()
-        self._refresh_selected_curve()
-        self._refresh_weather()
+    def _on_date_changed(self, _date_iso: str) -> None:
+        # Mismo recorrido que «Aplicar filtros»: refresh() hace las 4
+        # partes (esta copia literal del cuerpo se iba de sincronía).
+        self.refresh()
