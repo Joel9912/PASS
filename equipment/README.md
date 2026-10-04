@@ -7,10 +7,10 @@ Modelos y persistencia del equipo del usuario: setups (telescopio + cámara + mo
 - `models.py` — dataclasses: `Location`, `Telescope`, `Camera`, `Mount`, `EquipmentSetup`. Solo campos comparables (apertura, focal, resolución, bits, refrigeración).
   - `Camera` incluye **`pixel_size_um`/`width_px`/`height_px`** (los que permiten el FOV; ya estaban en el esquema y faltaban en el modelo — C-1 de la auditoría).
   - `Location` lleva además **`utc_offset_hours`**: desfase de la hora de reloj frente a UTC (España en verano = 2). Si es `None`, la lógica de `planners/` infiere el huso de la longitud (`round(lon/15)`, huso estándar).
-- `manager.py` — CRUD de setups en SQLite (`equipment_setups`); `list_setups()` funciona y devuelve dicts con todas las columnas (la UI calcula el FOV a partir de ellos). `get()`/`list_setups()` **anotan `dict`**, el contrato real que ya usa la UI (C-2; antes anotaban `EquipmentSetup`).
+- `manager.py` — CRUD de setups en SQLite (`equipment_setups`); `list_setups()` devuelve dicts con todas las columnas (la UI calcula el FOV a partir de ellos). `get()`/`list_setups()` **anotan `dict`**, el contrato que usa la UI (C-2).
 - `localizations.py` — CRUD de localizaciones (`locations`); `list_locations()` (anota `list[dict]`, M-16) y `delete()` funcionan.
 - `images.py` — adjuntar imágenes al setup (`equipment_images`), **solo visuales**. `attach()` **copia** el fichero a `data/equipment_images/<setup_id>/` (decisión D-1): la imagen persiste aunque el original se mueva o se borre; si la copia falla, guarda la ruta original.
-- Esquema: `equipment_setups` incluye ya **`price_eur`** y **`weight_kg`** (decisión D-3: añadidos antes del paso 6 para migrar una sola vez).
+- Esquema: `equipment_setups` incluye **`price_eur`** y **`weight_kg`** (decisión D-3).
 - El resto de operaciones CRUD están pendientes (`NotImplementedError`).
 
 ## Qué hacer aquí

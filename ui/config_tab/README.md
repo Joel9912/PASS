@@ -1,18 +1,18 @@
 # ui/config_tab/ — Diálogo de Configuración
 
 ## Qué es
-El diálogo **«Configuración General de la Aplicación»** que abre el botón ⚙ de la barra lateral: guardado de API keys del clima, ruta de SirIL y carpeta base de proyectos. Solo interfaz; la persistencia vive en `db/settings.py` y `stacks/siril_finder.py`.
+El diálogo **«Configuración General de la Aplicación»** que abre el botón ⚙: API keys del clima, ruta de SirIL y carpeta base de proyectos. Solo interfaz; la persistencia vive en `db/settings.py` y `stacks/siril_finder.py`.
 
 ## Estado actual
 - `__init__.py` — exporta `ConfigDialog`.
 - `config_dialog.py` — `ConfigDialog(QDialog)` con **nav lateral de 2 secciones** (🔧 General / 🌧 Clima) y páginas apiladas:
   - **General**:
-    1. *Motor de Procesamiento (SirIL)* — campo de ruta + «📁 Examinar...» + **estado comprobado en segundo plano**: `reload()` rellena los campos y llama a `_check_siril()`; si no hay SirIL o la ruta no existe el aviso sale **ya mismo** («no se encontró» en ámbar / «la ruta no existe» en rojo) y si existe se muestra «⏳ Comprobando SirIL…» mientras `_BRIDGE.probe()` ejecuta `siril_version()` en `_EXECUTOR` (ThreadPoolExecutor de 1 hilo); el resultado vuelve por la señal `checked` y pinta «✓ Siril x.y detectado y operativo.» en verde o «no responde» en ámbar.
+    1. *Motor de Procesamiento (SirIL)* — campo de ruta + «📁 Examinar...» + **estado comprobado en segundo plano**: `reload()` rellena y llama a `_check_siril()`; sin SirIL o con ruta mala el aviso sale **ya mismo** («no se encontró» en ámbar / «la ruta no existe» en rojo); si existe, «⏳ Comprobando SirIL…» mientras `_BRIDGE.probe()` corre `siril_version()` en `_EXECUTOR` (1 hilo) y la señal `checked` pinta «✓ Siril x.y detectado y operativo.» en verde o «no responde» en ámbar.
     2. *Carpeta Base de Proyectos* — directorio raíz (`settings`, clave `project_root`) + «Examinar...» + hint.
   - **Clima**: API keys de **Clear Outside** y **Meteoblue** (modo contraseña con casilla «Mostrar las claves») → `save_api_key` en `settings`.
   - Pie: **Guardar** (escribe todo de una vez y emite `saved`) / **Cerrar** (descarta; ✕ igual).
-- Cableado en `MainWindow._show_settings` (`ui/main_window.py`): **el diálogo se crea una sola vez y se reutiliza** (`self._config_dialog`); al reabrir solo se llama a `reload()` (refresca campos y estado). Al emitirse `saved` se llama a `BusquedaTab.refresh_weather()` para refrescar las tarjetas sin repetir la búsqueda.
-- Tests en `tests/test_smoke.py`: `test_config_dialog_*` (abre sin esperar a SirIL, avisos instantáneos, pintado del resultado y señal encolada desde el hilo) y `test_show_settings_keeps_one_dialog` (una sola construcción).
+- Cableado en `MainWindow._show_settings` (`ui/main_window.py`): **el diálogo se crea una sola vez y se reutiliza** (`self._config_dialog`); al reabrir solo `reload()`. Al emitirse `saved` se llama a `BusquedaTab.refresh_weather()` para refrescar sin repetir la búsqueda.
+- Tests en `tests/test_smoke.py`: `test_config_dialog_*` (abre sin esperar a SirIL, avisos instantáneos, pintado del resultado y señal encolada desde el hilo) y `test_show_settings_keeps_one_dialog`.
 - Estilo: `#ConfigNav` en `ui/style.py` (mismo lenguaje que `#NavList`) y objectNames reutilizados (`GroupFrame`, `PanelTitle`, `HintLabel`, `PrimaryButton`).
 
 ## Qué hacer aquí

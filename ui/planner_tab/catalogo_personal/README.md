@@ -4,8 +4,8 @@
 La lista de deseos del usuario: objetos guardados desde Búsqueda («⭐ Añadir a Mi Lista») y regiones de interés creadas aquí mismo. Es el puente hacia Planificación, que toma su target de esta tabla.
 
 ## Estado actual
-- `tab.py` — `CatalogoPersonalTab` (antes `ui/planner_tab/catalogo_personal.py`; el módulo es `tab.py` dentro de esta carpeta). Señales `target_selected` (fila elegida → Planificación cambia de target) y `region_added` (región nueva → `PlannerPage` recarga los targets de Planificación).
-- Constantes propias: `COLUMNS` (9 columnas). `CATALOG_LABELS` (catálogo → etiqueta; `region` → «Región») es **compartido de `../widgets.py`** (M-12: antes duplicado con valores divergentes de Búsqueda).
+- `tab.py` — `CatalogoPersonalTab`. Señales `target_selected` (fila elegida → Planificación cambia de target) y `region_added` (región nueva → `PlannerPage` recarga los targets de Planificación).
+- Constantes propias: `COLUMNS` (9 columnas). `CATALOG_LABELS` (catálogo → etiqueta; `region` → «Región») es **compartido de `../widgets.py`**.
 - Tabla de 9 columnas con las mismas cabeceras formateadas que Búsqueda: el formato (`format_ra/dec/size`, `_type_label`) vive en `../widgets.py` compartido — **no se importa de `busqueda/`**.
 - Datos vía `planners.personal_catalog` (CRUD con LEFT JOIN al catálogo; admite `kind='region'`).
 - Las regiones **no se pintan en el planetario** (decisión del usuario): solo sirven como encuadre de referencia en Planificación.
