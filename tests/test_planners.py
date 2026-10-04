@@ -605,3 +605,72 @@ def test_rank_includes_weather_when_available():
     assert weather_clear[0].score > weather_cloudy[0].score
     assert weather_none[0].score > weather_cloudy[0].score
     assert weather_none[0].score <= 100.0
+
+
+# ---------------------------------------------------------------- sky_loader
+def _sky_connection() -> "object":
+    """Conexión en memoria con las tablas que lee ``sky_loader``."""
+    import sqlite3
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(
+        "CREATE TABLE stars (name TEXT, magnitude REAL, ra_hours REAL,"
+        " dec_deg REAL, color TEXT, constellation TEXT);"
+        "CREATE TABLE catalog (object_id TEXT, catalog TEXT, messier_num INTEGER,"
+        " ngc_num INTEGER, name TEXT, type TEXT, magnitude REAL, ra_hours REAL,"
+        " dec_deg REAL, size_major_arcmin REAL, size_minor_arcmin REAL,"
+        " constellation TEXT);"
+        "INSERT INTO stars VALUES ('Alfa', 1.5, 5.0, 20.0, 'A', 'Ori');"
+        "INSERT INTO stars VALUES ('Beta', NULL, 6.0, -10.0, 'K', 'Ori');"
+        "INSERT INTO catalog VALUES ('M42', 'messier', 42, 42, 'Nebulosa',"
+        " 'gas', 4.0, 5.5, -5.0, 85.0, 60.0, 'Ori');"
+        "INSERT INTO catalog VALUES ('SIN RA', 'ngc', NULL, 999, NULL,"
+        " 'other', NULL, NULL, NULL, NULL, NULL, 'Ori');"
+    )
+    return conn
+
+
+def test_sky_loader_convierte_y_filtra(monkeypatch):
+    """Regresión M-13: los datos del planetario salen de ``planners/``.
+
+    RA en horas → grados, magnitud desconocida → 99 y objetos sin
+    coordenadas excluidos (mismo comportamiento que antes del traslado).
+    """
+    import numpy as np
+
+    from planners import sky_loader
+
+    conn = _sky_connection()
+    monkeypatch.setattr(sky_loader, "get_connection", lambda: conn)
+
+    stars = sky_loader.load_stars()
+    # ORDER BY magnitude pone los NULL primero: Beta (mag NULL) va delante.
+    assert len(stars["ra"]) == 2
+    assert stars["ra"].tolist() == pytest.approx([90.0, 75.0])  # 6 h → 90°, 5 h → 75°
+    assert stars["dec"].tolist() == pytest.approx([-10.0, 20.0])
+    assert stars["mag"].tolist() == pytest.approx([99.0, 1.5])  # NULL → 99
+    assert stars["spect"] == ["K", "A"]
+
+    objects = sky_loader.load_objects()
+    assert objects["ids"] == ["M42"]               # sin RA/Dec se excluye
+    assert objects["ra"][0] == pytest.approx(82.5)  # 5,5 h → 82,5°
+    assert objects["catalogs"] == ["messier"]
+    assert isinstance(stars["ra"], np.ndarray)
+    conn.close()
+
+
+def test_sky_loader_tablas_vacias(monkeypatch):
+    """Tablas vacías → arrays vacíos (la UI pinta el cielo sin datos)."""
+    from planners import sky_loader
+
+    conn = _sky_connection()
+    conn.execute("DELETE FROM stars")
+    conn.execute("DELETE FROM catalog")
+    monkeypatch.setattr(sky_loader, "get_connection", lambda: conn)
+
+    stars = sky_loader.load_stars()
+    objects = sky_loader.load_objects()
+    assert len(stars["ra"]) == 0 and len(stars["mag"]) == 0
+    assert len(objects["ra"]) == 0 and objects["ids"] == []
+    conn.close()

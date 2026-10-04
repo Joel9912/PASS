@@ -13,7 +13,8 @@ pequeños se ven sin deformación y las rectas de RA/Dec se pueden muestrear.
 Orientación de carta celeste estándar: **norte arriba, este a la izquierda**
 (RA creciente hacia la izquierda).
 
-Los datos salen de las tablas ``stars`` (HYG, mag ≤ 8) y ``catalog``; las
+Los datos salen de las tablas ``stars`` (HYG, mag ≤ 8) y ``catalog``
+a través de :mod:`planners.sky_loader` (esta UI no hace SQL); las
 regiones del catálogo personal no se cargan (requisito: no ensuciar la vista).
 """
 from __future__ import annotations
@@ -25,7 +26,7 @@ from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QPolygonF
 from PyQt6.QtWidgets import QWidget
 
-from db.connection import get_connection
+from planners.sky_loader import load_objects, load_stars
 
 #: Nº máximo de estrellas pintadas por refresco (más allá se ven las más brillantes).
 MAX_STARS_DRAWN = 6000
@@ -125,40 +126,7 @@ def grid_step_for(span_deg: float, target_lines: int = 6) -> float:
 
 
 # --------------------------------------------------------------------- datos
-def _load_stars() -> dict[str, np.ndarray]:
-    """Estrellas HYG (mag ≤ 8) como arrays: ra(deg), dec(deg), mag, clase espectral."""
-    conn = get_connection()
-    rows = conn.execute(
-        "SELECT ra_hours, dec_deg, magnitude, color FROM stars ORDER BY magnitude"
-    ).fetchall()
-    if not rows:
-        empty = np.empty(0)
-        return {"ra": empty, "dec": empty, "mag": empty, "spect": []}
-    return {
-        "ra": np.array([r[0] * 15.0 for r in rows]),
-        "dec": np.array([r[1] for r in rows]),
-        "mag": np.array([r[2] if r[2] is not None else 99.0 for r in rows]),
-        "spect": [r[3] for r in rows],
-    }
-
-
-def _load_objects() -> dict:
-    """Objetos deep-sky del catálogo global (las regiones NO se pintan aquí)."""
-    conn = get_connection()
-    rows = conn.execute(
-        "SELECT object_id, catalog, ra_hours, dec_deg, magnitude FROM catalog"
-        " WHERE ra_hours IS NOT NULL AND dec_deg IS NOT NULL"
-    ).fetchall()
-    if not rows:
-        empty = np.empty(0)
-        return {"ra": empty, "dec": empty, "ids": [], "catalogs": [], "mag": empty}
-    return {
-        "ra": np.array([r[2] * 15.0 for r in rows]),
-        "dec": np.array([r[3] for r in rows]),
-        "ids": [r[0] for r in rows],
-        "catalogs": [r[1] for r in rows],
-        "mag": np.array([r[4] if r[4] is not None else 99.0 for r in rows]),
-    }
+# La consulta vive en planners/sky_loader (sin SQL en la UI).
 
 
 class PlanetarioVisual(QWidget):
@@ -198,8 +166,8 @@ class PlanetarioVisual(QWidget):
         self._framing: tuple[float, float, float, float, int, int] | None = None
         self._selected: tuple[str, str] | None = None
 
-        self._stars = _load_stars()
-        self._objects = _load_objects()
+        self._stars = load_stars()
+        self._objects = load_objects()
 
     # ------------------------------------------------------------ API pública
     def set_center(self, ra_hours: float, dec_deg: float, label: str = "") -> None:

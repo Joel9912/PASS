@@ -24,6 +24,7 @@ Planning-Stacking-Suite/
 │   ├── analytical_transit.py # Culminación/altitud sin astropy + local_utc_offset
 │   ├── moon_distance.py      # Umbral lunar y ventanas Captura Ideal/Posible
 │   ├── capture_plan.py       # Ranking de fechas (plan de captura)
+│   ├── sky_loader.py         # Datos del planetario (estrellas/objetos → UI sin SQL)
 │   ├── framing.py            # FOV del equipo (None si faltan datos)
 │   ├── ldn_loader.py         # Nebulosas oscuras de Lynds (VizieR)
 │   ├── ranking.py            # Ranking/recomendaciones (métricas del usuario)

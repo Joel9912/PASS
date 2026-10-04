@@ -5,7 +5,7 @@ El corazón de la subpestaña: mirar el target en el planetario, ajustar el encu
 
 ## Estado actual
 - `tab.py` — `PlanificacionTab` (antes `ui/planner_tab/planificacion.py`; el módulo es `tab.py` dentro de esta carpeta). Señales `session_saved` (→ Sesiones recarga) y `target_changed`.
-- `planetario_visual.py` — `PlanetarioVisual`: lienzo de cielo con QPainter (proyección gnomónica, norte arriba, 41 487 estrellas y 15 159 objetos; zoom con rueda y arrastre). Expone `set_target`, `set_center`, `set_framing`, `clear_framing`, `view`, `reset_view` y las señales `object_clicked`, `region_clicked`, `view_changed`. Vive en esta carpeta porque solo lo usa Planificación; más adelante será la base de la pestaña Planetario.
+- `planetario_visual.py` — `PlanetarioVisual`: lienzo de cielo con QPainter (proyección gnomónica, norte arriba, 41 487 estrellas y 15 159 objetos; zoom con rueda y arrastre). Los datos los carga `planners/sky_loader` (**sin SQL en esta UI**). Expone `set_target`, `set_center`, `set_framing`, `clear_framing`, `view`, `reset_view` y las señales `object_clicked`, `region_clicked`, `view_changed`. Vive en esta carpeta porque solo lo usa Planificación; más adelante será la base de la pestaña Planetario.
 - Compartidos de `../widgets.py`: `TransitCurve` y `window_lines`.
 - Datos vía `planners/`: `night_curve`, `best_dates` (30 noches → top 5), `framing.calculate_fov` (si faltan focal/resolución/píxel **no se activa el encuadre** y lo dice), `planned_sessions`, `personal_catalog` y `equipment.manager.list_setups` (combo «Equipo»).
 - Cursor de espera en «Calcular plan» (~1,5 s por cálculo).
