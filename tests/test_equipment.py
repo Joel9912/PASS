@@ -111,3 +111,39 @@ def test_migra_precio_y_peso_del_equipo():
     frescas = {row[1] for row in _memoria().execute("PRAGMA table_info(equipment_setups)")}
     assert {"price_eur", "weight_kg"} <= frescas
     conn.close()
+
+
+def test_attach_copia_la_imagen_a_data(monkeypatch, tmp_path):
+    """D-1: `attach()` copia el fichero a `data/equipment_images/<id>/`.
+
+    Antes se persistía la ruta absoluta del `QFileDialog`: si el usuario
+    movía o borraba el original, la imagen adjunta se perdía.
+    """
+    from equipment import images
+
+    conn = _memoria()
+    conn.execute("INSERT INTO equipment_setups (name) VALUES (?)", ("ASI2600",))
+    conn.commit()
+    monkeypatch.setattr(images, "get_connection", lambda: conn)
+    monkeypatch.setattr(images, "IMAGES_ROOT", tmp_path / "equipment_images")
+
+    original = tmp_path / "originales" / "spot.png"
+    original.parent.mkdir()
+    original.write_bytes(b"contenido de prueba")
+
+    images.attach(1, str(original), "spot")
+
+    guardada = Path(images.list_images(1)[0]["path"])
+    assert guardada != original                     # la ruta guardada es la copia
+    assert guardada.parent == tmp_path / "equipment_images" / "1"
+    assert guardada.read_bytes() == b"contenido de prueba"
+
+    # Re-adjuntar el mismo original: ya está copiado, no revienta
+    images.attach(1, str(original), "spot")
+    assert len(images.list_images(1)) == 2
+
+    # Original perdido: se persiste la ruta tal cual en vez de fallar
+    fantasma = tmp_path / "borrado.png"
+    images.attach(1, str(fantasma), "otra")
+    assert images.list_images(1)[2]["path"] == str(fantasma)
+    conn.close()
