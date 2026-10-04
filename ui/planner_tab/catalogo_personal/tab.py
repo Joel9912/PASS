@@ -142,6 +142,8 @@ class CatalogoPersonalTab(QWidget):
 
     target_selected = pyqtSignal(str, str)   # object_id, catalog
     region_added = pyqtSignal(str)           # nombre de la región creada
+    #: La lista cambió (quitar un objeto): Planificación debe recargarla.
+    catalog_changed = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -307,6 +309,9 @@ class CatalogoPersonalTab(QWidget):
         if answer == QMessageBox.StandardButton.Yes:
             personal_catalog.remove(str(row["object_id"]), str(row["catalog"]))
             self.refresh()
+            # Planificación sigue ofreciendo el target quitado sin esta
+            # señal (podía guardar una sesión de un objeto ya fuera).
+            self.catalog_changed.emit()
 
     def _on_edit_notes(self) -> None:
         row = self._selected()

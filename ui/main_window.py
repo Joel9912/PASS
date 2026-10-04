@@ -139,6 +139,7 @@ class PlannerPage(QWidget):
         # Catálogo personal → Planificación (elegir target / recargar lista)
         self.catalogo.target_selected.connect(self.planificacion.select_target)
         self.catalogo.region_added.connect(self._on_region_added)
+        self.catalogo.catalog_changed.connect(self.planificacion.reload_targets)
 
         # Planificación → Sesiones (fila nueva recién guardada)
         self.planificacion.session_saved.connect(

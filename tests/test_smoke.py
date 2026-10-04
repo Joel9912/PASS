@@ -586,3 +586,112 @@ def test_show_settings_keeps_one_dialog(monkeypatch):
     assert len(created) == 1     # una sola construcción…
     assert len(reloaded) == 2    # ...pero los valores se recargan al reabrir
     window.close()
+
+
+# --------------------------------------------- Planificación y catálogo (M-04/M-05/M-19)
+def _app_ui():
+    """QApplication retenida para los tests de cableado (ref. no descartada)."""
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import QApplication
+
+    global _UI_APP
+    _UI_APP = QApplication.instance() or QApplication([])
+    return _UI_APP
+
+
+_UI_APP = None
+
+
+def test_reload_targets_actualiza_una_vez(monkeypatch):
+    """M-04: repoblar el combo de targets dispara `_on_target_changed` una vez.
+
+    Antes `setCurrentIndex` emitía **y** se llamaba a mano: curva y
+    encuadre se recalculaban dos veces por recarga (y `target_changed`
+    se emitía dos veces).
+    """
+    from ui.planner_tab.planificacion import tab as plan_tab
+
+    llamadas: list[int] = []
+    original = plan_tab.PlanificacionTab._on_target_changed
+
+    def contando(self, *args, **kwargs):
+        llamadas.append(1)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(plan_tab.PlanificacionTab, "_on_target_changed", contando)
+    filas = [
+        {"object_id": "M42", "catalog": "messier"},
+        {"object_id": "M31", "catalog": "messier"},
+    ]
+    monkeypatch.setattr(plan_tab.personal_catalog, "list_objects", lambda: filas)
+
+    _app_ui()
+    page = plan_tab.PlanificacionTab()
+    page._target.setCurrentIndex(1)   # selecciona el segundo
+    llamadas.clear()
+
+    page.reload_targets()             # keep_current: debe volver al índice 1
+
+    assert len(llamadas) == 1
+    page.deleteLater()
+
+
+def test_reload_setups_mantiene_la_seleccion(monkeypatch):
+    """M-19: repoblar el combo de equipos reselecciona por id, no al primero."""
+    from ui.planner_tab.planificacion import tab as plan_tab
+
+    setups = [
+        {"id": 1, "name": "Cámara nocturna", "category": "nebulosas"},
+        {"id": 2, "name": "Setup planetario", "category": "planetario"},
+    ]
+    monkeypatch.setattr(plan_tab, "list_setups", lambda: setups)
+    monkeypatch.setattr(plan_tab.personal_catalog, "list_objects", lambda: [])
+
+    _app_ui()
+    page = plan_tab.PlanificacionTab()
+    page._setup.setCurrentIndex(1)    # el segundo (id 2)
+
+    page.reload_setups()
+
+    assert page._setup.currentData()["id"] == 2
+    page.deleteLater()
+
+
+def test_quitar_objeto_emite_catalog_changed(monkeypatch):
+    """M-05: quitar del catálogo personal avisa a Planificación (señal nueva).
+
+    Sin la señal, Planificación seguía ofreciendo el target borrado y
+    podía guardar una sesión de un objeto ya fuera del catálogo.
+    """
+    from planners import personal_catalog
+    from ui.planner_tab.catalogo_personal import tab as cat_tab
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript((ROOT / "db" / "schema.sql").read_text(encoding="utf-8"))
+    monkeypatch.setattr(personal_catalog, "get_connection", lambda: conn)
+    personal_catalog.add("M42", "messier")
+
+    # Respuesta Sí al «¿Quitar…?» sin abrir QMessageBox.
+    class _Caja:
+        StandardButton = cat_tab.QMessageBox.StandardButton
+        question = staticmethod(lambda *args, **kwargs: _Caja.StandardButton.Yes)
+
+    monkeypatch.setattr(cat_tab, "QMessageBox", _Caja)
+
+    _app_ui()
+    page = cat_tab.CatalogoPersonalTab()
+    assert page._table.rowCount() == 1
+    page._table.selectRow(0)
+    recibidas: list[int] = []
+    page.catalog_changed.connect(lambda: recibidas.append(1))
+
+    page._on_remove()
+
+    assert recibidas == [1]
+    assert conn.execute("SELECT COUNT(*) FROM personal_catalog").fetchone()[0] == 0
+    conn.close()
+    page.deleteLater()

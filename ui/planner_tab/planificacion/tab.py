@@ -347,7 +347,11 @@ class PlanificacionTab(QWidget):
                     index = i
                     break
         if self._targets:
+            # blockSignals durante setCurrentIndex: si no, salta también
+            # por la señal y _on_target_changed corre dos veces (M-04).
+            self._target.blockSignals(True)
             self._target.setCurrentIndex(max(0, index))
+            self._target.blockSignals(False)
             self._on_target_changed()
         else:
             self._target.addItem("(sin elementos)", None)
@@ -355,13 +359,22 @@ class PlanificacionTab(QWidget):
 
     def reload_setups(self) -> None:
         """Vuelve a leer los setups de equipo (para el FOV del encuadre)."""
+        actual = self._setup.currentData()
+        actual_id = actual.get("id") if isinstance(actual, dict) else None
         self._setups = [s for s in list_setups() if s.get("id") is not None]
         self._setup.blockSignals(True)
         self._setup.clear()
-        for setup in self._setups:
+        seleccion = -1
+        for position, setup in enumerate(self._setups):
             name = str(setup.get("name") or f"Setup {setup.get('id')}")
             category = str(setup.get("category") or "").replace("_", " ")
             self._setup.addItem(f"{name} · {category}" if category else name, setup)
+            if setup.get("id") == actual_id:
+                seleccion = position
+        # Reseleccionar por id: sin esto, repoblar saltaba al primer
+        # setup y revalidaba el FOV/plan de un equipo que no era (M-19).
+        if seleccion >= 0:
+            self._setup.setCurrentIndex(seleccion)
         self._setup.blockSignals(False)
         self._on_setup_changed()
 
