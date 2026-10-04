@@ -1,14 +1,15 @@
 # Estado Actual y Planes del Programa PAS.S
 
-## 📅 Situación Actual (3 de Octubre 2026)
+## 📅 Situación Actual (4 de Octubre 2026)
 
 | Aspecto | Estado |
 |---------|--------|
 | **Etapa de desarrollo** | Esqueleto completo + **`planners/` implementado** + **pestaña Planificador implementada** (4 subpestañas); resto de pestañas aún placeholder |
 | **Estructura de carpetas** | ✅ Creada: `db/`, `planners/`, `stacks/`, `equipment/`, `planetary/`, `ui/` (6 pestañas), `i18n/`, `tests/`, `data/` |
 | **Docs** | ✅ Raíz: README, AGENTS, PROGRAM, MEMORY, STRUCTURE + LICENSE GPL-3.0 + requirements.txt |
+| **Auditoría de código** | ✅ Tandas A, B y C aplicadas (deuda C cerrada 4/10/2026); pendientes anotados: M-02, D-4, D-7 y bajos (§4 del informe) |
 | **Entry point** | ✅ `main.py` con tema oscuro, barra lateral colapsable, pie `v0.1` y las 6 pestañas; carga catálogos al arrancar; se abre **maximizado** |
-| **Tests** | ✅ pytest: **142 tests** (lista por módulo en `tests/README`) |
+| **Tests** | ✅ pytest (recuento y lista por módulo en `tests/README`) |
 | **Librerías Python** | Instaladas en venv: PyQt6 6.11, **pyqtgraph 0.14.0**, astropy 8.0, numpy 2.5, PyYAML 6.0, pytest |
 | **Catálogos astronómicos** | ✅ OpenNGC (13 372 objetos) + HYG (41 487 estrellas mag ≤ 8) + **LDN (1 787)** en `data/pass.db` |
 | **Pestaña Planificador** | ✅ `ui/planner_tab/`: Búsqueda → Catálogo Personal → Planificación → Sesiones Planificadas, planetario QPainter, curva de tránsito PyQtGraph (un eje), plan de captura, barra de ubicación compartida |
@@ -82,7 +83,5 @@
 2. 🔜 UI de `planner_equip_tab`: comparativa con las métricas que defina el usuario (`RankingWeights`, `CaptureWeights` expuestos)
 3. 🔌 Llamadas reales a Clear Outside/Meteoblue cuando haya API keys
 4. 🔌 i18n (`QTranslator` + `.ts/.qm`) empezando por `planner_tab/`
-5. 📂 Documentos de plan (fuera del repo): `plan-rediseno-planificacion.md` (rediseño de Planificación) e `informe-auditoria-codigo.md` (auditoría: Tanda A/B aplicadas).
-6. 🔜 Tanda C de la auditoría de código (M-17, M-18, M-20, D-5, D-6, D-8) — junto al paso 1 (Equipo).
-7. 🔧 Bajos de la auditoría de Markdown (3/10/2026): marcador de estado por pestaña en la tabla del README raíz (B-2); orden de subpestañas y clima en `PROGRAM.md` (B-3); rutas con prefijo `planner_tab/` en `ui/README` (B-4); precisar en `equipment/README` que la UI usa `list_setups()` (B-6); añadir M-20 a «Planes futuros» de `ui/equipment_tab` (B-7).
-8. 🔍 Hallazgos al comentar código (4/10/2026): propiedades `total` sin uso en `RankingWeights` (`planners/ranking.py`) y `CaptureWeights` (`planners/capture_plan.py`) — borrarlas o exponerlas en la UI de pesos.
+5. 📂 Documentos de plan (fuera del repo): `plan-rediseno-planificacion.md` (rediseño de Planificación) e `informe-auditoria-codigo.md` (auditoría de código).
+6. 🔧 Bajos de la auditoría de Markdown (3/10/2026): marcador de estado por pestaña en la tabla del README raíz (B-2); orden de subpestañas y clima en `PROGRAM.md` (B-3); rutas con prefijo `planner_tab/` en `ui/README` (B-4); precisar en `equipment/README` que la UI usa `list_setups()` (B-6); añadir M-20 a «Planes futuros» de `ui/equipment_tab` (B-7).
