@@ -42,8 +42,9 @@ para documentación (`.md`). Ya se usó con éxito en la auditoría de código
 5. `pytest` verde tras **cada** commit (hoy: la suite vive en `tests/`;
    `test_smoke` valida que todos los `README`/docs existen — si renombras o
    borras un `.md`, hay que actualizar ese test en el mismo commit).
-6. Actualizar recuentos de tests en `AGENTS.md`, `MEMORY.md`,
-   `tests/README.md` y `planners/README.md` si cambia la suite.
+6. Si cambia la suite: actualizar `tests/README.md` (dueño del recuento) y
+   la instantánea fechada de `MEMORY.md` — ningún otro doc repite la cifra
+   (R2, fuente única).
 7. Al final: resumen de commits + `pytest` final; **lanzar `python main.py`**
    solo si hay cambios visibles en la app (cambios solo en docs → no hace
    falta).
@@ -54,6 +55,12 @@ para documentación (`.md`). Ya se usó con éxito en la auditoría de código
 - UI separada de lógica; SirIL solo como herramienta externa; las métricas
   las define el usuario.
 - Cambios estructurales o ambiguos → proponer al usuario, no imponer.
+- **Documentos (R2/R3)**: fuente única (un dato global solo en su fichero
+  dueño), prosa concreta (5 palabras si bastan) y **nada obsoleto** — lo
+  completado se elimina de los planes; la historia es git.
+- **Resúmenes con dudas (R4)**: si comprimir un texto puede perder contexto
+  importante, ofrecer al usuario 2-3 variantes numeradas y esperar su
+  elección antes de escribir.
 - PowerShell: `Get-Content`/`Set-Content` **con `-Encoding UTF8`** y vigilar
   el BOM (detalles en la skill `verificacion-fix`).
 
