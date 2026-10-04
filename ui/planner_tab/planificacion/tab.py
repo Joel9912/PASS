@@ -57,7 +57,7 @@ from planners.moon_distance import format_hour_range
 from planners.transit import night_curve
 
 from .planetario_visual import PlanetarioVisual
-from .widgets import TransitCurve, window_lines
+from ..widgets import TransitCurve, window_lines
 
 #: Etiqueta de "sin encuadre" cuando el equipo no da FOV.
 NO_FRAMING_TEXT = "Sin encuadre: faltan datos de la cámara o del telescopio"

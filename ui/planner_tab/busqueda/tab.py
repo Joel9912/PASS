@@ -51,8 +51,17 @@ from planners.celestial_search import (
 )
 from planners.transit import night_curve
 
-from ..style import PALETTE
-from .widgets import EphemerisPanel, LocationBar, TransitCurve, WeatherCards
+from ...style import PALETTE
+from ..widgets import (
+    EphemerisPanel,
+    LocationBar,
+    TransitCurve,
+    WeatherCards,
+    _type_label,
+    format_dec,
+    format_ra,
+    format_size,
+)
 
 #: Columnas de la tabla en el orden del mockup.
 COLUMNS: tuple[tuple[str, str], ...] = (
@@ -67,17 +76,6 @@ COLUMNS: tuple[tuple[str, str], ...] = (
     ("Tránsito", "80"),
     ("Horas >30°", "90"),
 )
-
-#: Códigos OpenNGC → etiqueta corta que ve el usuario.
-TYPE_LABELS: dict[str, str] = {
-    "G": "Galaxia", "GPair": "Galaxia", "GTrpl": "Galaxia", "GGroup": "Galaxia",
-    "OCl": "Cúmulo abierto", "GCl": "Cúmulo globular", "*Ass": "Asociación",
-    "Cl+N": "Cúmulo y nebulosa",
-    "Neb": "Nebulosa", "PN": "Nebulosa planetaria", "HII": "Región HII",
-    "EmN": "Nebulosa de emisión", "RfN": "Nebulosa de reflexión",
-    "SNR": "Resto de supernova", "DrkN": "Nebulosa oscura",
-    "*": "Estrella", "**": "Estrella doble", "Nova": "Nova",
-}
 
 #: Catálogos → etiqueta.
 CATALOG_LABELS: dict[str, str] = {
@@ -96,45 +94,11 @@ ALTITUDE_OPTIONS: tuple[tuple[str, float | None], ...] = (
 
 
 # --------------------------------------------------------------------------- #
-#                        F O R M A T O   D E   D A T O S                       #
+#          E T I Q E T A S   S Ó L O   D E   E S T A   S U B P E S T A Ñ A     #
 # --------------------------------------------------------------------------- #
-def format_ra(ra_hours: float | None) -> str:
-    """RA decimal en horas a sexagesimal: ``00h42m44s`` (``--`` si falta)."""
-    if ra_hours is None:
-        return "--"
-    total = round(ra_hours * 3600.0) % 86400
-    hours, rest = divmod(total, 3600)
-    minutes, seconds = divmod(rest, 60)
-    return f"{hours:02d}h{minutes:02d}m{seconds:02d}s"
-
-
-def format_dec(dec_deg: float | None) -> str:
-    """Declinación en grados a sexagesimal: ``+41°16′09″`` (``--`` si falta)."""
-    if dec_deg is None:
-        return "--"
-    sign = "-" if dec_deg < 0 else "+"
-    total = round(abs(dec_deg) * 3600.0)
-    degrees, rest = divmod(total, 3600)
-    minutes, seconds = divmod(rest, 60)
-    return f"{sign}{degrees:02d}°{minutes:02d}′{seconds:02d}″"
-
-
-def format_size(major_arcmin: float | None, minor_arcmin: float | None) -> str:
-    """Tamaño angular: grados si es grande, minutos si no (``--`` si falta)."""
-    if not major_arcmin:
-        return "--"
-    minor = minor_arcmin or major_arcmin
-    if major_arcmin >= 60.0:
-        return f"{major_arcmin / 60.0:.2f}°×{minor / 60.0:.2f}°"
-    return f"{major_arcmin:.0f}′×{minor:.0f}′"
-
-
-def _type_label(type_code: str | None) -> str:
-    if not type_code:
-        return "--"
-    return TYPE_LABELS.get(type_code, type_code)
-
-
+# El formato de datos compartido (format_ra/dec/size, _type_label, TYPE_LABELS)
+# se mudó a `widgets.py` porque Catálogo Personal también lo necesita: aquí
+# nadie importa de una subpestaña a otra.
 def _constellation_label(code: str | None) -> str:
     if not code:
         return "--"

@@ -37,7 +37,7 @@ from PyQt6.QtWidgets import (
 
 from planners import personal_catalog
 
-from .busqueda import _type_label, format_dec, format_ra, format_size
+from ..widgets import _type_label, format_dec, format_ra, format_size
 
 #: Columnas de la tabla (mockup del usuario).
 COLUMNS: tuple[str, ...] = (

@@ -143,6 +143,60 @@ def _local_label(local_hours: float | None) -> str:
     return fmt_hhmm(local_hours) if local_hours is not None else "--:--"
 
 
+# --------------------------------------------------------------------------- #
+#             F O R M A T O   D E L   C A T Á L O G O   (s h a r e d)         #
+# --------------------------------------------------------------------------- #
+#: Códigos OpenNGC → etiqueta corta que ve el usuario. Compartida por Búsqueda
+#: y Catálogo Personal: vive aquí para que ninguna subpestaña importe de otra.
+TYPE_LABELS: dict[str, str] = {
+    "G": "Galaxia", "GPair": "Galaxia", "GTrpl": "Galaxia", "GGroup": "Galaxia",
+    "OCl": "Cúmulo abierto", "GCl": "Cúmulo globular", "*Ass": "Asociación",
+    "Cl+N": "Cúmulo y nebulosa",
+    "Neb": "Nebulosa", "PN": "Nebulosa planetaria", "HII": "Región HII",
+    "EmN": "Nebulosa de emisión", "RfN": "Nebulosa de reflexión",
+    "SNR": "Resto de supernova", "DrkN": "Nebulosa oscura",
+    "*": "Estrella", "**": "Estrella doble", "Nova": "Nova",
+}
+
+
+def format_ra(ra_hours: float | None) -> str:
+    """RA decimal en horas a sexagesimal: ``00h42m44s`` (``--`` si falta)."""
+    if ra_hours is None:
+        return "--"
+    total = round(ra_hours * 3600.0) % 86400
+    hours, rest = divmod(total, 3600)
+    minutes, seconds = divmod(rest, 60)
+    return f"{hours:02d}h{minutes:02d}m{seconds:02d}s"
+
+
+def format_dec(dec_deg: float | None) -> str:
+    """Declinación en grados a sexagesimal: ``+41°16′09″`` (``--`` si falta)."""
+    if dec_deg is None:
+        return "--"
+    sign = "-" if dec_deg < 0 else "+"
+    total = round(abs(dec_deg) * 3600.0)
+    degrees, rest = divmod(total, 3600)
+    minutes, seconds = divmod(rest, 60)
+    return f"{sign}{degrees:02d}°{minutes:02d}′{seconds:02d}″"
+
+
+def format_size(major_arcmin: float | None, minor_arcmin: float | None) -> str:
+    """Tamaño angular: grados si es grande, minutos si no (``--`` si falta)."""
+    if not major_arcmin:
+        return "--"
+    minor = minor_arcmin or major_arcmin
+    if major_arcmin >= 60.0:
+        return f"{major_arcmin / 60.0:.2f}°×{minor / 60.0:.2f}°"
+    return f"{major_arcmin:.0f}′×{minor:.0f}′"
+
+
+def _type_label(type_code: str | None) -> str:
+    """Código de tipo → etiqueta (``--`` si falta o se desconoce)."""
+    if not type_code:
+        return "--"
+    return TYPE_LABELS.get(type_code, type_code)
+
+
 #: Husos horarios ofrecidos en el selector (frente a UTC, horas).
 UTC_OFFSETS: tuple[float, ...] = tuple(
     (step * 0.5 for step in range(-24, 29))   # -12.0 … +14.0 en pasos de 0.5
