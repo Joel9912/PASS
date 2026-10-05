@@ -177,6 +177,56 @@ def test_equipment_page_construye_con_sus_dos_subpestanas():
     pagina.deleteLater()
 
 
+def test_equipo_cableado_en_la_ventana(monkeypatch):
+    """Paso 3: Equipo ya no es placeholder y sus señales llegan al Planificador.
+
+    El cableado vive en ``MainWindow`` (ninguna pestaña importa a otra):
+    ``setups_changed`` → recarga de setups de Planificación y de Sesiones;
+    ``locations_changed`` → recarga y reenvío de la barra de ubicación.
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import QApplication
+
+    from ui.equipment_tab import EquipmentPage
+    from ui.main_window import TABS, MainWindow, PlannerPage
+    from ui.planner_tab import PlanificacionTab, SesionesTab
+    from ui.planner_tab.widgets import LocationBar
+
+    llamadas: list[str] = []
+    monkeypatch.setattr(
+        PlanificacionTab,
+        "reload_setups",
+        lambda self: llamadas.append("reload_setups"),
+    )
+    monkeypatch.setattr(SesionesTab, "refresh", lambda self: llamadas.append("refresh"))
+    monkeypatch.setattr(LocationBar, "reload", lambda self: llamadas.append("reload"))
+    monkeypatch.setattr(LocationBar, "reemit", lambda self: llamadas.append("reemit"))
+
+    _app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    llamadas.clear()  # descarta la reemisión del propio constructor
+
+    # La fila Equipo ya no es la página provisional
+    indice = [key for key, _title in TABS].index("equipment_tab")
+    equipo = window.content.widget(indice)
+    assert isinstance(equipo, EquipmentPage)
+    planificador = window.content.widget(
+        [key for key, _title in TABS].index("planner_tab")
+    )
+    assert isinstance(planificador, PlannerPage)
+
+    equipo.setups_changed.emit()
+    assert llamadas == ["reload_setups", "refresh"]
+
+    equipo.locations_changed.emit()
+    assert llamadas[-2:] == ["reload", "reemit"]
+
+    window.close()
+
+
 def test_ajustes_guardados_refrescan_clima_por_tipo(monkeypatch):
     """M-15: tras guardar API keys, Búsqueda se busca por tipo, no por índice.
 

@@ -2,10 +2,12 @@
 
 - Barra lateral izquierda: pestañas apiladas verticalmente con icono (+ texto si
   está expandida), colapsable con animación y acceso a Configuración abajo.
-- Contenido: pestañas sin subpestañas muestran una página; las que tienen
-  subpestañas (p. ej. Planificador) usan QTabWidget horizontal con nombre.
+- Contenido: cada pestaña tiene su página por clave (``_PAGE_BUILDERS``); las
+  que no la tienen muestran un placeholder.
 - Pie: nombre del programa y versión.
 """
+from collections.abc import Callable
+
 from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QSize, Qt, QTimer
 from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import (
@@ -22,6 +24,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from .equipment_tab import EquipmentPage
 from .planner_tab import (
     BusquedaTab,
     CatalogoPersonalTab,
@@ -163,6 +166,20 @@ def _planner_page() -> QWidget:
     return PlannerPage()
 
 
+def _equipment_page() -> QWidget:
+    """Comodidad para ``MainWindow``: la página de Equipo."""
+    return EquipmentPage()
+
+
+#: Constructor de la página real de cada pestaña; las claves sin entrada
+#: (Resumen, Planetario, Apilador…) reciben un placeholder. Así no hay
+#: índices mágicos de ``TABS`` que descuadren al reordenar.
+_PAGE_BUILDERS: dict[str, Callable[[], QWidget]] = {
+    "planner_tab": _planner_page,
+    "equipment_tab": _equipment_page,
+}
+
+
 class _Sidebar(QWidget):
     """Barra lateral colapsable: iconos de pestañas + Configuración abajo."""
 
@@ -238,8 +255,10 @@ class _Sidebar(QWidget):
 class MainWindow(QMainWindow):
     """Ventana principal: barra lateral, páginas apiladas y pie de página.
 
-    Solo el Planificador tiene página real; el resto son provisionales
-    (``_placeholder_page``) hasta que se implementen.
+    Páginas reales: Planificador y Equipo (``_PAGE_BUILDERS``); el resto son
+    provisionales (``_placeholder_page``) hasta que se implementen. Aquí se
+    concentra el cableado **entre** pestañas (Equipo → Planificador), para
+    que ninguna importe a otra.
     """
 
     def __init__(self) -> None:
@@ -258,9 +277,14 @@ class MainWindow(QMainWindow):
         body.setSpacing(0)
 
         self.content = QStackedWidget()
+        #: Página de cada pestaña por clave (sin índices mágicos de TABS).
+        self._paginas: dict[str, QWidget] = {}
         for key, title in TABS:
-            page = _planner_page() if key == "planner_tab" else _placeholder_page(title)
+            builder = _PAGE_BUILDERS.get(key)
+            page = builder() if builder else _placeholder_page(title)
+            self._paginas[key] = page
             self.content.addWidget(page)
+        self._wire_equipo()
 
         # Diálogo de Configuración: se crea una sola vez y se reutiliza.
         self._config_dialog = None
@@ -286,6 +310,26 @@ class MainWindow(QMainWindow):
         """Cambia la página visible (índice fuera de rango → se ignora)."""
         if 0 <= index < self.content.count():
             self.content.setCurrentIndex(index)
+
+    def _wire_equipo(self) -> None:
+        """Une la pestaña Equipo con el Planificador (paso 3, §7 del plan).
+
+        Regla: ninguna pestaña importa a otra — el cableado vive aquí.
+        ``locations_changed`` refresca la barra de ubicación (recarga por id
+        + reenvío, sin botón nuevo) y ``setups_changed`` el FOV de
+        Planificación y la lista de Sesiones (los componentes cambian lo que
+        pintan ambas).
+        """
+        equipo = self._paginas.get("equipment_tab")
+        planificador = self._paginas.get("planner_tab")
+        if not isinstance(equipo, EquipmentPage) or not isinstance(
+            planificador, PlannerPage
+        ):
+            return
+        equipo.locations_changed.connect(planificador.location_bar.reload)
+        equipo.locations_changed.connect(planificador.location_bar.reemit)
+        equipo.setups_changed.connect(planificador.planificacion.reload_setups)
+        equipo.setups_changed.connect(planificador.sesiones.refresh)
 
     def _show_settings(self) -> None:
         """Abre el diálogo de Configuración (SirIL, carpeta base, API keys).
