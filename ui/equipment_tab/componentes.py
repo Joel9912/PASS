@@ -716,10 +716,6 @@ class TelescopeForm(QFrame):
         columna.addWidget(boton_quitar)
         imagenes.addLayout(columna)
         layout.addLayout(imagenes)
-        pista = QLabel("Solo visuales: el programa no analiza los charts.")
-        pista.setObjectName("HintLabel")
-        pista.setWordWrap(True)
-        layout.addWidget(pista)
         layout.addStretch(1)
 
         self._tipo.currentIndexChanged.connect(self._subtipos)
@@ -961,10 +957,6 @@ class CameraForm(QFrame):
         columna.addWidget(boton_quitar)
         imagenes.addLayout(columna)
         layout.addLayout(imagenes)
-        pista = QLabel("Solo visuales: el programa no analiza las curvas de ganancia.")
-        pista.setObjectName("HintLabel")
-        pista.setWordWrap(True)
-        layout.addWidget(pista)
         layout.addStretch(1)
 
         self._conectar_cambios()

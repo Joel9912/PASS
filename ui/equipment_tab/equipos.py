@@ -80,17 +80,47 @@ _ARCOIRIS = (
 )
 
 
-class BarraMuestreo(QWidget):
-    """Mini barra arcoíris de 5 zonas con el marcador de la escala actual.
+def _posicion_marcador(
+    escala: float | None, limites: tuple[float, float, float, float] | None
+) -> float | None:
+    """Posición del marcador en la barra, de 0.0 a 1.0 (None sin dato).
 
-    Las zonas salen de `equipment.metrics.limites_muestreo` — violeta
-    (sobremuestreado), azul (ligero), verde (correcto), amarillo (ligero)
-    y naranja (submuestreado) — pintadas con `QLinearGradient`: cada
-    zona enseña su color en el núcleo y **se funde con la vecina en los
-    bordes** (arcoíris con transición). El dominio va de 0 a
-    ``máx(escala, alto_ligero) × 1,15`` para que el marcador nunca se
-    salga; sin límites (no hay apertura) se pinta la barra gris de
-    «sin datos».
+    La barra es una escala **fija** de 5 quintos equidistantes —violeta,
+    azul, verde centrado, amarillo, naranja— y el marcador se coloca
+    dentro del quinto de su veredicto, con las mismas ramas que
+    `equipment.metrics.veredicto_muestreo`: así el color que hay debajo
+    del marcador siempre es el color del nivel y, al crecer la escala,
+    el marcador solo se mueve de izquierda a derecha. Los límites salen
+    de `limites_muestreo` (factor ≥ 1 → bandas ordenadas y sin
+    divisiones por cero; rango de un solo punto → centro del verde).
+    """
+    if escala is None or escala <= 0 or limites is None:
+        return None
+    bajo_lig, bajo, alto, alto_lig = limites
+    if escala > alto_lig:
+        # Naranja: asintótico hasta 1,0 (nunca se queda pegado al borde).
+        return 0.8 + 0.2 * (1.0 - alto_lig / escala)
+    if escala > alto:
+        return 0.6 + 0.2 * (escala - alto) / (alto_lig - alto)
+    if escala < bajo_lig:
+        return 0.2 * (escala / bajo_lig)
+    if escala < bajo:
+        return 0.2 + 0.2 * (escala - bajo_lig) / (bajo - bajo_lig)
+    if alto <= bajo:
+        return 0.5  # rango de un solo punto: centro del verde
+    return 0.4 + 0.2 * (escala - bajo) / (alto - bajo)
+
+
+class BarraMuestreo(QWidget):
+    """Mini barra arcoíris: 5 zonas fijas y el marcador del nivel movible.
+
+    El fondo es una escala **fija** de 5 quintos equidistantes con
+    fundidos entre vecinos (violeta sobremuestreado · azul ligero ·
+    verde correcto **centrado** · amarillo ligero · naranja
+    submuestreado): no se reposiciona con el rango, así el color del
+    centro es siempre el verde. Lo único que se mueve es el marcador
+    ( `_posicion_marcador`, dentro del quinto de su veredicto). Sin
+    límites (no hay apertura) se pinta la barra gris de «sin datos».
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -98,14 +128,15 @@ class BarraMuestreo(QWidget):
         super().__init__(parent)
         self._escala: float | None = None
         self._limites: tuple[float, float, float, float] | None = None
+        self._posicion: float | None = None
         self.setFixedHeight(16)
         self.setMinimumWidth(160)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setToolTip(
-            "Arcoíris de los 5 niveles: violeta sobremuestreado · azul "
+            "Arcoíris de los 5 niveles (fijo): violeta sobremuestreado · azul "
             "sobremuestreado ligero · verde correcto · amarillo "
             "submuestreado ligero · naranja submuestreado (la línea "
-            "marca la escala)."
+            "marca el nivel actual)."
         )
 
     def pintar(
@@ -113,13 +144,14 @@ class BarraMuestreo(QWidget):
         escala: float | None,
         limites: tuple[float, float, float, float] | None,
     ) -> None:
-        """Actualiza escala y los 4 bordes y repinta (``None`` = sin dato)."""
+        """Actualiza escala y límites (con ellos la posición) y repinta."""
         self._escala = escala if escala and escala > 0 else None
         self._limites = limites
+        self._posicion = _posicion_marcador(self._escala, limites)
         self.update()
 
     def paintEvent(self, evento) -> None:
-        """Pinta el arcoíris de 5 zonas con fundidos y el marcador."""
+        """Pinta el arcoíris fijo de 5 zonas y el marcador del nivel."""
         del evento  # el repintado es completo: no hace falta usar el rect
         pintor = QPainter(self)
         pintor.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -133,40 +165,27 @@ class BarraMuestreo(QWidget):
         if self._limites is None:
             pintor.fillRect(0, 0, ancho, alto, QColor("#4A5058"))
             return
-        fin = max(self._escala or 0.0, self._limites[3]) * 1.15 or 1.0
-        bordes = [
-            max(0, min(ancho, int(valor / fin * ancho)))
-            for valor in self._limites
-        ]
+
+        # Quintos fijos: color sólido en el núcleo y fundido de 4 % a
+        # cada lado de cada borde (los offsets van de 0 a 1, en orden).
         degradado = QLinearGradient(0, 0, ancho, 0)
-        paradas: list[tuple[int, QColor]] = [
-            (0, QColor(_VEREDICTO_COLOR[_ARCOIRIS[0]]))
-        ]
-        for i, x in enumerate(bordes):
-            izquierda = x - (0 if i == 0 else bordes[i - 1])
-            derecha = (ancho if i == len(bordes) - 1 else bordes[i + 1]) - x
-            # Ancho del fundido: ¼ del hueco menor, para que cada zona
-            # conserve su núcleo sólido (mínimo 1 px).
-            t = max(1, min(8, izquierda // 4, derecha // 4))
-            paradas.append((max(x - t, 0), QColor(_VEREDICTO_COLOR[_ARCOIRIS[i]])))
-            paradas.append(
-                (min(x + t, ancho), QColor(_VEREDICTO_COLOR[_ARCOIRIS[i + 1]]))
-            )
-        paradas.append((ancho, QColor(_VEREDICTO_COLOR[_ARCOIRIS[4]])))
-        # Offset no decreciente (el caso límite puede empatar, nunca
-        # invertir) y de 0 a 1 en fracción del ancho.
-        ultimo = 0
-        limpias: list[tuple[float, QColor]] = []
-        for posicion, color in paradas:
-            posicion = max(posicion, ultimo)
-            ultimo = posicion
-            limpias.append((posicion / ancho, color))
-        degradado.setStops(limpias)
+        transicion = 0.04
+        paradas: list[tuple[float, QColor]] = []
+        for i, clave in enumerate(_ARCOIRIS):
+            color = QColor(_VEREDICTO_COLOR[clave])
+            borde = i * 0.2
+            if i:
+                paradas.append(
+                    (borde - transicion, QColor(_VEREDICTO_COLOR[_ARCOIRIS[i - 1]]))
+                )
+            paradas.append((borde + (transicion if i else 0.0), color))
+        paradas.append((1.0, QColor(_VEREDICTO_COLOR[_ARCOIRIS[-1]])))
+        degradado.setStops(paradas)
         pintor.fillRect(0, 0, ancho, alto, degradado)
 
         # Marcador: línea oscura con el núcleo claro encima.
-        if self._escala is not None:
-            x = max(2, min(ancho - 2, int(self._escala / fin * ancho)))
+        if self._posicion is not None:
+            x = max(2, min(ancho - 2, int(self._posicion * ancho)))
             pintor.fillRect(x - 2, 0, 5, alto, QColor("#0d1117"))
             pintor.fillRect(x - 1, 0, 3, alto, QColor("#e6edf3"))
 
@@ -228,7 +247,7 @@ class EquiposTab(QWidget):
         contenido = QWidget()
         interior = QVBoxLayout(contenido)
         interior.setContentsMargins(0, 0, 0, 0)
-        interior.setSpacing(10)
+        interior.setSpacing(8)
         interior.addWidget(self._subpestanas())
         interior.addWidget(self._bloque_calculos())
         interior.addStretch(1)
@@ -382,7 +401,7 @@ class EquiposTab(QWidget):
         marco = QFrame()
         marco.setObjectName("GroupFrame")
         lay = QVBoxLayout(marco)
-        lay.setContentsMargins(12, 6, 12, 10)
+        lay.setContentsMargins(12, 4, 12, 6)  # apretados: la ficha cabe sin scroll
         lay.setSpacing(6)
         fila = QHBoxLayout()
         fila.setSpacing(8)

@@ -645,6 +645,132 @@ def test_calculos_con_seeing_rango_y_barra(memory_db):
     tab.deleteLater()
 
 
+def test_barra_arcoiris_fija_y_marcador_sigue_el_veredicto(memory_db):
+    """La barra es una escala fija de 5 quintos y el marcador se mueve solo.
+
+    Regresiones: el verde se queda siempre centrado (0,4–0,6) y los
+    colores NO se reposicionan con el rango (mismo color en la misma X
+    aunque cambie la apertura); el marcador cae dentro del quinto de su
+    veredicto y al crecer la escala solo se mueve a la derecha. Sin
+    apertura → barra gris (nada inventado).
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import QApplication
+
+    from equipment.metrics import veredicto_muestreo
+    from ui.equipment_tab.equipos import (
+        _ARCOIRIS,
+        _VEREDICTO_COLOR,
+        BarraMuestreo,
+        _posicion_marcador,
+    )
+
+    _app = QApplication.instance() or QApplication([])
+    barra = BarraMuestreo()
+    barra.resize(160, 16)
+    limites = (0.5 / 1.4, 0.5, 1.0, 1.4)  # resolución 1,0 y factor 1,4
+
+    # Al crecer la escala el marcador solo se mueve a la derecha.
+    escalas = [0.1, 0.3, 0.35, 0.45, 0.5, 0.99, 1.05, 1.2, 1.41, 1.6, 3.0]
+    posiciones = [_posicion_marcador(e, limites) for e in escalas]
+    assert all(p is not None for p in posiciones)
+    assert posiciones == sorted(posiciones)
+
+    # El marcador cae SIEMPRE en el quinto de su veredicto (mismo mapeo
+    # que la barra: índice 0 = violeta … 4 = naranja).
+    quintos = {clave: i for i, clave in enumerate(_ARCOIRIS)}
+    for escala, posicion in zip(escalas, posiciones):
+        veredicto = veredicto_muestreo(escala, 1.0)
+        assert veredicto is not None
+        assert min(4, int(posicion * 5)) == quintos[veredicto], (
+            escala,
+            veredicto,
+            posicion,
+        )
+
+    # Zonas fijas: mismo color en la misma X con rangos distintos
+    # (muestreo en el centro de cada quinto; el marcador lejos de ahí).
+    muestras = {
+        0.1: "Sobremuestreado",
+        0.3: "Sobremuestreado Ligero",
+        0.5: "Muestreo Correcto",
+        0.7: "Submuestreado Ligero",
+        0.9: "Submuestreado",
+    }
+
+    def pintura() -> dict[float, str]:
+        imagen = barra.grab().toImage()
+        return {
+            frac: imagen.pixelColor(int(imagen.width() * frac), imagen.height() // 2)
+            .name()
+            .upper()
+            for frac in muestras
+        }
+
+    barra.pintar(1.1, limites)
+    una = pintura()
+    barra.pintar(1.1, (0.1 / 1.4, 0.1, 0.2, 0.28))  # rango otra vez
+    otra = pintura()
+    for frac, clave in muestras.items():
+        esperado = _VEREDICTO_COLOR[clave]
+        assert una[frac] == esperado, (frac, una[frac])
+        assert otra[frac] == esperado, (frac, otra[frac])
+
+    # Sin dato no se inventa nada: sin apertura, barra gris y sin marcador.
+    assert _posicion_marcador(1.1, None) is None
+    assert _posicion_marcador(None, limites) is None
+    assert _posicion_marcador(0.0, limites) is None
+    barra.pintar(1.1, None)
+    assert barra.grab().toImage().pixelColor(80, 8).name().upper() == "#4A5058"
+
+    barra.deleteLater()
+
+
+def test_ficha_sin_hint_de_solo_visuales_y_cabe_sin_scroll(memory_db):
+    """Sin el hint «Solo visuales» la ficha entera cabe sin scroll.
+
+    «Solo visuales: el programa no analiza los charts / las curvas de
+    ganancia» ocupaba una fila con word wrap en cada formulario y
+    empujaba la ficha a scrollear: quitado el hint (y apretados los
+    márgenes de «Cálculos»), con la ventana a 1000×600 el panel con
+    scroll vertical tiene ``maximum == 0``. La aclaración vive en
+    `PROGRAM.md` y en la docstring de `equipment.models`, no en la UI.
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import QApplication, QLabel, QScrollArea
+
+    from ui.equipment_tab.componentes import CameraForm, TelescopeForm
+    from ui.equipment_tab.equipos import EquiposTab
+
+    _app = QApplication.instance() or QApplication([])
+    for form in (TelescopeForm(), CameraForm()):
+        pistas = [
+            etiqueta
+            for etiqueta in form.findChildren(QLabel)
+            if "Solo visuales" in etiqueta.text()
+        ]
+        assert pistas == [], [p.text() for p in pistas]
+        form.deleteLater()
+
+    tab = EquiposTab()
+    tab.resize(1000, 600)
+    tab.show()
+    _app.processEvents()
+    areas = tab.findChildren(QScrollArea)
+    maximos = [area.verticalScrollBar().maximum() for area in areas]
+    assert maximos and all(maximo == 0 for maximo in maximos), (
+        f"scroll vertical {maximos} (0 = la ficha cabe sin scroll)"
+    )
+    tab.deleteLater()
+    _app.processEvents()
+
+
 def test_afines_nuevo_sin_dialogo_lista_vacia_y_falta_nombre(memory_db, monkeypatch):
     """Afines A de Equipos: «Nuevo…» sin diálogo, ayuda en lista vacía y «Falta: nombre».
 
