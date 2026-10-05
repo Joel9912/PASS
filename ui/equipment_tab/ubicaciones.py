@@ -14,7 +14,7 @@ la base, D-5).
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import QEvent, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -37,6 +37,7 @@ from PyQt6.QtWidgets import (
 from equipment import localizations, manager
 from equipment.images import list_images
 from equipment.models import Location
+from planners.analytical_transit import local_utc_offset
 
 from .componentes import sin_botones
 from .sitio import SitioPanel
@@ -175,6 +176,8 @@ class UbicacionesTab(QWidget):
             "Magnitud por segundo de arco cuadrado en el cenit (opcional)."
         )
         sin_botones(self._sqm)
+        # Para que el SQM pueda volver a vacío: ver `eventFilter`.
+        self._sqm.installEventFilter(self)
         rejilla.addWidget(self._sqm, 0, 3)
         rejilla.setColumnStretch(1, 1)
         rejilla.setColumnStretch(3, 1)
@@ -182,7 +185,8 @@ class UbicacionesTab(QWidget):
 
         pista = QLabel(
             "Bortle obligatorio: la CL alimenta las decisiones de captura. "
-            "Si no conoces el SQM, déjalo en «—»."
+            "El SQM informado es la referencia de la gráfica; en «—» se "
+            "asume con el Bortle."
         )
         pista.setObjectName("HintLabel")
         pista.setWordWrap(True)
@@ -236,8 +240,8 @@ class UbicacionesTab(QWidget):
         self._auto = QCheckBox("Huso automático (hora solar local)")
         self._auto.setChecked(True)
         self._auto.setToolTip(
-            "Sin desfase fijo se usa la longitud como hora local: una "
-            "aproximación suficiente para sitios sin horario de verano."
+            "El Desfase se calcula de la longitud (regla de 15) y queda "
+            "fijo: desmárcalo para indicarlo a mano."
         )
         huso.addWidget(self._auto)
         huso.addStretch(1)
@@ -247,9 +251,14 @@ class UbicacionesTab(QWidget):
         self._huso.setDecimals(1)
         self._huso.setSuffix(" h")
         self._huso.setEnabled(False)
+        self._huso.setToolTip(
+            "Con «Huso automático» muestra round(longitud/15); sin él, se "
+            "indica a mano y se guarda."
+        )
         sin_botones(self._huso)
         huso.addWidget(self._huso)
-        self._auto.toggled.connect(lambda marcado: self._huso.setEnabled(not marcado))
+        self._auto.toggled.connect(self._al_cambiar_auto)
+        self._longitud.valueChanged.connect(self._refrescar_desfase)
         lay.addLayout(huso)
         return caja
 
@@ -307,7 +316,7 @@ class UbicacionesTab(QWidget):
                 self._nombre.setText(str(fila.get("name") or ""))
                 self._latitud.setValue(float(fila.get("latitude") or 0.0))
                 self._longitud.setValue(float(fila.get("longitude") or 0.0))
-                self._altitud.setValue(float(fila.get("altitude_m") or 0.0))
+                self._altitud.setValue(float(fila.get("altitude") or 0.0))
                 desfase = fila.get("utc_offset_hours")
                 self._auto.setChecked(desfase is None)
                 if desfase is not None:
@@ -325,8 +334,50 @@ class UbicacionesTab(QWidget):
                 )
         finally:
             self._cargando = False
+        self._refrescar_desfase()
         self._refrescar_cielo()
         self._boton_eliminar.setEnabled(self._ubicacion_id is not None)
+
+    def _refrescar_desfase(self) -> None:
+        """Con huso automático, el Desfase muestra ``round(longitud/15)``.
+
+        La misma regla que el planificador (``local_utc_offset``): lo que
+        se ve en la ficha es exactamente lo que se usará al planificar.
+        """
+        if self._auto.isChecked():
+            self._huso.setValue(local_utc_offset(self._longitud.value()))
+
+    def _al_cambiar_auto(self, marcado: bool) -> None:
+        """Huso automático activado: recalcular y bloquear; si no, editable."""
+        self._huso.setEnabled(not marcado)
+        if marcado:
+            self._refrescar_desfase()
+
+    def eventFilter(self, objeto, evento):
+        """Antes de que Qt interprete el SQM: texto vacío o inválido → «—».
+
+        QDoubleSpinBox revierte al último valor válido al salir del campo,
+        así que con «-» o vacío el SQM no podía volver a quedarse sin
+        informar (lo pidió el usuario); al no poder leerse el texto se
+        pone 0, que es el valor especial «—».
+        """
+        # FocusOut, o las teclas que hacen interpretar el texto (Enter/Tab).
+        sale_o_interpreta = evento.type() == QEvent.Type.FocusOut or (
+            evento.type() == QEvent.Type.KeyPress
+            and evento.key()
+            in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Tab)
+        )
+        if objeto is self._sqm and sale_o_interpreta:
+            self._sqm_a_vacio_si_invalido()
+        return super().eventFilter(objeto, evento)
+
+    def _sqm_a_vacio_si_invalido(self) -> None:
+        """Si el texto del SQM no es número (vacío, «-»…), lo deja en «—»."""
+        cuerpo = self._sqm.lineEdit().text().replace(self._sqm.suffix(), "").strip()
+        try:
+            float(cuerpo.replace(",", "."))
+        except ValueError:
+            self._sqm.setValue(0.0)
 
     def _refrescar_cielo(self) -> None:
         """Bortle/SQM cambiados (o ficha cargada) → esquemático al día."""

@@ -264,6 +264,14 @@ class RosaDirecciones(QWidget):
         """Tamaño natural: mismo cuadrado que los discos de entrada."""
         return QSize(176, 176)
 
+    def hasHeightForWidth(self) -> bool:
+        """El ancho manda: la fila reparte todo el ancho entre los discos."""
+        return True
+
+    def heightForWidth(self, ancho: int) -> int:
+        """Alto = ancho: disco cuadrado a tamaño de su celda."""
+        return max(ancho, self.minimumHeight())
+
     def paintEvent(self, event) -> None:
         """Pinta el aro, los ticks de azimut, las letras y el cenit."""
         del event
@@ -312,6 +320,14 @@ class _DiscoBase(QWidget):
     def sizeHint(self) -> QSize:
         """Tamaño natural: mismo cuadrado que la rosa de orientación."""
         return QSize(176, 176)
+
+    def hasHeightForWidth(self) -> bool:
+        """El ancho manda: la fila reparte todo el ancho entre los discos."""
+        return True
+
+    def heightForWidth(self, ancho: int) -> int:
+        """Alto = ancho: disco cuadrado a tamaño de su celda."""
+        return max(ancho, self.minimumHeight())
 
     def _geometria(self) -> tuple[float, float, float]:
         """Centro y radio del disco (margen para las letras de la rosa)."""
@@ -639,6 +655,18 @@ class DiscoEsquematico(QWidget):
     def sizeHint(self) -> QSize:
         """Tamaño natural: disco grande + banda de la barra de color."""
         return QSize(420, 340)
+
+    def hasHeightForWidth(self) -> bool:
+        """El ancho manda: el cuadro llena su celda sin hueco a los lados."""
+        return True
+
+    def heightForWidth(self, ancho: int) -> int:
+        """Alto del conjunto disco + barra para un ancho dado.
+
+        El presupuesto es ``ancho - 60``: sobra para el disco centrado
+        (margen de letras incluido), la barra a su derecha y las etiquetas.
+        """
+        return max(ancho - 60, self.minimumHeight())
 
     def set_datos(
         self,

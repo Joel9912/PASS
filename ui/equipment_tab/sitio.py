@@ -1,10 +1,11 @@
 """Bloques de la ficha de Ubicación: rosácea de entrada y salida.
 
 Arriba, la rosácea con los 3 discos de `rosaceas.py` (orientación,
-obstrucciones y CL por dirección); abajo, los dos cuadros grandes: la
-representación esquemática del sitio (``DiscoEsquematico``) y el mapa de
-CL adjunto con su vista previa (``_VistaMapa``), más la casilla
-``consider_lp``. Se sustituye a la antigua malla 3×3
+obstrucciones y CL por dirección) a ancho completo; abajo, dos cuadros a
+mitades: la representación esquemática del sitio (``DiscoEsquematico``,
+con la casilla ``consider_lp`` «Usar Contaminación Lumínica al
+Planificar» dentro) y el mapa de CL adjunto con su vista previa
+(``_VistaMapa``). Se sustituye a la antigua malla 3×3
 (``HorizonWidget``/``LightPollutionWidget``).
 
 Regla UX global (§9): **nada se persiste hasta «Guardar ubicación»** —
@@ -93,28 +94,28 @@ class SitioPanel(QWidget):
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        """Monta la rosácea, los dos cuadros grandes y la casilla de CL."""
+        """Monta la rosácea y los dos cuadros grandes (casilla incluida)."""
         super().__init__(parent)
         self._bortle: int | None = None
         self._sqm: float | None = None
         self._lp_map: str | None = None
+
+        # La casilla vive dentro del cuadro del esquemático.
+        self._considerar = QCheckBox("Usar Contaminación Lumínica al Planificar")
+        self._considerar.setChecked(True)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
         layout.addWidget(self._rosacea())
 
+        # Mitades iguales: el esquemático llena su celda (HFW) y el mapa
+        # aprovecha el mismo ancho para la vista previa.
         abajo = QHBoxLayout()
         abajo.setSpacing(8)
-        abajo.addWidget(self._esquematico(), 3)
-        abajo.addWidget(self._mapa(), 2)
+        abajo.addWidget(self._esquematico(), 1)
+        abajo.addWidget(self._mapa(), 1)
         layout.addLayout(abajo)
-
-        self._considerar = QCheckBox(
-            "Tener en cuenta la CL en las capturas de esta ubicación"
-        )
-        self._considerar.setChecked(True)
-        layout.addWidget(self._considerar)
 
         self._obstrucciones.changed.connect(self._repintar_salida)
         self._lumen.changed.connect(self._repintar_salida)
@@ -123,7 +124,7 @@ class SitioPanel(QWidget):
     # -- construcción ------------------------------------------------------
 
     def _rosacea(self) -> QFrame:
-        """Los 3 discos de entrada en fila, cada uno con su rótulo."""
+        """Los 3 discos de entrada en fila: tercios iguales, sin laterales."""
         marco = QFrame()
         marco.setObjectName("GroupFrame")
         caja = QVBoxLayout(marco)
@@ -131,7 +132,6 @@ class SitioPanel(QWidget):
         caja.setSpacing(6)
         fila = QHBoxLayout()
         fila.setSpacing(16)
-        fila.addStretch(1)
 
         self._rosa = RosaDirecciones()
         self._obstrucciones = DiscoObstrucciones()
@@ -148,14 +148,15 @@ class SitioPanel(QWidget):
             etiqueta.setObjectName("PanelTitle")
             etiqueta.setAlignment(Qt.AlignmentFlag.AlignCenter)
             columna.addWidget(etiqueta)
-            columna.addWidget(disco, 0, Qt.AlignmentFlag.AlignHCenter)
-            fila.addLayout(columna)
-        fila.addStretch(1)
+            # Sin AlignHCenter: el disco crece hasta el ancho de su celda
+            # y su altura lo sigue (HFW) — cuadrados a ancho completo.
+            columna.addWidget(disco)
+            fila.addLayout(columna, 1)
         caja.addLayout(fila)
         return marco
 
     def _esquematico(self) -> QFrame:
-        """Cuadro grande de la representación del sitio."""
+        """Cuadro de la representación del sitio, con la casilla de CL."""
         marco = QFrame()
         marco.setObjectName("GroupFrame")
         caja = QVBoxLayout(marco)
@@ -165,17 +166,19 @@ class SitioPanel(QWidget):
         titulo.setObjectName("PanelTitle")
         caja.addWidget(titulo)
         self._salida = DiscoEsquematico()
-        caja.addWidget(self._salida, 1, Qt.AlignmentFlag.AlignHCenter)
+        caja.addWidget(self._salida, 1)
+        # La casilla de CL la «asume» el esquemático (lo pidió el usuario).
+        caja.addWidget(self._considerar)
         return marco
 
     def _mapa(self) -> QFrame:
-        """Cuadro grande del mapa de CL adjunto (referencia visual)."""
+        """Cuadro del mapa de CL con su vista previa a ancho de celda."""
         marco = QFrame()
         marco.setObjectName("GroupFrame")
         caja = QVBoxLayout(marco)
         caja.setContentsMargins(12, 6, 12, 10)
         caja.setSpacing(6)
-        titulo = QLabel("Mapa de CL")
+        titulo = QLabel("Mapa de Contaminación Lumínica")
         titulo.setObjectName("PanelTitle")
         caja.addWidget(titulo)
 
@@ -183,19 +186,16 @@ class SitioPanel(QWidget):
         self._mapa_lbl = QLabel("Sin mapa")
         self._mapa_lbl.setToolTip("")
         fila.addWidget(self._mapa_lbl, 1)
-        boton_anadir = QPushButton("➕ Añadir mapa…")
-        boton_anadir.clicked.connect(self._anadir_mapa)
-        fila.addWidget(boton_anadir)
+        # El rótulo cambia con el estado: «Añadir» sin mapa, «Cambiar» con él.
+        self._boton_anadir = QPushButton("Añadir")
+        self._boton_anadir.clicked.connect(self._anadir_mapa)
+        fila.addWidget(self._boton_anadir)
         self._boton_quitar = QPushButton("Quitar")
         self._boton_quitar.setEnabled(False)
         self._boton_quitar.clicked.connect(self._quitar_mapa)
         fila.addWidget(self._boton_quitar)
         caja.addLayout(fila)
 
-        referencia = QLabel("Referencia: el programa no la analiza.")
-        referencia.setObjectName("HintLabel")
-        referencia.setWordWrap(True)
-        caja.addWidget(referencia)
         # Vista previa: el usuario modela discos y obstrucciones con la
         # referencia a la vista (ocupa todo el resto del cuadro).
         self._vista = _VistaMapa()
@@ -258,12 +258,13 @@ class SitioPanel(QWidget):
         self._actualizar_mapa()
 
     def _actualizar_mapa(self) -> None:
-        """Pinta nombre, vista previa y «Quitar» habilitado si hay mapa."""
+        """Pinta nombre, botón contextual, vista previa y «Quitar»."""
         if self._lp_map:
             self._mapa_lbl.setText(Path(self._lp_map).name)
             self._mapa_lbl.setToolTip(self._lp_map)
         else:
             self._mapa_lbl.setText("Sin mapa")
             self._mapa_lbl.setToolTip("")
+        self._boton_anadir.setText("Añadir" if not self._lp_map else "Cambiar")
         self._boton_quitar.setEnabled(bool(self._lp_map))
         self._vista.set_ruta(self._lp_map)

@@ -190,7 +190,7 @@ def test_ubicaciones_fila_geografia_primero_y_vista_previa_mapa(tmp_path):
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
     from PyQt6.QtGui import QImage
-    from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtWidgets import QApplication, QLabel
 
     from ui.equipment_tab import EquipmentPage
 
@@ -208,6 +208,7 @@ def test_ubicaciones_fila_geografia_primero_y_vista_previa_mapa(tmp_path):
     vista = tab._sitio._vista
     tab._sitio.set_valores({}, {}, None, True)
     assert vista._original.isNull()
+    assert tab._sitio._boton_anadir.text() == "Añadir"
 
     ruta = tmp_path / "mapa.png"
     imagen = QImage(8, 6, QImage.Format.Format_RGB32)
@@ -216,13 +217,88 @@ def test_ubicaciones_fila_geografia_primero_y_vista_previa_mapa(tmp_path):
     tab._sitio.set_valores({}, {}, str(ruta), True)
     assert not vista._original.isNull()
     assert vista._original.width() == 8
+    assert tab._sitio._boton_anadir.text() == "Cambiar"
 
     # Ruta inexistente → sin imagen y aviso en el propio rótulo.
     tab._sitio.set_valores({}, {}, str(tmp_path / "no_existe.png"), True)
     assert vista._original.isNull()
     assert "No se pudo" in vista.text()
 
+    # Revisión 2 del layout: títulos, casilla dentro del esquemático y
+    # discos/esquemático con HFW (ancho completo, sin hueco a los lados).
+    sitio = tab._sitio
+    textos = [rotulo.text() for rotulo in sitio.findChildren(QLabel)]
+    assert "Mapa de Contaminación Lumínica" in textos
+    assert "Referencia: el programa no la analiza." not in textos
+    assert sitio._considerar.text() == "Usar Contaminación Lumínica al Planificar"
+    assert sitio._considerar.parentWidget() is sitio._salida.parentWidget()
+    for disco in (sitio._rosa, sitio._obstrucciones, sitio._lumen):
+        assert disco.hasHeightForWidth()
+        assert disco.heightForWidth(300) == 300
+    assert sitio._salida.hasHeightForWidth()
+    assert sitio._salida.heightForWidth(500) == 440
+
     pagina.deleteLater()
+
+
+def test_ubicacion_altitud_desfase_y_sqm(memory_db):
+    """Revisión 2: la altitud sobrevive al guardar, desfase y SQM «—».
+
+    Regresiones de los tres defectos reportados: ``list_locations`` trae la
+    columna ``altitude`` (la ficha leía ``altitude_m`` y se quedaba en 0 al
+    recargar); con «Huso automático» el Desfase muestra ``round(lon/15)``
+    —la misma regla que el planificador— y queda fijo, y sin el check se
+    edita; y el SQM vuelve a vacío («-» al salir del campo → «—», en vez
+    de revertir al valor anterior).
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtCore import QEvent
+    from PyQt6.QtTest import QTest
+    from PyQt6.QtWidgets import QApplication
+
+    from ui.equipment_tab.ubicaciones import UbicacionesTab
+
+    _app = QApplication.instance() or QApplication([])
+    tab = UbicacionesTab()
+    tab._nombre.setText("Cacao")
+    tab._latitud.setValue(10.019)
+    tab._longitud.setValue(-84.282)
+    tab._altitud.setValue(822.0)
+    tab._bortle.setCurrentIndex(5)
+
+    # Huso automático: el Desfase indica round(-84,282 / 15) = -6 y fijo.
+    assert tab._huso.value() == -6.0
+    assert not tab._huso.isEnabled()
+
+    tab._guardar()
+    # Regresión: la altitud no se borra al guardar (clave «altitude»).
+    assert tab._altitud.value() == 822.0
+    # La longitud sigue mandando y el desfase sigue automático al recargar.
+    assert tab._huso.value() == -6.0
+    assert not tab._huso.isEnabled()
+
+    # Sin el check, el desfase se indica a mano y se persiste.
+    tab._auto.setChecked(False)
+    assert tab._huso.isEnabled()
+    tab._huso.setValue(-5.0)
+    tab._guardar()
+    assert tab._auto.isChecked() is False
+    assert tab._huso.value() == -5.0
+
+    # SQM: con valor, «-» al salir del campo → «—» (0), no el valor viejo.
+    tab._sqm.setValue(19.98)
+    tab._sqm.setFocus()
+    tab._sqm.lineEdit().selectAll()
+    QTest.keyClicks(tab._sqm, "-")
+    QApplication.sendEvent(tab._sqm, QEvent(QEvent.Type.FocusOut))
+    assert tab._sqm.value() == 0.0
+    assert tab._sqm.text() == "—"
+    assert tab._sqm_actual() is None
+
+    tab.deleteLater()
 
 
 def test_rosaceas_construyen_pintan_y_hacen_roundtrip():
