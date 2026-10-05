@@ -824,16 +824,17 @@ class TelescopeForm(QFrame):
     def _subtipos(self) -> None:
         """Repuebla el combo con los subtipos del tipo elegido (solo selección).
 
-        Un subtipo que no esté en la lista de su tipo (guardado en otra BD
-        o de la versión anterior, que era texto libre) se añade al combo y
-        se mantiene seleccionado: no se pierde lo que ya tenía el usuario.
+        Al cambiar de Tipo se selecciona el **primer subtipo** del nuevo
+        tipo: el combo no arrastra el valor del tipo anterior (aunque fuera
+        ajeno a la lista). Conservar un subtipo guardado que no está en la
+        taxonomía es cosa de `cargar`, que lo restaura **después** de
+        repueblar.
         """
-        actual = self._subtipo.currentText()
         claves = self._tipo.currentData() or "otro"
         self._subtipo.clear()
         self._subtipo.addItems(SUBTYPE_SUGGESTIONS.get(claves, ()))
-        if actual:
-            self._asegurar_subtipo(actual)
+        if self._subtipo.count():
+            self._subtipo.setCurrentIndex(0)
 
     def _asegurar_subtipo(self, subtipo: str) -> None:
         """Selecciona ``subtipo`` en el combo (y lo añade si venía de otra BD)."""

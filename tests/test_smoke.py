@@ -525,13 +525,16 @@ def test_cabecera_suma_precio_peso_y_lo_persiste(memory_db):
     tab.deleteLater()
 
 
-def test_subtipo_es_solo_seleccionable_y_conserva_el_guardado(memory_db):
+def test_subtipo_es_solo_seleccionable_conserva_al_cargar_y_cambia_con_el_tipo(
+    memory_db,
+):
     """Subtipo: combo solo seleccionable con la taxonomía de su tipo.
 
-    Regresiones del cierre: el combo ya no admite texto libre; al elegir
-    Tipo aparecen solo las opciones de esa óptica (Refractor = las 5 de la
-    taxonomía) y un subtipo guardado que no está en la lista (otra BD o el
-    texto libre antiguo) se conserva al cargar **y** al cambiar de tipo.
+    Regresiones: el combo ya no admite texto libre; al elegir Tipo aparecen
+    solo las opciones de esa óptica (Refractor = las 5 de la taxonomía);
+    un subtipo guardado que no está en la lista (otra BD o el texto libre
+    antiguo) se conserva al cargar, y al cambiar de Tipo el combo
+    selecciona el primer subtipo del nuevo tipo (no arrastra el anterior).
     """
     import os
 
@@ -562,9 +565,15 @@ def test_subtipo_es_solo_seleccionable_y_conserva_el_guardado(memory_db):
     assert form._subtipo.currentText() == "Sextuplete"
     assert form.a_modelo().subtype == "Sextuplete"
 
-    # ...ni al cambiar de tipo (se añade al combo y sigue seleccionado).
+    # ...pero al cambiar de tipo se selecciona el primero del nuevo tipo
+    # (regresión: «Sextuplete» se quedaba pegado y hasta se añadía a la
+    # lista de Reflector).
     form._tipo.setCurrentIndex(form._tipo.findData("reflector"))
-    assert form._subtipo.currentText() == "Sextuplete"
+    assert [form._subtipo.itemText(i) for i in range(form._subtipo.count())] == [
+        "Newtoniano",
+        "Ritchey-Chrétien (RC)",
+    ]
+    assert form._subtipo.currentText() == "Newtoniano"
 
     form.deleteLater()
 
