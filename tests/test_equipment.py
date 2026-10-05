@@ -15,16 +15,21 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 
-def test_camera_expone_los_datos_del_fov():
-    """C-1: Camera lleva píxel y tamaño de sensor, ya presentes en el esquema."""
+def test_camera_expone_los_datos_del_fov(memory_db):
+    """C-1: Camera lleva píxel y tamaño de sensor, en su tabla (Equipo v2).
+
+    El FOV depende de esos tres datos; antes vivían embebidos en
+    ``equipment_setups`` sin modelo y hoy están en ``cameras``, de donde
+    ``list_setups()`` los expone como alias (lo comprueba el test de claves
+    FOV del backend).
+    """
     from equipment.models import Camera
 
     cam = Camera(name="ASI2600", pixel_size_um=3.76, width_px=6248, height_px=4176)
 
     assert (cam.pixel_size_um, cam.width_px, cam.height_px) == (3.76, 6248, 4176)
-    schema = (ROOT / "db" / "schema.sql").read_text(encoding="utf-8")
-    for columna in ("camera_pixel_size_um", "camera_width_px", "camera_height_px"):
-        assert columna in schema
+    columnas = {row[1] for row in memory_db.execute("PRAGMA table_info(cameras)")}
+    assert {"pixel_size_um", "width_px", "height_px"} <= columnas
 
 
 def test_anotaciones_de_equipo_coinciden_con_lo_devuelto():
@@ -37,13 +42,13 @@ def test_anotaciones_de_equipo_coinciden_con_lo_devuelto():
 
 
 def test_list_setups_devuelve_dicts_de_fila(memory_db):
-    """La tabla se lee como dicts completos (incluidas las columnas camera_*)."""
+    """La tabla se lee como dicts de fila con sus columnas (C-2)."""
     from equipment import manager
 
     memory_db.execute(
-        "INSERT INTO equipment_setups (name, category, camera_pixel_size_um,"
-        " camera_width_px, camera_height_px) VALUES (?, ?, ?, ?, ?)",
-        ("ASI2600", "nebulosas", 3.76, 6248, 4176),
+        "INSERT INTO equipment_setups (name, category, price_eur, weight_kg)"
+        " VALUES (?, ?, ?, ?)",
+        ("ASI2600", "espacio_profundo", 1200.0, 8.5),
     )
     memory_db.commit()
 
@@ -51,7 +56,7 @@ def test_list_setups_devuelve_dicts_de_fila(memory_db):
 
     assert setups and all(isinstance(s, dict) for s in setups)
     assert setups[0]["name"] == "ASI2600"
-    assert setups[0]["camera_pixel_size_um"] == pytest.approx(3.76)
+    assert setups[0]["price_eur"] == pytest.approx(1200.0)
     assert manager.list_setups("campo_amplio") == []  # filtro por categoría
 
 
@@ -127,6 +132,70 @@ def test_migra_precio_y_peso_del_equipo(memory_db):
     # El esquema de una base nueva también los trae
     frescas = {row[1] for row in memory_db.execute("PRAGMA table_info(equipment_setups)")}
     assert {"price_eur", "weight_kg"} <= frescas
+    conn.close()
+
+
+def test_migra_las_referencias_y_quita_las_columnas_de_la_v1(memory_db):
+    """Equipo v2: una base antigua gana las FK de componentes y pierde lo embebido.
+
+    Las columnas de la v1 (``telescope_name``, ``camera_*``, ``mount_name``)
+    pasaron a sus tablas; si la migración no las quitara, una base antigua
+    conviviría con datos muertos. Se comprueba además que el borrado es
+    idempotente y que una base fresca sale sin esquema huérfano.
+    """
+    from db import connection as db_conn
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        "CREATE TABLE equipment_setups ("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " name TEXT NOT NULL,"
+        " telescope_name TEXT, camera_resolution TEXT,"
+        " camera_pixel_size_um REAL, mount_name TEXT)"
+    )
+
+    db_conn.init_db(conn)
+
+    columnas = {row[1] for row in conn.execute("PRAGMA table_info(equipment_setups)")}
+    assert {
+        "price_eur",
+        "weight_kg",
+        "telescope_id",
+        "guide_telescope_id",
+        "camera_id",
+        "guide_camera_id",
+        "mount_id",
+    } <= columnas
+    assert not (
+        {"telescope_name", "camera_resolution", "camera_pixel_size_um", "mount_name"}
+        & columnas
+    )
+    db_conn.init_db(conn)  # segunda pasada: idempotente, no revienta
+
+    frescas = {row[1] for row in memory_db.execute("PRAGMA table_info(equipment_setups)")}
+    assert not (set(db_conn._LEGACY_SETUP_COLUMNS) & frescas)
+    conn.close()
+
+
+def test_migra_el_sitio_de_las_ubicaciones(memory_db):
+    """Una base antigua recibe las columnas de sitio de la Equipo v2."""
+    from db import connection as db_conn
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        "CREATE TABLE locations (id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " name TEXT NOT NULL, latitude REAL NOT NULL, longitude REAL NOT NULL)"
+    )
+
+    db_conn.init_db(conn)
+
+    sitio = {"obstacles", "lp", "bortle", "sqm", "consider_lp"}
+    columnas = {row[1] for row in conn.execute("PRAGMA table_info(locations)")}
+    assert sitio <= columnas
+    frescas = {row[1] for row in memory_db.execute("PRAGMA table_info(locations)")}
+    assert sitio <= frescas  # la fresca las trae directas del esquema
     conn.close()
 
 

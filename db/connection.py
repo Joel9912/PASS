@@ -16,11 +16,24 @@ _MIGRATIONS: dict[str, tuple[str, ...]] = {
     "locations": (
         # Desfase horario para pasar efemérides de UTC a hora de reloj.
         "utc_offset_hours REAL",
+        # Bloque de sitio de la pestaña Equipo (JSON con las 8 direcciones).
+        "obstacles TEXT",
+        "lp TEXT",
+        # Bortle es obligatorio en el formulario, no en la columna: SQLite
+        # no admite ADD COLUMN NOT NULL sin default y no queremos inventarlo.
+        "bortle INTEGER",
+        "sqm REAL",
+        "consider_lp INTEGER NOT NULL DEFAULT 1",
     ),
     "equipment_setups": (
-        "camera_pixel_size_um REAL",
-        "camera_width_px INTEGER",
-        "camera_height_px INTEGER",
+        # Componentes globales (pestaña Equipo v2): el equipo pasa a
+        # referenciarlos. El executescript del esquema corre antes, así que
+        # las tablas a las que apuntan ya existen al hacer el ADD COLUMN.
+        "telescope_id INTEGER REFERENCES telescopes(id) ON DELETE SET NULL",
+        "guide_telescope_id INTEGER REFERENCES telescopes(id) ON DELETE SET NULL",
+        "camera_id INTEGER REFERENCES cameras(id) ON DELETE SET NULL",
+        "guide_camera_id INTEGER REFERENCES cameras(id) ON DELETE SET NULL",
+        "mount_id INTEGER REFERENCES mounts(id) ON DELETE SET NULL",
         # Precio/peso de la comparativa (D-3): añadidos antes del paso 6
         # para que el esquema se migre una sola vez.
         "price_eur REAL",
@@ -71,10 +84,12 @@ def _apply_schema(conn: sqlite3.Connection) -> None:
     """Aplica `schema.sql` (idempotente: todo usa IF NOT EXISTS).
 
     Así una base creada con un esquema antiguo recibe las tablas nuevas;
-    las columnas añadidas a tablas ya existentes se migran después.
+    las columnas añadidas a tablas ya existentes se migran después y las
+    obsoletas de la v1 se quitan (``_drop_legacy_columns``).
     """
     conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
     _migrate_columns(conn)
+    _drop_legacy_columns(conn)
     conn.commit()
 
 
@@ -94,12 +109,46 @@ def _migrate_columns(conn: sqlite3.Connection) -> None:
                 existing.add(name)
 
 
+#: Columnas embebidas de la v1 de `equipment_setups`: la pestaña Equipo v2
+#: las movió a sus tablas (`telescopes`, `cameras`, `mounts`). Están fuera
+#: de `_MIGRATIONS` a propósito: si quedaran ahí, una base fresca las
+#: recibiría de nuevo por ADD COLUMN y quedaría esquema huérfano.
+_LEGACY_SETUP_COLUMNS = (
+    "telescope_name",
+    "telescope_aperture_mm",
+    "telescope_focal_mm",
+    "camera_name",
+    "camera_cooled",
+    "camera_resolution",
+    "camera_bit_depth",
+    "camera_pixel_size_um",
+    "camera_width_px",
+    "camera_height_px",
+    "mount_name",
+)
+
+
+def _drop_legacy_columns(conn: sqlite3.Connection) -> None:
+    """Quita de ``equipment_setups`` las columnas embebidas de la v1 (idempotente).
+
+    SQLite solo admite ``DROP COLUMN`` desde la 3.35 y sin «IF NOT EXISTS»,
+    así que se comprueba con ``PRAGMA table_info`` antes de alterar. Las
+    tablas de equipo estaban vacías en la base real (el CRUD era stub: no
+    existía forma de insertar sin ``create()``), así que no hay datos que
+    perder.
+    """
+    try:
+        existing = {row[1] for row in conn.execute("PRAGMA table_info(equipment_setups)")}
+    except sqlite3.Error:
+        return
+    for name in _LEGACY_SETUP_COLUMNS:
+        if name in existing:
+            conn.execute(f"ALTER TABLE equipment_setups DROP COLUMN {name}")
+
+
 def init_db(conn: sqlite3.Connection | None = None) -> None:
     """Aplica el esquema de `schema.sql` (idempotente)."""
-    target = conn if conn is not None else get_connection()
-    target.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
-    _migrate_columns(target)
-    target.commit()
+    _apply_schema(conn if conn is not None else get_connection())
 
 
 def close_connection() -> None:

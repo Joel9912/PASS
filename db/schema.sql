@@ -1,6 +1,6 @@
 -- Esquema de PAS.S (SQLite 3, stdlib). Idempotente: CREATE ... IF NOT EXISTS.
 
--- Localizaciones del usuario
+-- Localizaciones del usuario (+ bloque de sitio de la pestaña Equipo)
 CREATE TABLE IF NOT EXISTS locations (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT NOT NULL,
@@ -10,33 +10,96 @@ CREATE TABLE IF NOT EXISTS locations (
     -- Desfase horario frente a UTC (horas). NULL = usar la longitud como
     -- hora solar local (aproximación) hasta que el usuario lo indique.
     utc_offset_hours REAL,
+    -- Bloque de sitio: JSON con SIEMPRE las 8 direcciones (N, NE, E, SE, S,
+    -- SO, O, NO). obstacles = {dir: ['arboles', 'edificios', ...]}.
+    obstacles   TEXT,
+    lp          TEXT,               -- {dir: 0-3} contaminación lumínica por dirección
+    bortle      INTEGER,            -- 1-9 (obligatorio en el formulario, no en la columna)
+    sqm         REAL,               -- SQM cenital en mag/arcsec² (opcional)
+    -- «Tener en cuenta la CL en las capturas de esta ubicación»: de momento
+    -- solo se guarda; el cableado a puntuación es el paso 6 (comparativa).
+    consider_lp INTEGER NOT NULL DEFAULT 1,
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- Setups de equipo (datos fríos comparables)
+-- Componentes globales reutilizables (pestaña Equipo v2): varios setups
+-- referencian la misma óptica/cámara con rol principal o de guía.
+CREATE TABLE IF NOT EXISTS telescopes (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    name           TEXT NOT NULL,
+    aperture_mm    REAL,             -- NULL = el usuario no lo sabe
+    focal_mm       REAL,
+    optical_type   TEXT,             -- ver equipment.models.OPTICAL_TYPES
+    subtype        TEXT,             -- texto libre con sugerencias (doblete, triplete apocromático…)
+    reducer        INTEGER NOT NULL DEFAULT 0,   -- ¿lleva aplanador/reductor?
+    reducer_factor REAL,             -- p. ej. 0.8 (NULL = desconocido)
+    notes          TEXT,
+    created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS cameras (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    name          TEXT NOT NULL,
+    cooled        INTEGER NOT NULL DEFAULT 0,
+    pixel_size_um REAL,              -- → FOV y escala de muestreo
+    width_px      INTEGER,           -- → FOV
+    height_px     INTEGER,           -- → FOV
+    bit_depth     INTEGER,
+    mono          INTEGER NOT NULL DEFAULT 0,   -- monocromática vs color
+    ampglow       INTEGER NOT NULL DEFAULT 0,
+    notes         TEXT,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+-- Sin columna `resolution`: la resolución se deriva de width×height en la
+-- UI y `calculate_fov` solo la usaba de respaldo de esas dos columnas.
+
+CREATE TABLE IF NOT EXISTS mounts (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL,
+    mount_type TEXT,                 -- ver equipment.models.MOUNT_TYPES
+    payload_kg REAL,                 -- capacidad / carga útil
+    notes      TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS filters (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    name        TEXT NOT NULL,
+    filter_type TEXT,                -- ver equipment.models.FILTER_TYPES
+    notes       TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Setups de equipo (datos fríos comparables): combinación de componentes
+-- globales + ubicación + categoría. Las columnas embebidas de la v1
+-- (telescope_name, camera_pixel_size_um, mount_name…) viven ahora en sus
+-- tablas; una base antigua las pierde por migración (_drop_legacy_columns).
 CREATE TABLE IF NOT EXISTS equipment_setups (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     name                TEXT NOT NULL,
-    category            TEXT NOT NULL DEFAULT 'campo_amplio',
-        -- 'campo_amplio' | 'nebulosas' | 'galaxias' | 'planetario' (futuro)
+    category            TEXT NOT NULL DEFAULT 'general',
+        -- 'paisaje' | 'campo_amplio' | 'espacio_profundo' |
+        -- 'espacio_profundo_largo' | 'planetario' | 'general'
+        -- (catálogo completo: equipment.models.CATEGORIES)
     location_id         INTEGER REFERENCES locations(id) ON DELETE SET NULL,
-    telescope_name      TEXT,
-    telescope_aperture_mm REAL,
-    telescope_focal_mm  REAL,
-    camera_name         TEXT,
-    camera_cooled       INTEGER NOT NULL DEFAULT 0,
-    camera_resolution   TEXT,
-    camera_bit_depth    INTEGER,
-    camera_pixel_size_um REAL,      -- tamaño de píxel (µm) → FOV
-    camera_width_px     INTEGER,    -- resolución horizontal (px) → FOV
-    camera_height_px    INTEGER,    -- resolución vertical (px) → FOV
-    mount_name          TEXT,
+    telescope_id        INTEGER REFERENCES telescopes(id) ON DELETE SET NULL,
+    guide_telescope_id  INTEGER REFERENCES telescopes(id) ON DELETE SET NULL,
+    camera_id           INTEGER REFERENCES cameras(id) ON DELETE SET NULL,
+    guide_camera_id     INTEGER REFERENCES cameras(id) ON DELETE SET NULL,
+    mount_id            INTEGER REFERENCES mounts(id) ON DELETE SET NULL,
     -- Precio y peso del setup: los exige la comparativa (paso 6); se
     -- añadieron ya (decisión D-3) para migrar el esquema una sola vez.
     price_eur           REAL,
     weight_kg           REAL,
     notes               TEXT,
     created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- «Qué filtros lleva»: muchos a muchos entre setups y filtros globales.
+CREATE TABLE IF NOT EXISTS setup_filters (
+    setup_id   INTEGER NOT NULL REFERENCES equipment_setups(id) ON DELETE CASCADE,
+    filter_id  INTEGER NOT NULL REFERENCES filters(id) ON DELETE CASCADE,
+    PRIMARY KEY (setup_id, filter_id)
 );
 
 -- Imágenes adjuntas al equipo (spot, etc.): SOLO visuales, el programa no las compara
@@ -46,6 +109,29 @@ CREATE TABLE IF NOT EXISTS equipment_images (
     path      TEXT NOT NULL,
     kind      TEXT NOT NULL DEFAULT 'otra'
         -- 'spot' | 'otra'
+);
+
+-- Imágenes de componentes y ubicaciones: SOLO visuales igualmente; el
+-- CASCADE nativo de cada FK las filas, los ficheros los purga el CRUD.
+CREATE TABLE IF NOT EXISTS telescope_images (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    telescope_id INTEGER NOT NULL REFERENCES telescopes(id) ON DELETE CASCADE,
+    path         TEXT NOT NULL,
+    kind         TEXT NOT NULL DEFAULT 'chart'
+);
+
+CREATE TABLE IF NOT EXISTS camera_images (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    camera_id INTEGER NOT NULL REFERENCES cameras(id) ON DELETE CASCADE,
+    path      TEXT NOT NULL,
+    kind      TEXT NOT NULL DEFAULT 'ganancia'
+);
+
+CREATE TABLE IF NOT EXISTS location_images (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+    path        TEXT NOT NULL,
+    kind        TEXT NOT NULL DEFAULT 'mapa_lp'
 );
 
 -- Catálogo personal del usuario (objetos guardados desde el Planificador)

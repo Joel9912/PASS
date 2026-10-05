@@ -90,6 +90,15 @@ def test_schema_applies():
         "settings",
         "catalog",
         "stars",
+        # Componentes globales + imágenes por entidad (Equipo v2)
+        "telescopes",
+        "cameras",
+        "mounts",
+        "filters",
+        "setup_filters",
+        "telescope_images",
+        "camera_images",
+        "location_images",
     } <= tables
     conn.close()
 
