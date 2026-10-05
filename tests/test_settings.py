@@ -19,6 +19,21 @@ def test_set_get_roundtrip(memory_settings):
     assert settings_mod.get_setting("clave") == "valor-2"
 
 
+def test_get_float_lee_y_defiende_lo_corrupto(memory_settings):
+    """get_float: texto numérico → float; clave ausente o rara → default.
+
+    La tabla guarda TEXT: los umbrales de muestreo (Configuración) leen con
+    éste y jamás deben reventar por una clave sucia.
+    """
+    assert settings_mod.get_float("umbral", 1.0) == 1.0  # ausente → default
+
+    settings_mod.set_setting("umbral", "0.75")
+    assert settings_mod.get_float("umbral", 1.0) == 0.75
+
+    settings_mod.set_setting("umbral", "no-numérico")
+    assert settings_mod.get_float("umbral", 1.0) == 1.0  # corrupto → default
+
+
 def test_api_key_roundtrip(memory_settings):
     """save_api_key escribe en settings y load_api_key lo lee (o None)."""
     assert weather_base.load_api_key("clear_outside_api_key") is None

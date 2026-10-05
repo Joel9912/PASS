@@ -779,7 +779,7 @@ def test_reload_setups_mantiene_la_seleccion(monkeypatch):
     from ui.planner_tab.planificacion import tab as plan_tab
 
     setups = [
-        {"id": 1, "name": "Cámara nocturna", "category": "nebulosas"},
+        {"id": 1, "name": "Cámara nocturna", "category": "espacio_profundo"},
         {"id": 2, "name": "Setup planetario", "category": "planetario"},
     ]
     monkeypatch.setattr(plan_tab, "list_setups", lambda: setups)

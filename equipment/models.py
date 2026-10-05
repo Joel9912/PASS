@@ -103,6 +103,8 @@ class Location:
     obligatorio en el formulario (1-9), ``sqm`` opcional, y
     ``consider_lp`` decide si la CL entra en las decisiones de captura de
     esta ubicación — de momento solo se guarda (paso 6 lo cablea).
+    ``lp_map`` es la imagen única de referencia (Light Pollution Map): al
+    subir otra sustituye a la anterior.
     """
 
     id: int | None = None
@@ -116,6 +118,7 @@ class Location:
     bortle: int | None = None
     sqm: float | None = None
     consider_lp: bool = True
+    lp_map: str | None = None
 
 
 @dataclass

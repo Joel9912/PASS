@@ -1,9 +1,11 @@
-"""Tests de equipo: modelos, lecturas de la base y anotaciones (auditoría).
+"""Tests de equipo: modelos, CRUD de la Equipo v2, lecturas y anotaciones.
 
-Cubren los hallazgos C-1 (Camera sin datos de FOV), C-2 y M-16 (funciones
-implementadas que anotaban ``EquipmentSetup``/``Location`` y devolvían dicts),
-M-17 (``list_setups()`` con `location_name`), M-20 (``count_sessions()``) y
-D-8: el fixture compartido ``memory_db`` con las FK activas.
+Cubren los hallazgos C-1 (datos de FOV de la cámara), C-2 y M-16 (contrato
+dict), M-17 (``list_setups()`` con `location_name`), M-20
+(``count_sessions()``), D-8 (fixture ``memory_db`` con FK activas) y el plan
+de la pestaña Equipo: migraciones de esquema, CRUD de componentes, claves
+FOV, imágenes por entidad, sitio de las ubicaciones, validaciones y
+categorías.
 """
 import sqlite3
 import sys
@@ -13,6 +15,25 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+
+from equipment.models import (
+    CATEGORIES,
+    DIRECTIONS,
+    Camera,
+    EquipmentSetup,
+    Filter,
+    Location,
+    Mount,
+    Telescope,
+)
+from equipment.validaciones import (
+    validar_camara,
+    validar_filtro,
+    validar_montura,
+    validar_setup,
+    validar_telescopio,
+    validar_ubicacion,
+)
 
 
 def test_camera_expone_los_datos_del_fov(memory_db):
@@ -200,10 +221,12 @@ def test_migra_el_sitio_de_las_ubicaciones(memory_db):
 
 
 def test_attach_copia_la_imagen_a_data(memory_db, monkeypatch, tmp_path):
-    """D-1: `attach()` copia el fichero a `data/equipment_images/<id>/`.
+    """D-1: `attach()` copia a `data/equipment_images/<entidad>/<id>/`.
 
     Antes se persistía la ruta absoluta del `QFileDialog`: si el usuario
-    movía o borraba el original, la imagen adjunta se perdía.
+    movía o borraba el original, la imagen adjunta se perdía. El layout es
+    uniforme por entidad (Equipo v2) y una entidad desconocida no llega ni
+    a tocar el SQL.
     """
     from equipment import images
 
@@ -215,21 +238,25 @@ def test_attach_copia_la_imagen_a_data(memory_db, monkeypatch, tmp_path):
     original.parent.mkdir()
     original.write_bytes(b"contenido de prueba")
 
-    images.attach(1, str(original), "spot")
+    images.attach("setup", 1, str(original), "spot")
 
-    guardada = Path(images.list_images(1)[0]["path"])
+    guardada = Path(images.list_images("setup", 1)[0]["path"])
     assert guardada != original                     # la ruta guardada es la copia
-    assert guardada.parent == tmp_path / "equipment_images" / "1"
+    assert guardada.parent == tmp_path / "equipment_images" / "setup" / "1"
     assert guardada.read_bytes() == b"contenido de prueba"
 
     # Re-adjuntar el mismo original: ya está copiado, no revienta
-    images.attach(1, str(original), "spot")
-    assert len(images.list_images(1)) == 2
+    images.attach("setup", 1, str(original), "spot")
+    assert len(images.list_images("setup", 1)) == 2
 
     # Original perdido: se persiste la ruta tal cual en vez de fallar
     fantasma = tmp_path / "borrado.png"
-    images.attach(1, str(fantasma), "otra")
-    assert images.list_images(1)[2]["path"] == str(fantasma)
+    images.attach("setup", 1, str(fantasma), "otra")
+    assert images.list_images("setup", 1)[2]["path"] == str(fantasma)
+
+    # Entidad fuera del mapa cerrado: ValueError, nunca SQL dinámico suelto
+    with pytest.raises(ValueError, match="Entidad"):
+        images.attach("banana", 1, str(original))
 
 
 def test_memory_db_dispara_los_on_delete_del_esquema(memory_db):
@@ -264,8 +291,9 @@ def test_count_sessions_cuenta_antes_y_tras_el_set_null(memory_db):
 
     Refleja el contrato del esquema: al borrar el setup las sesiones **no se
     borran**, quedan desvinculadas (``ON DELETE SET NULL``) y el conteo pasa a
-    0 — por eso hay que avisar *antes*. ``delete()`` aún es stub, así que el
-    borrado se simula con SQL.
+    0 — por eso hay que avisar *antes* (la UI usa ``count_sessions``). Aquí el
+    borrado se hace con SQL directo para no arrastrar el resto de efectos de
+    ``manager.delete`` (imágenes, filtros).
     """
     from equipment import manager
 
@@ -290,3 +318,405 @@ def test_count_sessions_cuenta_antes_y_tras_el_set_null(memory_db):
         "SELECT COUNT(*) FROM planned_sessions"
     ).fetchone()[0]
     assert total == 2  # las sesiones siguen existiendo
+
+
+def _ubicacion(**kwargs) -> Location:
+    """Ubicación válida de fábrica: sitio completo de las 8 direcciones.
+
+    ``kwargs`` pisa los valores por defecto (nombre, bortle, imagen de CL…),
+    así que los casos de validación solo describen lo que quieren provocar.
+    """
+    datos = dict(
+        name="Casa",
+        latitude=40.4,
+        longitude=-3.7,
+        bortle=3,
+        obstacles={d: [] for d in DIRECTIONS},
+        lp={d: 0 for d in DIRECTIONS},
+    )
+    datos.update(kwargs)
+    return Location(**datos)
+
+
+#: (objeto inválido, validador, fragmento del mensaje): la tabla de reglas
+#: del plan (paso 1) convertida en casos — una fila por regla.
+_CASOS_INVALIDOS = [
+    # Ubicación
+    (Location(name="  "), validar_ubicacion, "nombre"),
+    (Location(name="X", latitude=91), validar_ubicacion, "Latitud"),
+    (Location(name="X", longitude=200), validar_ubicacion, "Longitud"),
+    (Location(name="X", utc_offset_hours=15), validar_ubicacion, "Desfase"),
+    (_ubicacion(bortle=None), validar_ubicacion, "Bortle"),
+    (_ubicacion(bortle=0), validar_ubicacion, "Bortle"),
+    (_ubicacion(bortle=10), validar_ubicacion, "Bortle"),
+    (_ubicacion(sqm=-1), validar_ubicacion, "SQM"),
+    (_ubicacion(obstacles={}), validar_ubicacion, "8 direcciones"),
+    (
+        _ubicacion(obstacles={d: (["alien"] if d == "N" else []) for d in DIRECTIONS}),
+        validar_ubicacion,
+        "Obstáculo",
+    ),
+    (_ubicacion(lp={}), validar_ubicacion, "contaminación"),
+    (
+        _ubicacion(lp={d: (5 if d == "N" else 0) for d in DIRECTIONS}),
+        validar_ubicacion,
+        "0-3",
+    ),
+    # Telescopio
+    (Telescope(name=""), validar_telescopio, "nombre"),
+    (Telescope(name="X", aperture_mm=-1), validar_telescopio, "apertura"),
+    (Telescope(name="X", focal_mm=-1), validar_telescopio, "focal"),
+    (Telescope(name="X", reducer=True, reducer_factor=0), validar_telescopio, "reductor"),
+    (Telescope(name="X", optical_type="aberración"), validar_telescopio, "óptica"),
+    # Cámara
+    (Camera(name=""), validar_camara, "nombre"),
+    (Camera(name="X", pixel_size_um=-1), validar_camara, "píxel"),
+    (Camera(name="X", width_px=-1), validar_camara, "ancho"),
+    (Camera(name="X", height_px=-1), validar_camara, "alto"),
+    (Camera(name="X", bit_depth=0), validar_camara, "bits"),
+    # Montura
+    (Mount(name=""), validar_montura, "nombre"),
+    (Mount(name="X", payload_kg=-1), validar_montura, "capacidad"),
+    (Mount(name="X", mount_type="voladora"), validar_montura, "montura"),
+    # Filtro
+    (Filter(name=""), validar_filtro, "nombre"),
+    (Filter(name="X", filter_type="magenta"), validar_filtro, "filtro"),
+    # Setup
+    (EquipmentSetup(name=""), validar_setup, "nombre"),
+    (EquipmentSetup(name="X", category="nebulosas"), validar_setup, "Categoría"),
+]
+
+
+@pytest.mark.parametrize("objeto, validador, mensaje", _CASOS_INVALIDOS)
+def test_validaciones_de_equipo(objeto, validador, mensaje):
+    """Cada regla de la tabla del plan lanza ``ValueError`` con su mensaje."""
+    with pytest.raises(ValueError, match=mensaje):
+        validador(objeto)
+
+
+def test_actualizar_sin_id_es_error(memory_db):
+    """Sin id no se actualiza nada: el orden es create → update."""
+    from equipment import components, localizations, manager
+
+    with pytest.raises(ValueError, match="falta el id"):
+        manager.update(EquipmentSetup(name="X"))
+    with pytest.raises(ValueError, match="falta el id"):
+        components.update_telescope(Telescope(name="X"))
+    with pytest.raises(ValueError, match="falta el id"):
+        components.update_camera(Camera(name="X"))
+    with pytest.raises(ValueError, match="falta el id"):
+        components.update_mount(Mount(name="X"))
+    with pytest.raises(ValueError, match="falta el id"):
+        components.update_filter(Filter(name="X"))
+    with pytest.raises(ValueError, match="falta el id"):
+        localizations.update(_ubicacion())
+
+
+def test_crud_de_las_cuatro_piezas(memory_db):
+    """CRUD completo de componentes: alta, lectura como dict, edición y baja."""
+    from equipment import components
+
+    telescopio = Telescope(
+        name="Refractor 72",
+        aperture_mm=72,
+        focal_mm=420,
+        optical_type="refractor",
+        subtype="Doblete",
+    )
+    tid = components.create_telescope(telescopio)
+    assert telescopio.id == tid
+    assert components.get_telescope(tid)["focal_mm"] == pytest.approx(420)
+
+    telescopio.focal_mm = 490
+    components.update_telescope(telescopio)
+    assert components.get_telescope(tid)["focal_mm"] == pytest.approx(490)
+    assert isinstance(components.list_telescopes()[0], dict)  # contrato C-2
+
+    camara = Camera(
+        name="ASI2600",
+        cooled=True,
+        pixel_size_um=3.76,
+        width_px=6248,
+        height_px=4176,
+        bit_depth=16,
+    )
+    cid = components.create_camera(camara)
+    assert components.get_camera(cid)["cooled"] == 1  # bool → 0/1 en la fila
+
+    montura = Mount(name="AM5", mount_type="armonica", payload_kg=20)
+    mid = components.create_mount(montura)
+    assert components.get_mount(mid)["payload_kg"] == pytest.approx(20)
+
+    filtro = Filter(name="UHC", filter_type="uhc")
+    fid = components.create_filter(filtro)
+    assert components.get_filter(fid)["filter_type"] == "uhc"
+
+    components.delete_filter(fid)
+    components.delete_mount(mid)
+    components.delete_camera(cid)
+    components.delete_telescope(tid)
+    assert components.list_telescopes() == []
+    assert components.list_cameras() == []
+    assert components.list_mounts() == []
+    assert components.list_filters() == []
+    assert components.get_telescope(tid) is None
+
+
+def test_setups_con_referencias_exponen_las_claves_del_fov(memory_db):
+    """El dict trae el contrato de claves de `calculate_fov` (C-1 en la v2)."""
+    from equipment import components, manager
+
+    tid = components.create_telescope(Telescope(name="ED80", aperture_mm=80, focal_mm=400))
+    cid = components.create_camera(
+        Camera(name="ASI533", pixel_size_um=3.76, width_px=3008, height_px=3008)
+    )
+    setup_id = manager.create(
+        EquipmentSetup(name="Rápido", category="paisaje", telescope_id=tid, camera_id=cid)
+    )
+
+    fila = manager.get(setup_id)
+    assert fila["telescope_focal_mm"] == pytest.approx(400)
+    assert fila["camera_pixel_size_um"] == pytest.approx(3.76)
+    assert fila["camera_width_px"] == 3008
+    assert fila["camera_height_px"] == 3008
+    assert manager.list_setups()[0]["camera_pixel_size_um"] == pytest.approx(3.76)
+
+    # Sin piezas: las claves siguen ahí con None (LEFT JOIN, contrato .get())
+    pelon = manager.get(manager.create(EquipmentSetup(name="Pelón")))
+    assert pelon["telescope_focal_mm"] is None
+    assert pelon["camera_width_px"] is None
+
+
+def test_fov_con_reductor_usa_la_focal_efectiva(memory_db):
+    """El alias de FOV trae la focal efectiva: FOV correcto sin tocar `planners/`."""
+    from equipment import components, manager
+    from planners.framing import calculate_fov
+
+    tid = components.create_telescope(
+        Telescope(
+            name="Newton 200",
+            aperture_mm=200,
+            focal_mm=1000,
+            reducer=True,
+            reducer_factor=0.8,
+        )
+    )
+    cid = components.create_camera(
+        Camera(name="ASI2600", pixel_size_um=3.76, width_px=6248, height_px=4176)
+    )
+    setup_id = manager.create(
+        EquipmentSetup(name="Reducido", telescope_id=tid, camera_id=cid)
+    )
+
+    fila = manager.get(setup_id)
+    assert fila["telescope_focal_mm"] == pytest.approx(800)  # 1000 × 0.8
+
+    con_reductor = calculate_fov(fila)
+    sin_reductor = calculate_fov({**fila, "telescope_focal_mm": 1000.0})
+    assert con_reductor is not None
+    # Menor focal ⇒ campo más amplio: si el dict llevara la focal nominal,
+    # el FOV saldría estrecho y esta comparación no distinguiría los casos.
+    assert con_reductor[0] > sin_reductor[0]
+
+
+def test_borrar_componentes_desvincula_y_el_conteo_avisa(memory_db):
+    """SET NULL + ``count_setups_using``: el número previo a la confirmación."""
+    from equipment import components, localizations, manager
+
+    t_principal = components.create_telescope(Telescope(name="Principal", focal_mm=400))
+    t_guia = components.create_telescope(Telescope(name="Guía", focal_mm=200))
+    camara = components.create_camera(Camera(name="ASI2600", pixel_size_um=3.76))
+    montura = components.create_mount(Mount(name="AM5"))
+    filtro = components.create_filter(Filter(name="UHC"))
+    sitio = localizations.create(_ubicacion())
+    setup_id = manager.create(
+        EquipmentSetup(
+            name="Completo",
+            location_id=sitio,
+            telescope_id=t_principal,
+            guide_telescope_id=t_guia,
+            camera_id=camara,
+            mount_id=montura,
+            filter_ids=[filtro],
+        )
+    )
+
+    assert manager.count_setups_using("telescope", t_principal) == 1
+    assert manager.count_setups_using("telescope", t_guia) == 1
+    assert manager.count_setups_using("camera", camara) == 1
+    assert manager.count_setups_using("mount", montura) == 1
+    assert manager.count_setups_using("filter", filtro) == 1
+    assert manager.count_setups_using("location", sitio) == 1
+    with pytest.raises(ValueError, match="desconocido"):
+        manager.count_setups_using("banana", 1)
+
+    components.delete_telescope(t_principal)
+    components.delete_camera(camara)
+    components.delete_mount(montura)
+    components.delete_filter(filtro)
+    localizations.delete(sitio)
+
+    fila = manager.get(setup_id)
+    assert fila["telescope_id"] is None          # SET NULL en cualquier rol
+    assert fila["guide_telescope_id"] == t_guia  # la de guía no se tocó
+    assert fila["camera_id"] is None
+    assert fila["mount_id"] is None
+    assert fila["location_id"] is None
+    assert manager.count_setups_using("telescope", t_principal) == 0
+    assert manager.count_setups_using("camera", camara) == 0
+    assert manager.count_setups_using("filter", filtro) == 0
+
+
+def test_setup_filters_asignacion_y_cascada(memory_db):
+    """M2M: la lista es la verdad al guardar y el borrado limpia las filas."""
+    from equipment import components, manager
+
+    def asignados(setup_id: int) -> list[int]:
+        """Filtros asignados a ``setup_id`` en la tabla intermedia, ordenados."""
+        filas = memory_db.execute(
+            "SELECT filter_id FROM setup_filters WHERE setup_id = ?", (setup_id,)
+        ).fetchall()
+        return sorted(row[0] for row in filas)
+
+    uhc = components.create_filter(Filter(name="UHC", filter_type="uhc"))
+    cpl = components.create_filter(Filter(name="CPL", filter_type="cpl"))
+    setup = EquipmentSetup(name="Con filtros", filter_ids=[uhc, cpl])
+    setup_id = manager.create(setup)
+    assert asignados(setup_id) == sorted([uhc, cpl])
+
+    setup.filter_ids = [uhc]  # quito uno al guardar → diff por conjunto
+    manager.update(setup)
+    assert asignados(setup_id) == [uhc]
+
+    # Borrar el filtro borra sus asignaciones (FK en cascada)
+    components.delete_filter(uhc)
+    assert memory_db.execute("SELECT COUNT(*) FROM setup_filters").fetchone()[0] == 0
+
+
+def test_borrar_setup_limpia_filtros_e_imagenes(memory_db, monkeypatch, tmp_path):
+    """DELETE del setup: filas de filtros e imágenes en cascada, ficheros purgados."""
+    from equipment import components, images, manager
+
+    monkeypatch.setattr(images, "IMAGES_ROOT", tmp_path / "equipment_images")
+    original = tmp_path / "spot.png"
+    original.write_bytes(b"foto")
+
+    filtro = components.create_filter(Filter(name="UHC"))
+    setup = EquipmentSetup(name="Borrable", filter_ids=[filtro], images=[str(original)])
+    setup_id = manager.create(setup)
+    assert images.list_images("setup", setup_id)  # adjuntada en el create
+
+    manager.delete(setup_id)
+
+    assert images.list_images("setup", setup_id) == []  # FK cascade
+    assert not (tmp_path / "equipment_images" / "setup" / str(setup_id)).exists()
+    assert memory_db.execute("SELECT COUNT(*) FROM setup_filters").fetchone()[0] == 0
+
+
+def test_ubicaciones_roundtrip_del_sitio(memory_db):
+    """El sitio viaja a JSON con las 8 direcciones y vuelve parseado."""
+    from equipment import localizations
+
+    obstaculos = {d: [] for d in DIRECTIONS}
+    obstaculos["N"] = ["arboles"]
+    obstaculos["E"] = ["edificios", "colinas"]
+    niveles = {d: 0 for d in DIRECTIONS}
+    niveles["S"] = 3
+    niveles["NE"] = 1
+
+    ubicacion = _ubicacion(
+        altitude_m=650,
+        utc_offset_hours=2,
+        bortle=4,
+        sqm=21.2,
+        consider_lp=False,
+        obstacles=obstaculos,
+        lp=niveles,
+    )
+    pk = localizations.create(ubicacion)
+
+    fila = localizations.list_locations()[0]
+    assert fila["obstacles"] == obstaculos
+    assert fila["lp"] == niveles
+    assert fila["bortle"] == 4
+    assert fila["sqm"] == pytest.approx(21.2)
+    assert fila["consider_lp"] == 0  # crudo 0/1, como en el resto de dicts
+    assert set(fila["lp"]) == set(DIRECTIONS)  # siempre las 8
+
+    ubicacion.id = pk
+    ubicacion.bortle = 2
+    localizations.update(ubicacion)
+    assert localizations.list_locations()[0]["bortle"] == 2
+
+    # Fila corrupta (JSON roto): nunca revienta al listar, vuelve al defecto
+    memory_db.execute(
+        "UPDATE locations SET obstacles = 'no-es-json' WHERE id = ?", (pk,)
+    )
+    memory_db.commit()
+    fila = localizations.list_locations()[0]
+    assert fila["obstacles"] == {d: [] for d in DIRECTIONS}
+
+
+def test_imagenes_por_entidad_sync_y_purge(memory_db, monkeypatch, tmp_path):
+    """API generalizada: kinds por defecto, sync D-5, purge y cascada de filas."""
+    from equipment import components, images, localizations
+
+    monkeypatch.setattr(images, "IMAGES_ROOT", tmp_path / "equipment_images")
+    tid = components.create_telescope(Telescope(name="ED80"))
+    cid = components.create_camera(Camera(name="ASI533"))
+
+    originales = tmp_path / "originales"
+    originales.mkdir()
+    chart = originales / "chart.png"
+    chart.write_bytes(b"chart")
+    ganancia = originales / "ganancia.png"
+    ganancia.write_bytes(b"gain")
+
+    # kind por defecto por entidad y layout uniforme
+    images.attach("telescope", tid, str(chart))
+    images.attach("camera", cid, str(ganancia))
+    assert images.list_images("telescope", tid)[0]["kind"] == "chart"
+    assert images.list_images("camera", cid)[0]["kind"] == "ganancia"
+    copia = Path(images.list_images("telescope", tid)[0]["path"])
+    assert copia.parent == tmp_path / "equipment_images" / "telescope" / str(tid)
+
+    # sync (D-5): partir de list_images + orígenes nuevos; vaciar, vacía
+    otra = originales / "otra.png"
+    otra.write_bytes(b"x")
+    images.sync("telescope", tid, [copia, str(otra)])
+    assert len(images.list_images("telescope", tid)) == 2
+    images.sync("telescope", tid, [])
+    assert images.list_images("telescope", tid) == []
+    assert not copia.exists()  # la copia propia se fue con el remove
+
+    # purge: al borrar el padre no quedan ficheros huérfanos (D-1)
+    images.attach("telescope", tid, str(chart))
+    carpeta = tmp_path / "equipment_images" / "telescope" / str(tid)
+    assert carpeta.exists()
+    components.delete_telescope(tid)
+    assert not carpeta.exists()
+    assert images.list_images("telescope", tid) == []  # filas en cascada (FK)
+
+    # Ubicación: imagen única de CL; al guardar, una sustituye y None borra
+    pk = localizations.create(_ubicacion(lp_map=str(chart)))
+    assert images.list_images("location", pk)[0]["kind"] == "mapa_lp"
+    localizations.update(_ubicacion(id=pk, lp_map=None))
+    assert images.list_images("location", pk) == []
+
+
+def test_categorias_del_enum_del_usuario(memory_db):
+    """Las 6 categorías aprobadas, con etiqueta y default ``general``."""
+    from equipment import manager
+
+    assert list(CATEGORIES) == [
+        "paisaje",
+        "campo_amplio",
+        "espacio_profundo",
+        "espacio_profundo_largo",
+        "planetario",
+        "general",
+    ]
+    assert all(label for label in CATEGORIES.values())
+    assert EquipmentSetup().category == "general"
+    pk = manager.create(EquipmentSetup(name="Nuevo"))
+    assert manager.get(pk)["category"] == "general"

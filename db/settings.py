@@ -18,6 +18,20 @@ def get_setting(key: str, default: str | None = None) -> str | None:
     return row["value"] if row else default
 
 
+def get_float(key: str, default: float) -> float:
+    """Valor numérico de ``key``; ``default`` si falta o no se puede leer.
+
+    La tabla ``settings`` guarda TEXT: esta lectura defensiva (clave
+    ausente o texto corrupto → default) es la que usan los umbrales de
+    muestreo y el diálogo de Configuración.
+    """
+    texto = get_setting(key, str(default))
+    try:
+        return float(texto)
+    except (TypeError, ValueError):
+        return default
+
+
 def set_setting(key: str, value: str) -> None:
     """Guarda ``value`` para ``key`` (insert o update) y hace commit."""
     conn = get_connection()
