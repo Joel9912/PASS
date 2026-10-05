@@ -50,6 +50,7 @@ from PyQt6.QtWidgets import (
 )
 
 from equipment.manager import list_setups
+from equipment.models import CATEGORIES
 from planners import personal_catalog, planned_sessions
 from planners.capture_plan import best_dates
 from planners.framing import calculate_fov
@@ -375,7 +376,10 @@ class PlanificacionTab(QWidget):
         seleccion = -1
         for position, setup in enumerate(self._setups):
             name = str(setup.get("name") or f"Setup {setup.get('id')}")
-            category = str(setup.get("category") or "").replace("_", " ")
+            # Etiqueta con acentos desde la fuente única (CATEGORIES, R2);
+            # una categoría de otra BD (si la hubiera) se pinta tal cual.
+            crudo = str(setup.get("category") or "")
+            category = CATEGORIES.get(crudo, crudo.replace("_", " "))
             self._setup.addItem(f"{name} · {category}" if category else name, setup)
             if setup.get("id") == actual_id:
                 seleccion = position

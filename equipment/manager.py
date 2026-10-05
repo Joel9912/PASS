@@ -137,10 +137,25 @@ def delete(setup_id: int) -> None:
 
 
 def get(setup_id: int) -> dict | None:
-    """Carga un setup por id (mismos alias que ``list_setups``) o ``None``."""
+    """Carga un setup por id (mismos alias que ``list_setups``) o ``None``.
+
+    Además de las claves del JOIN trae ``filter_ids`` (los filtros
+    asignados hoy, ordenados): el formulario de edición necesita la
+    asignación completa y ``list_setups`` no la trae — la lista solo pinta
+    nombre y categoría. Sin filtros → lista vacía.
+    """
     conn = get_connection()
     row = conn.execute(_SELECT + " WHERE e.id = ?", (setup_id,)).fetchone()
-    return _fila(row) if row else None
+    if not row:
+        return None
+    d = _fila(row)
+    filas = conn.execute(
+        "SELECT filter_id FROM setup_filters WHERE setup_id = ?"
+        " ORDER BY filter_id",
+        (setup_id,),
+    ).fetchall()
+    d["filter_ids"] = [f[0] for f in filas]
+    return d
 
 
 def list_setups(category: str | None = None) -> list[dict]:

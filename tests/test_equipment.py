@@ -583,6 +583,8 @@ def test_setup_filters_asignacion_y_cascada(memory_db):
     setup = EquipmentSetup(name="Con filtros", filter_ids=[uhc, cpl])
     setup_id = manager.create(setup)
     assert asignados(setup_id) == sorted([uhc, cpl])
+    # get() carga la asignación completa (la necesita el formulario de edición)
+    assert manager.get(setup_id)["filter_ids"] == sorted([uhc, cpl])
 
     setup.filter_ids = [uhc]  # quito uno al guardar → diff por conjunto
     manager.update(setup)

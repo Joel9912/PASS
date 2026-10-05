@@ -1,0 +1,1031 @@
+"""Formularios de las piezas globales y el selector de componente.
+
+Aquí viven los formularios del equipo (`TelescopeForm`, `CameraForm`,
+`MountForm`, `FiltersPanel`) y el selector (`PartPicker`/`PartEditor`) que
+combina el combo de piezas globales con sus botones.
+
+Regla de los **dos niveles de guardado** (§9 del plan): las piezas globales
+se persisten con «Guardar componente» (create si el formulario venía vacío,
+update si venía de la base) y las asignaciones al equipo con «Guardar
+equipo» de la cabecera. Cambiar de pieza en el combo sin guardar descarta
+lo tecleado: es el «cancelar» de la regla D-5 (nada llega a la BD ni a
+`data/` hasta que se pulsa su botón).
+"""
+from __future__ import annotations
+
+from pathlib import Path
+
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QDoubleSpinBox,
+    QFileDialog,
+    QFormLayout,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
+from equipment import components, manager
+from equipment.images import list_images
+from equipment.models import (
+    FILTER_TYPES,
+    MOUNT_TYPES,
+    OPTICAL_TYPES,
+    SUBTYPE_SUGGESTIONS,
+    Camera,
+    Filter,
+    Mount,
+    Telescope,
+)
+
+#: Ficheros de imagen admitidos para charts/ganancia (solo visuales).
+_FILTRO_IMAGENES = "Imágenes (*.png *.jpg *.jpeg *.bmp);;Todos los archivos (*)"
+
+#: Ruta de cada tipo de pieza hacia su CRUD en ``equipment.components`` y su
+#: modelo. El mapa vive aquí porque solo lo necesita el cableado del
+#: formulario; las funciones del backend son el contrato único.
+_PIEZAS: dict[str, dict] = {
+    "telescope": {
+        "vacio": "(sin telescopio)",
+        "nombre": "telescopio",
+        "listar": components.list_telescopes,
+        "obtener": components.get_telescope,
+        "crear": components.create_telescope,
+        "actualizar": components.update_telescope,
+        "borrar": components.delete_telescope,
+        "modelo": Telescope,
+    },
+    "camera": {
+        "vacio": "(sin cámara)",
+        "nombre": "cámara",
+        "listar": components.list_cameras,
+        "obtener": components.get_camera,
+        "crear": components.create_camera,
+        "actualizar": components.update_camera,
+        "borrar": components.delete_camera,
+        "modelo": Camera,
+    },
+    "mount": {
+        "vacio": "(sin montura)",
+        "nombre": "montura",
+        "listar": components.list_mounts,
+        "obtener": components.get_mount,
+        "crear": components.create_mount,
+        "actualizar": components.update_mount,
+        "borrar": components.delete_mount,
+        "modelo": Mount,
+    },
+}
+
+
+def _opt_f(spin: QDoubleSpinBox) -> float | None:
+    """Valor de un spin con «—» como especial: 0 = no informado → ``None``.
+
+    Ninguna magnitud física de estos formularios admite 0 de verdad
+    (apertura, focal, píxel…), así que 0 significa «el usuario no lo sabe»
+    y se guarda como NULL, no como un cero inventado.
+    """
+    valor = spin.value()
+    return float(valor) if valor > 0.0 else None
+
+
+def _opt_i(spin: QSpinBox) -> int | None:
+    """Igual que ``_opt_f`` pero para spins de enteros (bits, píxeles)."""
+    valor = spin.value()
+    return int(valor) if valor > 0 else None
+
+
+def _etiqueta_archivo(ruta: str) -> tuple[str, str]:
+    """(nombre para la lista, ruta completa para el dato): imagen adjunta."""
+    return Path(ruta).name, ruta
+
+
+def _combo_opciones(combo: QComboBox, opciones: dict[str, str]) -> None:
+    """Rellena un combo con «(sin …)» + las opciones del catálogo."""
+    combo.addItem("(sin dato)", None)
+    for clave, etiqueta in opciones.items():
+        combo.addItem(etiqueta, clave)
+
+
+class _FiltroDialog(QDialog):
+    """Alta/edición de un filtro global (nombre*, tipo, notas).
+
+    Solo valida en backend al aceptar el llamante: aquí se recogen los
+    campos y el ``ValueError`` de `validar_filtro` se enseña en un aviso.
+    """
+
+    def __init__(self, parent: QWidget, fila: dict | None = None) -> None:
+        """Con vacío para alta, o precargado con ``fila`` para editar."""
+        super().__init__(parent)
+        self.setWindowTitle("Filtro")
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+        self._nombre = QLineEdit(str((fila or {}).get("name") or ""))
+        self._nombre.setPlaceholderText("UHC, CLS, Baader…")
+        form.addRow("Nombre *", self._nombre)
+        self._tipo = QComboBox()
+        _combo_opciones(self._tipo, FILTER_TYPES)
+        tipo = (fila or {}).get("filter_type")
+        if tipo:
+            self._tipo.setCurrentIndex(max(0, self._tipo.findData(tipo)))
+        form.addRow("Tipo", self._tipo)
+        self._notas = QLineEdit(str((fila or {}).get("notes") or ""))
+        form.addRow("Notas", self._notas)
+        layout.addLayout(form)
+        botones = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        botones.accepted.connect(self.accept)
+        botones.rejected.connect(self.reject)
+        layout.addWidget(botones)
+
+    def filtro(self, filter_id: int | None = None) -> Filter:
+        """Modelo del diálogo (el id solo lo pone quien ya tiene filtro)."""
+        return Filter(
+            id=filter_id,
+            name=self._nombre.text().strip(),
+            filter_type=self._tipo.currentData(),
+            notes=self._notas.text().strip(),
+        )
+
+
+class FiltersPanel(QFrame):
+    """Filtros globales: tabla con la casilla «lo lleva este equipo» + CRUD.
+
+    La casilla es una **asignación en memoria** del equipo que se está
+    editando (la persiste «Guardar equipo»); «Nuevo filtro…», «Editar» y
+    «Eliminar» tocan los filtros **globales** al momento (su propio nivel de
+    guardado) y al eliminar, ``count_setups_using('filter', id)`` avisa de
+    los equipos afectados antes de confirmar.
+    """
+
+    changed = pyqtSignal()  # cambió una casilla → asignación pendiente
+    saved = pyqtSignal()    # filtro global persistido → refrescar combos/listas
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        """Monta la tabla de filtros y sus botones de CRUD."""
+        super().__init__(parent)
+        self.setObjectName("GroupFrame")
+        self._marcados: set[int] = set()
+        self._cargando = False
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 6, 12, 10)
+        layout.setSpacing(8)
+        titulo = QLabel("Filtros")
+        titulo.setObjectName("PanelTitle")
+        layout.addWidget(titulo)
+
+        self._tabla = QTableWidget(0, 3)
+        self._tabla.setHorizontalHeaderLabels(["Filtro", "Tipo", "Lo lleva este equipo"])
+        self._tabla.verticalHeader().setVisible(False)
+        self._tabla.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._tabla.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._tabla.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        layout.addWidget(self._tabla)
+
+        botones = QHBoxLayout()
+        boton_nuevo = QPushButton("➕ Nuevo filtro…")
+        boton_nuevo.clicked.connect(self._nuevo)
+        botones.addWidget(boton_nuevo)
+        boton_editar = QPushButton("Editar")
+        boton_editar.clicked.connect(self._editar)
+        botones.addWidget(boton_editar)
+        boton_eliminar = QPushButton("Eliminar")
+        boton_eliminar.clicked.connect(self._eliminar)
+        botones.addWidget(boton_eliminar)
+        botones.addStretch(1)
+        layout.addLayout(botones)
+
+        ayuda = QLabel(
+            "La casilla asigna el filtro a este equipo (se guarda con el equipo); "
+            "los botones de abajo guardan el filtro global al momento."
+        )
+        ayuda.setObjectName("HintLabel")
+        ayuda.setWordWrap(True)
+        layout.addWidget(ayuda)
+        self.reload()
+
+    # -- asignación en memoria (equipo en edición) ------------------------
+
+    def filter_ids(self) -> list[int]:
+        """Ids de los filtros marcados (los pinta «Guardar equipo»)."""
+        return sorted(self._marcados)
+
+    def set_filter_ids(self, ids: list[int]) -> None:
+        """Marca los filtros de ``ids`` sin emitir (carga de un equipo)."""
+        self._marcados = set(ids)
+        self._pintar_casillas()
+
+    # -- CRUD global -------------------------------------------------------
+
+    def reload(self) -> None:
+        """Vuelve a leer los filtros de la base preservando las casillas."""
+        filas = components.list_filters()
+        self._cargando = True
+        self._tabla.setRowCount(len(filas))
+        for fila_id, filtro in enumerate(filas):
+            self._tabla.setItem(
+                fila_id, 0, QTableWidgetItem(str(filtro["name"]))
+            )
+            tipo = FILTER_TYPES.get(str(filtro.get("filter_type") or ""), "—")
+            self._tabla.setItem(fila_id, 1, QTableWidgetItem(tipo))
+            # Casilla real (cellWidget): con NoEditTriggers un item no
+            # alterna, y aquí sí tiene que alternar.
+            casilla = QCheckBox()
+            casilla.setChecked(filtro["id"] in self._marcados)
+            casilla.toggled.connect(
+                lambda marcado, fid=filtro["id"]: self._casilla(fid, marcado)
+            )
+            # Marcar una casilla también pone la fila al frente: si no,
+            # «Eliminar»/«Editar» actuarían sobre la fila que estaba antes.
+            casilla.clicked.connect(
+                lambda _c=False, r=fila_id: self._tabla.setCurrentCell(r, 0)
+            )
+            contenedor = QWidget()
+            fila_casilla = QHBoxLayout(contenedor)
+            fila_casilla.setContentsMargins(8, 0, 0, 0)
+            fila_casilla.addWidget(casilla)
+            fila_casilla.addStretch(1)
+            self._tabla.setCellWidget(fila_id, 2, contenedor)
+            marcador = QTableWidgetItem()
+            marcador.setData(Qt.ItemDataRole.UserRole, filtro["id"])
+            self._tabla.setItem(fila_id, 2, marcador)
+        self._cargando = False
+
+    def _pintar_casillas(self) -> None:
+        """Refresca las casillas de la columna 3 según ``_marcados``."""
+        self._cargando = True
+        for fila in range(self._tabla.rowCount()):
+            contenedor = self._tabla.cellWidget(fila, 2)
+            item = self._tabla.item(fila, 2)
+            if contenedor is None or item is None:
+                continue
+            casilla = contenedor.findChild(QCheckBox)
+            if casilla is not None:
+                casilla.setChecked(item.data(Qt.ItemDataRole.UserRole) in self._marcados)
+        self._cargando = False
+
+    def _casilla(self, filtro_id: int, marcado: bool) -> None:
+        """Guarda o descarta el filtro en memoria al alternar su casilla."""
+        if self._cargando:
+            return
+        if marcado:
+            self._marcados.add(filtro_id)
+        else:
+            self._marcados.discard(filtro_id)
+        self.changed.emit()
+
+    def _id_seleccionado(self) -> int | None:
+        """Id del filtro de la fila seleccionada (None si no hay fila)."""
+        fila = self._tabla.currentRow()
+        if fila < 0 or self._tabla.item(fila, 2) is None:
+            return None
+        return self._tabla.item(fila, 2).data(Qt.ItemDataRole.UserRole)
+
+    def _nuevo(self) -> None:
+        """Alta inmediata del filtro global (su propio «Guardar»)."""
+        dialogo = _FiltroDialog(self)
+        if not dialogo.exec():
+            return
+        try:
+            components.create_filter(dialogo.filtro())
+        except ValueError as exc:
+            QMessageBox.warning(self, "No se pudo guardar", str(exc))
+            return
+        self.reload()
+        self.saved.emit()
+
+    def _editar(self) -> None:
+        """Edita la fila seleccionada y guarda el filtro global al instante."""
+        filtro_id = self._id_seleccionado()
+        if filtro_id is None:
+            return
+        fila = components.get_filter(filtro_id)
+        if fila is None:
+            return
+        dialogo = _FiltroDialog(self, fila)
+        if not dialogo.exec():
+            return
+        try:
+            components.update_filter(dialogo.filtro(filtro_id))
+        except ValueError as exc:
+            QMessageBox.warning(self, "No se pudo guardar", str(exc))
+            return
+        self.reload()
+        self.saved.emit()
+
+    def _eliminar(self) -> None:
+        """Borra el filtro global tras avisar con ``count_setups_using``."""
+        filtro_id = self._id_seleccionado()
+        if filtro_id is None:
+            return
+        nombre = self._tabla.item(self._tabla.currentRow(), 0).text()
+        afectados = manager.count_setups_using("filter", filtro_id)
+        mensaje = f"¿Eliminar el filtro «{nombre}»?"
+        if afectados:
+            mensaje += f"\n\nLo usan {afectados} equipos: quedarán sin ese filtro."
+        boton = QMessageBox.StandardButton
+        if (
+            QMessageBox.question(
+                self, "Eliminar filtro", mensaje, boton.Yes | boton.No, boton.No
+            )
+            != boton.Yes
+        ):
+            return
+        components.delete_filter(filtro_id)
+        self._marcados.discard(filtro_id)
+        self.reload()
+        self.saved.emit()
+
+
+class PartPicker(QFrame):
+    """Combo de una pieza global + sus botones: «Nuevo…», «Guardar componente», «Eliminar».
+
+    Solo gestiona la selección y el ciclo de vida de la pieza elegida; el
+    formulario lo apila debajo el ``PartEditor``. «Nuevo» deja el formulario
+    en blanco: la pieza recién existe en la base tras «Guardar componente».
+    """
+
+    nuevo_solicitado = pyqtSignal()
+    guardar_solicitado = pyqtSignal()
+    eliminar_solicitado = pyqtSignal()
+    seleccion_cambiada = pyqtSignal()  # cambio hecho por el usuario
+
+    def __init__(self, kind: str, parent: QWidget | None = None) -> None:
+        """``kind`` es la clave de ``_PIEZAS`` (telescope/camera/mount)."""
+        super().__init__(parent)
+        self._pieza = _PIEZAS[kind]
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        self._combo = QComboBox()
+        self._combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToContents
+        )
+        self._combo.currentIndexChanged.connect(self._tras_cambio)
+        layout.addWidget(self._combo, 1)
+
+        boton_nuevo = QPushButton("Nuevo…")
+        boton_nuevo.clicked.connect(self.nuevo_solicitado)
+        layout.addWidget(boton_nuevo)
+        boton_guardar = QPushButton("Guardar componente")
+        boton_guardar.clicked.connect(self.guardar_solicitado)
+        layout.addWidget(boton_guardar)
+        self._boton_eliminar = QPushButton("Eliminar")
+        self._boton_eliminar.clicked.connect(self.eliminar_solicitado)
+        layout.addWidget(self._boton_eliminar)
+        self.reload()
+
+    def selected_id(self) -> int | None:
+        """Id de la pieza seleccionada (None = «(sin …)» o lista vacía)."""
+        return self._combo.currentData()
+
+    def _tras_cambio(self, _indice: int) -> None:
+        """Tras un cambio (del usuario o de recarga): «Eliminar» y aviso."""
+        self._boton_eliminar.setEnabled(self._combo.currentData() is not None)
+        self.seleccion_cambiada.emit()
+
+    def selected_name(self) -> str:
+        """Texto visible de la selección (para los mensajes de borrado)."""
+        return self._combo.currentText()
+
+    def reload(self, select_id: int | None = None) -> None:
+        """Repuebla el combo desde la base y selecciona ``select_id``.
+
+        Se hacen señales bloqueadas: la recarga es programática (quien la
+        pide ya sabe qué formulario debe quedar en pantalla).
+        """
+        self._combo.blockSignals(True)
+        self._combo.clear()
+        self._combo.addItem(self._pieza["vacio"], None)
+        for fila in self._pieza["listar"]():
+            self._combo.addItem(str(fila["name"]), fila["id"])
+        self._combo.setCurrentIndex(max(0, self._combo.findData(select_id)))
+        self._combo.blockSignals(False)
+        self._boton_eliminar.setEnabled(self._combo.currentData() is not None)
+
+
+class PartEditor(QWidget):
+    """Columna «selector + formulario» de una pieza global (principal o guía).
+
+    Los dos botones de ``PartPicker`` dejan su alcance a la vista (§9):
+    «Guardar componente» persiste lo del formulario (create/update) y
+    «Eliminar» borra la pieza tras avisar con ``count_setups_using``; las
+    asignaciones al equipo las decide «Guardar equipo» en la cabecera.
+    Recargar el combo con una pieza distinta descarta lo no guardado en el
+    formulario: cancelar nunca toca la base (D-5).
+    """
+
+    changed = pyqtSignal()  # formulario/selección cambiaron → bloque Cálculos
+    saved = pyqtSignal()    # pieza persistida → setups_changed y combos
+
+    def __init__(
+        self, kind: str, form: QWidget, titulo: str, parent: QWidget | None = None
+    ) -> None:
+        """Apila el picker de ``kind`` y su formulario bajo un ``titulo``."""
+        super().__init__(parent)
+        self.setObjectName("GroupFrame")
+        self._kind = kind
+        self._pieza = _PIEZAS[kind]
+        self.form = form
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 6, 12, 10)
+        layout.setSpacing(8)
+        etiqueta = QLabel(titulo)
+        etiqueta.setObjectName("PanelTitle")
+        layout.addWidget(etiqueta)
+        self.picker = PartPicker(kind)
+        layout.addWidget(self.picker)
+        layout.addWidget(form)
+
+        self.picker.seleccion_cambiada.connect(self._cargar_formulario)
+        self.picker.nuevo_solicitado.connect(self._nuevo)
+        self.picker.guardar_solicitado.connect(self._guardar)
+        self.picker.eliminar_solicitado.connect(self._eliminar)
+        self.form.changed.connect(self.changed)
+
+    # -- API para EquiposTab ----------------------------------------------
+
+    def selected_id(self) -> int | None:
+        """Pieza seleccionada = asignación que «Guardar equipo» escribirá."""
+        return self.picker.selected_id()
+
+    def cargar(self, pieza_id: int | None) -> None:
+        """Selección programática (al cargar un equipo): combo + formulario."""
+        self.picker.reload(select_id=pieza_id)
+        self._cargar_formulario()
+
+    def reload(self) -> None:
+        """Repuebla el combo preservando la selección (tras crear en otro editor)."""
+        self.picker.reload(select_id=self.picker.selected_id())
+        self.changed.emit()
+
+    # -- cableado interno --------------------------------------------------
+
+    def _cargar_formulario(self) -> None:
+        """Vierte la pieza seleccionada (o el vacío) en el formulario."""
+        pieza_id = self.picker.selected_id()
+        fila = self._pieza["obtener"](pieza_id) if pieza_id is not None else None
+        self.form.cargar(fila)
+
+    def _nuevo(self) -> None:
+        """Formulario en blanco para crear una pieza nueva (sin id)."""
+        self.picker.reload(select_id=None)
+        self.form.limpiar()
+        self.changed.emit()
+
+    def _guardar(self) -> None:
+        """Persiste el formulario: create si no venía de la base, update si sí."""
+        try:
+            modelo = self.form.a_modelo()
+            if modelo.id is None:
+                nuevo_id = self._pieza["crear"](modelo)
+            else:
+                self._pieza["actualizar"](modelo)
+                nuevo_id = modelo.id
+        except ValueError as exc:
+            QMessageBox.warning(self, "No se pudo guardar", str(exc))
+            return
+        self.cargar(nuevo_id)  # releer de la base: ids y valores canónicos
+        self.saved.emit()
+        self.changed.emit()
+
+    def _eliminar(self) -> None:
+        """Borra la pieza global tras avisar del número de equipos afectados."""
+        pieza_id = self.picker.selected_id()
+        if pieza_id is None:
+            return
+        nombre = self.picker.selected_name()
+        afectados = manager.count_setups_using(self._kind, pieza_id)
+        mensaje = f"¿Eliminar el {self._pieza['nombre']} «{nombre}»?"
+        if afectados:
+            mensaje += (
+                f"\n\nLo usan {afectados} equipos: quedarán sin esta pieza"
+                " (los equipos no se borran)."
+            )
+        boton = QMessageBox.StandardButton
+        if (
+            QMessageBox.question(
+                self, "Eliminar componente", mensaje, boton.Yes | boton.No, boton.No
+            )
+            != boton.Yes
+        ):
+            return
+        self._pieza["borrar"](pieza_id)
+        self.picker.reload()
+        self.form.limpiar()
+        self.saved.emit()
+        self.changed.emit()
+
+
+class TelescopeForm(QFrame):
+    """Formulario de una óptica: datos comparables, reductor e imágenes (charts)."""
+
+    changed = pyqtSignal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        """Campos del telescopio + lecturas vivas y la lista de charts."""
+        super().__init__(parent)
+        self._id: int | None = None
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        form = QFormLayout()
+        form.setSpacing(6)
+
+        self._nombre = QLineEdit()
+        self._nombre.setPlaceholderText("ED80, Newton 200…")
+        form.addRow("Nombre *", self._nombre)
+
+        fila_datos = QHBoxLayout()
+        self._apertura = QDoubleSpinBox()
+        self._apertura.setRange(0.0, 600.0)
+        self._apertura.setDecimals(1)
+        self._apertura.setSuffix(" mm")
+        self._apertura.setSpecialValueText("—")
+        self._focal = QDoubleSpinBox()
+        self._focal.setRange(0.0, 5000.0)
+        self._focal.setDecimals(1)
+        self._focal.setSuffix(" mm")
+        self._focal.setSpecialValueText("—")
+        fila_datos.addWidget(QLabel("Apertura"))
+        fila_datos.addWidget(self._apertura, 1)
+        fila_datos.addWidget(QLabel("Focal"))
+        fila_datos.addWidget(self._focal, 1)
+        layout.addLayout(fila_datos)
+
+        lecturas = QHBoxLayout()
+        self._relacion = QLabel("—")
+        self._efectiva = QLabel("—")
+        lecturas.addWidget(QLabel("Relación focal"))
+        lecturas.addWidget(self._relacion, 1)
+        lecturas.addWidget(QLabel("Focal efectiva"))
+        lecturas.addWidget(self._efectiva, 1)
+        layout.addLayout(lecturas)
+
+        reductor = QHBoxLayout()
+        self._reductor = QCheckBox("Con aplanador/reductor")
+        reductor.addWidget(self._reductor)
+        reductor.addStretch(1)
+        reductor.addWidget(QLabel("Factor ×"))
+        self._factor = QDoubleSpinBox()
+        self._factor.setRange(0.01, 1.0)
+        self._factor.setDecimals(2)
+        self._factor.setSingleStep(0.05)
+        self._factor.setValue(0.8)
+        self._factor.setEnabled(False)
+        reductor.addWidget(self._factor)
+        layout.addLayout(reductor)
+
+        tipos = QHBoxLayout()
+        self._tipo = QComboBox()
+        _combo_opciones(self._tipo, OPTICAL_TYPES)
+        self._subtipo = QComboBox()
+        self._subtipo.setEditable(True)
+        self._subtipo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        tipos.addWidget(QLabel("Tipo"))
+        tipos.addWidget(self._tipo, 1)
+        tipos.addWidget(QLabel("Subtipo"))
+        tipos.addWidget(self._subtipo, 1)
+        layout.addLayout(tipos)
+
+        self._notas = QLineEdit()
+        self._notas.setPlaceholderText("Notas (opcional)")
+        layout.addWidget(self._notas)
+
+        imagenes = QHBoxLayout()
+        imagenes.addWidget(QLabel("Imágenes (charts)"))
+        self._imagenes = QListWidget()
+        self._imagenes.setMaximumHeight(72)
+        imagenes.addWidget(self._imagenes, 1)
+        columna = QVBoxLayout()
+        boton_anadir = QPushButton("➕ Adjuntar…")
+        boton_anadir.clicked.connect(self._anadir_imagenes)
+        columna.addWidget(boton_anadir)
+        boton_quitar = QPushButton("Quitar")
+        boton_quitar.clicked.connect(self._quitar_imagenes)
+        columna.addWidget(boton_quitar)
+        imagenes.addLayout(columna)
+        layout.addLayout(imagenes)
+        pista = QLabel("Solo visuales: el programa no analiza los charts.")
+        pista.setObjectName("HintLabel")
+        layout.addWidget(pista)
+        layout.addStretch(1)
+
+        self._tipo.currentIndexChanged.connect(self._subtipos)
+        self._subtipos()
+        self._conectar_cambios()
+
+    # -- protocolo de formulario (PartEditor) ------------------------------
+
+    def limpiar(self) -> None:
+        """Vacía el formulario para una óptica nueva (id = None)."""
+        self._id = None
+        self._nombre.clear()
+        self._apertura.setValue(0.0)
+        self._focal.setValue(0.0)
+        self._reductor.setChecked(False)
+        self._factor.setValue(0.8)
+        self._tipo.setCurrentIndex(0)
+        self._subtipo.setCurrentIndex(-1)
+        self._notas.clear()
+        self._imagenes.clear()
+        self._recalcular()
+
+    def cargar(self, fila: dict | None) -> None:
+        """Vierte una fila de la base (o ``None`` = vacío) en el formulario."""
+        self.limpiar()
+        if fila is None:
+            return
+        self._id = fila.get("id")
+        self._nombre.setText(str(fila.get("name") or ""))
+        self._apertura.setValue(float(fila.get("aperture_mm") or 0.0))
+        self._focal.setValue(float(fila.get("focal_mm") or 0.0))
+        self._reductor.setChecked(bool(fila.get("reducer")))
+        factor = fila.get("reducer_factor")
+        if factor:
+            self._factor.setValue(float(factor))
+        indice = self._tipo.findData(fila.get("optical_type"))
+        self._tipo.setCurrentIndex(max(0, indice) if fila.get("optical_type") else 0)
+        self._subtipos()
+        if fila.get("subtype"):
+            self._subtipo.setCurrentText(str(fila["subtype"]))
+        self._notas.setText(str(fila.get("notes") or ""))
+        for imagen in list_images("telescope", int(fila["id"])):
+            self._anadir_fila(imagen["path"])
+
+    def a_modelo(self) -> Telescope:
+        """Modelo con lo que hay en pantalla (el id marca create vs update)."""
+        return Telescope(
+            id=self._id,
+            name=self._nombre.text().strip(),
+            aperture_mm=_opt_f(self._apertura),
+            focal_mm=_opt_f(self._focal),
+            optical_type=self._tipo.currentData(),
+            subtype=self._subtipo.currentText().strip() or None,
+            reducer=self._reductor.isChecked(),
+            reducer_factor=_opt_f(self._factor) if self._reductor.isChecked() else None,
+            notes=self._notas.text().strip(),
+            images=self._rutas(),
+        )
+
+    # -- imágenes ----------------------------------------------------------
+
+    def _anadir_imagenes(self) -> None:
+        """Adjunta charts nuevos a la lista en memoria (sin tocar la base)."""
+        rutas, _ = QFileDialog.getOpenFileNames(
+            self, "Seleccionar charts", "", _FILTRO_IMAGENES
+        )
+        for ruta in rutas:
+            self._anadir_fila(ruta)
+        if rutas:
+            self.changed.emit()
+
+    def _quitar_imagenes(self) -> None:
+        """Quita de la lista lo seleccionado (la base se toca al guardar)."""
+        for item in self._imagenes.selectedItems():
+            self._imagenes.takeItem(self._imagenes.row(item))
+        self.changed.emit()
+
+    def _anadir_fila(self, ruta: str) -> None:
+        """Añade la ruta si no estaba ya (nombre visible, ruta en el dato)."""
+        if ruta in self._rutas():
+            return
+        nombre, ruta = _etiqueta_archivo(ruta)
+        item = QListWidgetItem(nombre)
+        item.setData(Qt.ItemDataRole.UserRole, ruta)
+        item.setToolTip(ruta)
+        self._imagenes.addItem(item)
+
+    def _rutas(self) -> list[str]:
+        """Rutas completas de las imágenes listadas (su verdad en memoria)."""
+        return [
+            self._imagenes.item(i).data(Qt.ItemDataRole.UserRole)
+            for i in range(self._imagenes.count())
+        ]
+
+    # -- lecturas vivas ----------------------------------------------------
+
+    def _subtipos(self) -> None:
+        """Repuebla las sugerencias de subtipo según el tipo elegido."""
+        actual = self._subtipo.currentText()
+        claves = self._tipo.currentData() or "otro"
+        self._subtipo.clear()
+        self._subtipo.addItems(SUBTYPE_SUGGESTIONS.get(claves, ()))
+        if actual:
+            self._subtipo.setCurrentText(actual)
+
+    def _recalcular(self) -> None:
+        """Repinta relación focal y focal efectiva con ``equipment.metrics``."""
+        from equipment.metrics import focal_efectiva, relacion_focal
+
+        focal = focal_efectiva(
+            _opt_f(self._focal), self._reductor.isChecked(), _opt_f(self._factor)
+        )
+        relacion = relacion_focal(focal, _opt_f(self._apertura))
+        self._relacion.setText(f"F/{relacion:.1f}" if relacion else "—")
+        if focal is None:
+            self._efectiva.setText("—")
+        elif self._reductor.isChecked():
+            self._efectiva.setText(f"{focal:.1f} mm (× {_opt_f(self._factor)})")
+        else:
+            self._efectiva.setText(f"{focal:.1f} mm")
+
+    def _conectar_cambios(self) -> None:
+        """Cualquier toque al formulario emite ``changed`` y recalcula."""
+        def toque() -> None:
+            self._recalcular()
+            self.changed.emit()
+
+        for widget in (self._nombre, self._apertura, self._focal, self._notas):
+            widget.textChanged.connect(lambda _t: toque())
+        for widget in (self._apertura, self._focal, self._factor):
+            widget.valueChanged.connect(lambda _v: toque())
+        self._reductor.toggled.connect(lambda _c: toque())
+        self._tipo.currentIndexChanged.connect(lambda _i: toque())
+        self._subtipo.currentTextChanged.connect(lambda _t: toque())
+        self._factor.setEnabled(self._reductor.isChecked())
+        self._reductor.toggled.connect(self._factor.setEnabled)
+
+
+class CameraForm(QFrame):
+    """Formulario de una cámara: píxel/resolución/bits e imágenes de ganancia."""
+
+    changed = pyqtSignal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        """Campos de la cámara + la lectura derivada de resolución."""
+        super().__init__(parent)
+        self._id: int | None = None
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        form = QFormLayout()
+        self._nombre = QLineEdit()
+        self._nombre.setPlaceholderText("ASI2600MC…")
+        form.addRow("Nombre *", self._nombre)
+        layout.addLayout(form)
+
+        fila_datos = QHBoxLayout()
+        self._pixel = QDoubleSpinBox()
+        self._pixel.setRange(0.0, 100.0)
+        self._pixel.setDecimals(3)
+        self._pixel.setSuffix(" µm")
+        self._pixel.setSpecialValueText("—")
+        self._bits = QSpinBox()
+        self._bits.setRange(0, 64)
+        self._bits.setSpecialValueText("—")
+        self._bits.setSuffix(" bits")
+        fila_datos.addWidget(QLabel("Píxel"))
+        fila_datos.addWidget(self._pixel, 1)
+        fila_datos.addWidget(QLabel("Profundidad"))
+        fila_datos.addWidget(self._bits, 1)
+        layout.addLayout(fila_datos)
+
+        fila_sensor = QHBoxLayout()
+        self._ancho = QSpinBox()
+        self._ancho.setRange(0, 30000)
+        self._ancho.setSpecialValueText("—")
+        self._alto = QSpinBox()
+        self._alto.setRange(0, 30000)
+        self._alto.setSpecialValueText("—")
+        self._resolucion = QLabel("—")
+        fila_sensor.addWidget(QLabel("Ancho"))
+        fila_sensor.addWidget(self._ancho, 1)
+        fila_sensor.addWidget(QLabel("Alto"))
+        fila_sensor.addWidget(self._alto, 1)
+        fila_sensor.addWidget(QLabel("Resolución"))
+        fila_sensor.addWidget(self._resolucion, 1)
+        layout.addLayout(fila_sensor)
+
+        flags = QHBoxLayout()
+        self._refrigerada = QCheckBox("Refrigerada")
+        flags.addWidget(self._refrigerada)
+        self._mono = QCheckBox("Monocromática")
+        flags.addWidget(self._mono)
+        self._ampglow = QCheckBox("Amp glow")
+        flags.addWidget(self._ampglow)
+        flags.addStretch(1)
+        layout.addLayout(flags)
+
+        self._notas = QLineEdit()
+        self._notas.setPlaceholderText("Notas (opcional)")
+        layout.addWidget(self._notas)
+
+        imagenes = QHBoxLayout()
+        imagenes.addWidget(QLabel("Imágenes (ganancia)"))
+        self._imagenes = QListWidget()
+        self._imagenes.setMaximumHeight(72)
+        imagenes.addWidget(self._imagenes, 1)
+        columna = QVBoxLayout()
+        boton_anadir = QPushButton("➕ Adjuntar…")
+        boton_anadir.clicked.connect(self._anadir_imagenes)
+        columna.addWidget(boton_anadir)
+        boton_quitar = QPushButton("Quitar")
+        boton_quitar.clicked.connect(self._quitar_imagenes)
+        columna.addWidget(boton_quitar)
+        imagenes.addLayout(columna)
+        layout.addLayout(imagenes)
+        pista = QLabel("Solo visuales: el programa no analiza las curvas de ganancia.")
+        pista.setObjectName("HintLabel")
+        layout.addWidget(pista)
+        layout.addStretch(1)
+
+        self._conectar_cambios()
+
+    # -- protocolo de formulario ------------------------------------------
+
+    def limpiar(self) -> None:
+        """Vacía el formulario para una cámara nueva (id = None)."""
+        self._id = None
+        self._nombre.clear()
+        self._pixel.setValue(0.0)
+        self._bits.setValue(0)
+        self._ancho.setValue(0)
+        self._alto.setValue(0)
+        self._refrigerada.setChecked(False)
+        self._mono.setChecked(False)
+        self._ampglow.setChecked(False)
+        self._notas.clear()
+        self._imagenes.clear()
+        self._recalcular()
+
+    def cargar(self, fila: dict | None) -> None:
+        """Vierte una fila de la base (o ``None`` = vacío) en el formulario."""
+        self.limpiar()
+        if fila is None:
+            return
+        self._id = fila.get("id")
+        self._nombre.setText(str(fila.get("name") or ""))
+        self._pixel.setValue(float(fila.get("pixel_size_um") or 0.0))
+        self._bits.setValue(int(fila.get("bit_depth") or 0))
+        self._ancho.setValue(int(fila.get("width_px") or 0))
+        self._alto.setValue(int(fila.get("height_px") or 0))
+        self._refrigerada.setChecked(bool(fila.get("cooled")))
+        self._mono.setChecked(bool(fila.get("mono")))
+        self._ampglow.setChecked(bool(fila.get("ampglow")))
+        self._notas.setText(str(fila.get("notes") or ""))
+        for imagen in list_images("camera", int(fila["id"])):
+            self._anadir_fila(imagen["path"])
+
+    def a_modelo(self) -> Camera:
+        """Modelo con lo que hay en pantalla (el id marca create vs update)."""
+        return Camera(
+            id=self._id,
+            name=self._nombre.text().strip(),
+            cooled=self._refrigerada.isChecked(),
+            bit_depth=_opt_i(self._bits),
+            pixel_size_um=_opt_f(self._pixel),
+            width_px=_opt_i(self._ancho),
+            height_px=_opt_i(self._alto),
+            mono=self._mono.isChecked(),
+            ampglow=self._ampglow.isChecked(),
+            notes=self._notas.text().strip(),
+            images=self._rutas(),
+        )
+
+    # -- imágenes ----------------------------------------------------------
+
+    def _anadir_imagenes(self) -> None:
+        """Adjunta curvas nuevas a la lista en memoria (sin tocar la base)."""
+        rutas, _ = QFileDialog.getOpenFileNames(
+            self, "Seleccionar curvas de ganancia", "", _FILTRO_IMAGENES
+        )
+        for ruta in rutas:
+            self._anadir_fila(ruta)
+        if rutas:
+            self.changed.emit()
+
+    def _quitar_imagenes(self) -> None:
+        """Quita de la lista lo seleccionado (la base se toca al guardar)."""
+        for item in self._imagenes.selectedItems():
+            self._imagenes.takeItem(self._imagenes.row(item))
+        self.changed.emit()
+
+    def _anadir_fila(self, ruta: str) -> None:
+        """Añade la ruta si no estaba ya (nombre visible, ruta en el dato)."""
+        if ruta in self._rutas():
+            return
+        nombre, ruta = _etiqueta_archivo(ruta)
+        item = QListWidgetItem(nombre)
+        item.setData(Qt.ItemDataRole.UserRole, ruta)
+        item.setToolTip(ruta)
+        self._imagenes.addItem(item)
+
+    def _rutas(self) -> list[str]:
+        """Rutas completas de las imágenes listadas (su verdad en memoria)."""
+        return [
+            self._imagenes.item(i).data(Qt.ItemDataRole.UserRole)
+            for i in range(self._imagenes.count())
+        ]
+
+    # -- lecturas vivas ----------------------------------------------------
+
+    def _recalcular(self) -> None:
+        """Repinta la resolución derivada (ancho × alto; sin datos, «—»)."""
+        ancho, alto = _opt_i(self._ancho), _opt_i(self._alto)
+        self._resolucion.setText(f"{ancho}×{alto}" if ancho and alto else "—")
+
+    def _conectar_cambios(self) -> None:
+        """Cualquier toque al formulario emite ``changed`` y recalcula."""
+        def toque() -> None:
+            self._recalcular()
+            self.changed.emit()
+
+        for widget in (self._nombre, self._notas):
+            widget.textChanged.connect(lambda _t: toque())
+        for widget in (self._pixel, self._bits, self._ancho, self._alto):
+            widget.valueChanged.connect(lambda _v: toque())
+        for widget in (self._refrigerada, self._mono, self._ampglow):
+            widget.toggled.connect(lambda _c: toque())
+        self._recalcular()
+
+
+class MountForm(QFrame):
+    """Formulario de una montura: tipo y capacidad de carga."""
+
+    changed = pyqtSignal()
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        """Campos de la montura (el más corto de los tres)."""
+        super().__init__(parent)
+        self._id: int | None = None
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        form = QFormLayout()
+        self._nombre = QLineEdit()
+        self._nombre.setPlaceholderText("AM5, EQ6-R…")
+        form.addRow("Nombre *", self._nombre)
+        self._tipo = QComboBox()
+        _combo_opciones(self._tipo, MOUNT_TYPES)
+        form.addRow("Tipo", self._tipo)
+        self._capacidad = QDoubleSpinBox()
+        self._capacidad.setRange(0.0, 200.0)
+        self._capacidad.setDecimals(1)
+        self._capacidad.setSuffix(" kg")
+        self._capacidad.setSpecialValueText("—")
+        self._capacidad.setToolTip("Carga útil máxima que admite la montura.")
+        form.addRow("Capacidad de carga", self._capacidad)
+        self._notas = QLineEdit()
+        self._notas.setPlaceholderText("Notas (opcional)")
+        form.addRow("Notas", self._notas)
+        layout.addLayout(form)
+        layout.addStretch(1)
+
+        self._nombre.textChanged.connect(lambda _t: self.changed.emit())
+        self._tipo.currentIndexChanged.connect(lambda _i: self.changed.emit())
+        self._capacidad.valueChanged.connect(lambda _v: self.changed.emit())
+        self._notas.textChanged.connect(lambda _t: self.changed.emit())
+
+    # -- protocolo de formulario ------------------------------------------
+
+    def limpiar(self) -> None:
+        """Vacía el formulario para una montura nueva (id = None)."""
+        self._id = None
+        self._nombre.clear()
+        self._tipo.setCurrentIndex(0)
+        self._capacidad.setValue(0.0)
+        self._notas.clear()
+
+    def cargar(self, fila: dict | None) -> None:
+        """Vierte una fila de la base (o ``None`` = vacío) en el formulario."""
+        self.limpiar()
+        if fila is None:
+            return
+        self._id = fila.get("id")
+        self._nombre.setText(str(fila.get("name") or ""))
+        indice = self._tipo.findData(fila.get("mount_type"))
+        self._tipo.setCurrentIndex(max(0, indice) if fila.get("mount_type") else 0)
+        self._capacidad.setValue(float(fila.get("payload_kg") or 0.0))
+        self._notas.setText(str(fila.get("notes") or ""))
+
+    def a_modelo(self) -> Mount:
+        """Modelo con lo que hay en pantalla (el id marca create vs update)."""
+        return Mount(
+            id=self._id,
+            name=self._nombre.text().strip(),
+            mount_type=self._tipo.currentData(),
+            payload_kg=_opt_f(self._capacidad),
+            notes=self._notas.text().strip(),
+        )

@@ -1,9 +1,10 @@
 """Diálogo «Configuración General de la Aplicación».
 
-Se abre con el botón ⚙ de la barra lateral. Dos secciones en el nav:
-«General» (motor SirIL y carpeta base de proyectos) y «Clima» (API keys
-de Clear Outside y Meteoblue). «Guardar» escribe todo de una vez en la
-tabla ``settings`` (nunca en código ni en el repositorio); «Cerrar» o ✕
+Se abre con el botón ⚙ de la barra lateral. Tres secciones en el nav:
+«General» (motor SirIL y carpeta base de proyectos), «Clima» (API keys
+de Clear Outside y Meteoblue) y «Equipo» (umbrales de muestreo del
+bloque Cálculos). «Guardar» escribe todo de una vez en la tabla
+``settings`` (nunca en código ni en el repositorio); «Cerrar» o ✕
 descarta los cambios.
 
 La comprobación de SirIL corre en un hilo aparte: el diálogo abre al
@@ -19,6 +20,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QDialog,
+    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QFrame,
@@ -33,7 +35,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from db.settings import get_setting, set_setting
+from db.settings import get_float, get_setting, set_setting
 from planners.weather.base import load_api_key, save_api_key
 from stacks.siril_finder import find_siril, save_user_path, siril_version
 
@@ -110,16 +112,19 @@ class ConfigDialog(QDialog):
         body = QHBoxLayout()
         body.setSpacing(12)
 
-        # Nav lateral (según el mockup: General y Clima).
+        # Nav lateral (según el mockup: General, Clima y Equipo).
         self._nav = QListWidget()
         self._nav.setObjectName("ConfigNav")
         self._nav.setFixedWidth(170)
-        self._nav.addItems(["\U0001f527  General", "\U0001f324  Clima"])
+        self._nav.addItems(
+            ["\U0001f527  General", "\U0001f324  Clima", "\U0001f52d  Equipo"]
+        )
         body.addWidget(self._nav)
 
         self._stack = QStackedWidget()
         self._stack.addWidget(self._build_general_page())
         self._stack.addWidget(self._build_clima_page())
+        self._stack.addWidget(self._build_equipo_page())
         body.addWidget(self._stack, 1)
         root.addLayout(body, 1)
 
@@ -250,6 +255,60 @@ class ConfigDialog(QDialog):
         layout.addStretch(1)
         return page
 
+    def _build_equipo_page(self) -> QWidget:
+        """Página «Equipo»: los dos umbrales del bloque Cálculos (muestreo).
+
+        Las métricas las define el usuario (decisión suya): estos números
+        deciden cuándo un equipo se pinta «Submuestreado» o «Sobremuestreado»
+        (``equipment.metrics.veredicto_muestreo``). Se guardan con el mismo
+        «Guardar» del diálogo y el bloque «Cálculos» los relee en cada
+        recálculo, así que no hay que cablear la señal ``saved``.
+        """
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        frame, frame_layout = self._group("Muestreo")
+        form = QFormLayout()
+        form.setSpacing(6)
+
+        self._sampling_under = QDoubleSpinBox()
+        self._sampling_under.setRange(0.01, 10.0)
+        self._sampling_under.setDecimals(2)
+        self._sampling_under.setSingleStep(0.05)
+        self._sampling_under.setSuffix(" ×")
+        self._sampling_under.setToolTip(
+            "Si la escala ″/px supera este múltiplo de la resolución de "
+            "Dawes, el equipo se pinta «Submuestreado»."
+        )
+        form.addRow("Umbral de submuestreo (× Dawes):", self._sampling_under)
+
+        self._sampling_over = QDoubleSpinBox()
+        self._sampling_over.setRange(0.01, 10.0)
+        self._sampling_over.setDecimals(2)
+        self._sampling_over.setSingleStep(0.05)
+        self._sampling_over.setSuffix(" ×")
+        self._sampling_over.setToolTip(
+            "Por debajo de este múltiplo de Dawes, el equipo se pinta "
+            "«Sobremuestreado»."
+        )
+        form.addRow("Umbral de sobremuestreo (× Dawes):", self._sampling_over)
+
+        frame_layout.addLayout(form)
+        hint = QLabel(
+            "Los decide el usuario: la escala ″/px se compara con estos "
+            "múltiplos de la resolución de Dawes. El bloque «Cálculos» de "
+            "la pestaña Equipo los relee en cada cálculo."
+        )
+        hint.setObjectName("HintLabel")
+        hint.setWordWrap(True)
+        frame_layout.addWidget(hint)
+        layout.addWidget(frame)
+
+        layout.addStretch(1)
+        return page
+
     # ------------------------------------------------------------------ valores
     def reload(self) -> None:
         """Rellena los campos con ``settings`` y comprueba SirIL sin bloquear.
@@ -262,6 +321,8 @@ class ConfigDialog(QDialog):
         self._project_root.setText(get_setting(PROJECT_ROOT_KEY) or "")
         self._clear_outside_key.setText(load_api_key("clear_outside_api_key") or "")
         self._meteoblue_key.setText(load_api_key("meteoblue_api_key") or "")
+        self._sampling_under.setValue(get_float("sampling_under_ratio", 1.0))
+        self._sampling_over.setValue(get_float("sampling_over_ratio", 0.5))
         self._check_siril(path)
 
     def _check_siril(self, path: str) -> None:
@@ -342,6 +403,8 @@ class ConfigDialog(QDialog):
         set_setting(PROJECT_ROOT_KEY, self._project_root.text().strip())
         save_api_key("clear_outside_api_key", self._clear_outside_key.text().strip())
         save_api_key("meteoblue_api_key", self._meteoblue_key.text().strip())
+        set_setting("sampling_under_ratio", str(self._sampling_under.value()))
+        set_setting("sampling_over_ratio", str(self._sampling_over.value()))
         self._check_siril(self._siril_path.text().strip())
         QMessageBox.information(self, "Configuración", "Configuración guardada.")
         self.saved.emit()

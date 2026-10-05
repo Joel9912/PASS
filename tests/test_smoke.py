@@ -145,6 +145,38 @@ def test_main_window_layout():
     window.close()
 
 
+def test_equipment_page_construye_con_sus_dos_subpestanas():
+    """Paso 2: EquipmentPage monta Equipos y Ubicaciones y reemite señales.
+
+    El cableado de la página en la ventana (fila de navegación → página real,
+    no placeholder) se comprueba en el paso 3; aquí solo la página en sí.
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import QApplication, QTabWidget
+
+    from ui.equipment_tab import EquipmentPage
+
+    _app = QApplication.instance() or QApplication([])
+    pagina = EquipmentPage()
+
+    tabs = pagina.findChild(QTabWidget)
+    assert tabs is not None and tabs.count() == 2
+    assert [tabs.tabText(i) for i in range(2)] == ["Equipos", "Ubicaciones"]
+
+    # Las dos señales del contrato existen y reemiten lo de las subpestañas
+    recibidas: list[str] = []
+    pagina.setups_changed.connect(lambda: recibidas.append("setups"))
+    pagina.locations_changed.connect(lambda: recibidas.append("locations"))
+    pagina.equipos.setups_changed.emit()
+    pagina.ubicaciones.locations_changed.emit()
+    assert recibidas == ["setups", "locations"]
+
+    pagina.deleteLater()
+
+
 def test_ajustes_guardados_refrescan_clima_por_tipo(monkeypatch):
     """M-15: tras guardar API keys, Búsqueda se busca por tipo, no por índice.
 
