@@ -514,6 +514,50 @@ def test_cabecera_suma_precio_peso_y_lo_persiste(memory_db):
     tab.deleteLater()
 
 
+def test_subtipo_es_solo_seleccionable_y_conserva_el_guardado(memory_db):
+    """Subtipo: combo solo seleccionable con la taxonomía de su tipo.
+
+    Regresiones del cierre: el combo ya no admite texto libre; al elegir
+    Tipo aparecen solo las opciones de esa óptica (Refractor = las 5 de la
+    taxonomía) y un subtipo guardado que no está en la lista (otra BD o el
+    texto libre antiguo) se conserva al cargar **y** al cambiar de tipo.
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import QApplication
+
+    from ui.equipment_tab.componentes import TelescopeForm
+
+    _app = QApplication.instance() or QApplication([])
+    form = TelescopeForm()
+
+    # Solo selección: sin edición libre.
+    assert not form._subtipo.isEditable()
+    form._tipo.setCurrentIndex(form._tipo.findData("refractor"))
+    assert [form._subtipo.itemText(i) for i in range(form._subtipo.count())] == [
+        "Acromático",
+        "Doblete (ED)",
+        "Triplete Apocromático",
+        "Quad (FF)",
+        "Petzval",
+    ]
+
+    # Un subtipo guardado ajeno a la lista no se pierde al cargar...
+    form.cargar(
+        {"id": 1, "name": "Raro", "optical_type": "refractor", "subtype": "Sextuplete"}
+    )
+    assert form._subtipo.currentText() == "Sextuplete"
+    assert form.a_modelo().subtype == "Sextuplete"
+
+    # ...ni al cambiar de tipo (se añade al combo y sigue seleccionado).
+    form._tipo.setCurrentIndex(form._tipo.findData("reflector"))
+    assert form._subtipo.currentText() == "Sextuplete"
+
+    form.deleteLater()
+
+
 def test_equipo_cableado_en_la_ventana(monkeypatch):
     """Paso 3: Equipo ya no es placeholder y sus señales llegan al Planificador.
 

@@ -31,21 +31,26 @@ OPTICAL_TYPES: dict[str, str] = {
     "otro": "Otro",
 }
 
-#: Sugerencias de subtipo según el tipo de óptica. El campo es texto libre
-#: (la UI ofrece estas opciones en un combo rellenable y guarda lo que el
-#: usuario escriba tal cual): cerrarlo a un enum dejaría fuera modelos que
-#: aún no conocemos.
+#: Subtipos de óptica (``Telescope.subtype``) por tipo, según la
+#: taxonomía decidida por el usuario. El combo de la UI es **solo
+#: seleccionable**; un valor guardado que no esté en la lista (otra BD o
+#: texto de la versión anterior) se conserva añadiéndolo al combo al
+#: cargar (patrón de ``_asegurar_categoria``).
 SUBTYPE_SUGGESTIONS: dict[str, tuple[str, ...]] = {
     "refractor": (
-        "Doblete",
-        "Triplete apocromático",
-        "ED",
+        "Acromático",
+        "Doblete (ED)",
+        "Triplete Apocromático",
+        "Quad (FF)",
         "Petzval",
-        "Cuádruple (quad)",
-        "Sextuplete",
     ),
-    "reflector": ("Newton", "Cassegrain", "Ritchey-Chrétien", "Dall-Kirkham"),
-    "catadioptrico": ("Schmidt-Cassegrain", "Maksutov-Cassegrain"),
+    "reflector": ("Newtoniano", "Ritchey-Chrétien (RC)"),
+    "catadioptrico": (
+        "Schmidt-Cassegrain (SCT)",
+        "Maksutov-Cassegrain (Mak)",
+        "Maksutov-Newtonian",
+        "Schmidt-Newtonian",
+    ),
     "otro": (),
 }
 
@@ -154,7 +159,7 @@ class Telescope:
     aperture_mm: float | None = None   # NULL = el usuario no lo sabe
     focal_mm: float | None = None
     optical_type: str | None = None    # ver OPTICAL_TYPES
-    subtype: str | None = None         # texto libre (SUBTYPE_SUGGESTIONS)
+    subtype: str | None = None         # ver SUBTYPE_SUGGESTIONS (combo solo seleccionable)
     reducer: bool = False
     reducer_factor: float | None = None  # p. ej. 0.8 (None = desconocido)
     price_eur: float | None = None    # precio de esta pieza (None = no informado)

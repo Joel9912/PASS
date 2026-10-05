@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS telescopes (
     aperture_mm    REAL,             -- NULL = el usuario no lo sabe
     focal_mm       REAL,
     optical_type   TEXT,             -- ver equipment.models.OPTICAL_TYPES
-    subtype        TEXT,             -- texto libre con sugerencias (doblete, triplete apocromático…)
+    subtype        TEXT,             -- opciones por tipo (equipment.models.SUBTYPE_SUGGESTIONS)
     reducer        INTEGER NOT NULL DEFAULT 0,   -- ¿lleva aplanador/reductor?
     reducer_factor REAL,             -- p. ej. 0.8 (NULL = desconocido)
     price_eur      REAL,             -- precio de la pieza (NULL = no informado)

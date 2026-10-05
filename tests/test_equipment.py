@@ -806,3 +806,30 @@ def test_categorias_del_enum_del_usuario(memory_db):
     assert EquipmentSetup().category == "general"
     pk = manager.create(EquipmentSetup(name="Nuevo"))
     assert manager.get(pk)["category"] == "general"
+
+
+def test_subtipos_de_optica_por_tipo():
+    """La taxonomía de subtipos es exactamente la del usuario (combo cerrado).
+
+    Refractor ×5 (el Sextuplete quedó fuera), Reflector ×2 y
+    Catadióptrico ×4; el campo deja de ser texto libre, así que las listas
+    son el catálogo completo y nada más.
+    """
+    from equipment.models import SUBTYPE_SUGGESTIONS
+
+    assert SUBTYPE_SUGGESTIONS["refractor"] == (
+        "Acromático",
+        "Doblete (ED)",
+        "Triplete Apocromático",
+        "Quad (FF)",
+        "Petzval",
+    )
+    assert SUBTYPE_SUGGESTIONS["reflector"] == ("Newtoniano", "Ritchey-Chrétien (RC)")
+    assert SUBTYPE_SUGGESTIONS["catadioptrico"] == (
+        "Schmidt-Cassegrain (SCT)",
+        "Maksutov-Cassegrain (Mak)",
+        "Maksutov-Newtonian",
+        "Schmidt-Newtonian",
+    )
+    assert SUBTYPE_SUGGESTIONS["otro"] == ()
+    assert "Sextuplete" not in SUBTYPE_SUGGESTIONS["refractor"]

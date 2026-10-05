@@ -690,8 +690,7 @@ class TelescopeForm(QFrame):
         tipos = QHBoxLayout()
         self._tipo = QComboBox()
         _combo_opciones(self._tipo, OPTICAL_TYPES)
-        self._subtipo = QComboBox()
-        self._subtipo.setEditable(True)
+        self._subtipo = QComboBox()  # solo seleccionable (taxonomía por tipo)
         self._subtipo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         tipos.addWidget(QLabel("Tipo"))
         tipos.addWidget(self._tipo, 1)
@@ -763,7 +762,7 @@ class TelescopeForm(QFrame):
         self._tipo.setCurrentIndex(max(0, indice) if fila.get("optical_type") else 0)
         self._subtipos()
         if fila.get("subtype"):
-            self._subtipo.setCurrentText(str(fila["subtype"]))
+            self._asegurar_subtipo(str(fila["subtype"]))
         self._notas.setText(str(fila.get("notes") or ""))
         for imagen in list_images("telescope", int(fila["id"])):
             self._anadir_fila(imagen["path"])
@@ -823,13 +822,24 @@ class TelescopeForm(QFrame):
     # -- lecturas vivas ----------------------------------------------------
 
     def _subtipos(self) -> None:
-        """Repuebla las sugerencias de subtipo según el tipo elegido."""
+        """Repuebla el combo con los subtipos del tipo elegido (solo selección).
+
+        Un subtipo que no esté en la lista de su tipo (guardado en otra BD
+        o de la versión anterior, que era texto libre) se añade al combo y
+        se mantiene seleccionado: no se pierde lo que ya tenía el usuario.
+        """
         actual = self._subtipo.currentText()
         claves = self._tipo.currentData() or "otro"
         self._subtipo.clear()
         self._subtipo.addItems(SUBTYPE_SUGGESTIONS.get(claves, ()))
         if actual:
-            self._subtipo.setCurrentText(actual)
+            self._asegurar_subtipo(actual)
+
+    def _asegurar_subtipo(self, subtipo: str) -> None:
+        """Selecciona ``subtipo`` en el combo (y lo añade si venía de otra BD)."""
+        if self._subtipo.findText(subtipo) == -1:
+            self._subtipo.addItem(subtipo)
+        self._subtipo.setCurrentText(subtipo)
 
     def _conectar_cambios(self) -> None:
         """Cualquier toque al formulario emite ``changed`` (para «Cálculos»)."""
