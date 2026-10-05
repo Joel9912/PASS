@@ -1,9 +1,10 @@
 """Subpestaña **Equipos**: lista, cabecera, sub-subpestañas y bloque Cálculos.
 
 Layout: ``QSplitter`` horizontal — a la izquierda la lista de equipos con
-«Nuevo…»/«Eliminar»; a la derecha, en un panel con scroll, la cabecera
-(nombre*, categoría, ubicación, precio, peso, notas y «Guardar equipo»),
-las sub-subpestañas Telescopio / Cámara / Montura / Filtros y el bloque
+«Nuevo…»/«Eliminar»; a la derecha la cabecera (nombre*, categoría,
+ubicación, precio, peso, notas y «Guardar equipo») **fuera del scroll**
+para que su Guardar esté siempre visible, y en el panel con scroll las
+sub-subpestañas Telescopio / Cámara / Montura / Filtros y el bloque
 «Cálculos».
 
 Regla UX global (§9): **nada se persiste hasta «Guardar equipo»**: lo que
@@ -92,19 +93,26 @@ class EquiposTab(QWidget):
         vlay.addLayout(acciones)
         splitter.addWidget(izquierda)
 
-        # Derecha: scroll con cabecera + sub-subpestañas + cálculos.
+        # Derecha: cabecera con «Guardar equipo» SIEMPRE visible (fuera del
+        # scroll, igual que en Ubicaciones) y, debajo, sub-subpestañas y
+        # cálculos en un panel con scroll vertical.
+        derecha = QWidget()
+        dlay = QVBoxLayout(derecha)
+        dlay.setContentsMargins(0, 0, 0, 0)
+        dlay.setSpacing(10)
+        dlay.addWidget(self._cabecera())
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         contenido = QWidget()
-        derecha = QVBoxLayout(contenido)
-        derecha.setContentsMargins(0, 0, 6, 0)
-        derecha.setSpacing(10)
-        derecha.addWidget(self._cabecera())
-        derecha.addWidget(self._subpestanas())
-        derecha.addWidget(self._bloque_calculos())
-        derecha.addStretch(1)
+        interior = QVBoxLayout(contenido)
+        interior.setContentsMargins(0, 0, 6, 0)
+        interior.setSpacing(10)
+        interior.addWidget(self._subpestanas())
+        interior.addWidget(self._bloque_calculos())
+        interior.addStretch(1)
         scroll.setWidget(contenido)
-        splitter.addWidget(scroll)
+        dlay.addWidget(scroll, 1)
+        splitter.addWidget(derecha)
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([260, 760])

@@ -371,7 +371,10 @@ class PartPicker(QFrame):
         super().__init__(parent)
         self._pieza = _PIEZAS[kind]
 
-        layout = QHBoxLayout(self)
+        # Dos filas (combo arriba, botones abajo): en una sola el ancho
+        # mínimo de los 3 botones + combo forzaba scroll horizontal con las
+        # columnas Principal/Guía lado a lado.
+        layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
         self._combo = QComboBox()
@@ -379,17 +382,21 @@ class PartPicker(QFrame):
             QComboBox.SizeAdjustPolicy.AdjustToContents
         )
         self._combo.currentIndexChanged.connect(self._tras_cambio)
-        layout.addWidget(self._combo, 1)
+        layout.addWidget(self._combo)
 
+        botones = QHBoxLayout()
+        botones.setSpacing(6)
         boton_nuevo = QPushButton("Nuevo…")
         boton_nuevo.clicked.connect(self.nuevo_solicitado)
-        layout.addWidget(boton_nuevo)
+        botones.addWidget(boton_nuevo)
         boton_guardar = QPushButton("Guardar componente")
         boton_guardar.clicked.connect(self.guardar_solicitado)
-        layout.addWidget(boton_guardar)
+        botones.addWidget(boton_guardar)
         self._boton_eliminar = QPushButton("Eliminar")
         self._boton_eliminar.clicked.connect(self.eliminar_solicitado)
-        layout.addWidget(self._boton_eliminar)
+        botones.addWidget(self._boton_eliminar)
+        botones.addStretch(1)
+        layout.addLayout(botones)
         self.reload()
 
     def selected_id(self) -> int | None:
@@ -555,22 +562,26 @@ class TelescopeForm(QFrame):
         self._nombre.setPlaceholderText("ED80, Newton 200…")
         form.addRow("Nombre *", self._nombre)
 
-        fila_datos = QHBoxLayout()
+        # Apertura y focal, una por fila: en una sola sumaban 684 px de
+        # mínimo y forzaban scroll horizontal con Principal/Guía lado a lado.
         self._apertura = QDoubleSpinBox()
         self._apertura.setRange(0.0, 600.0)
         self._apertura.setDecimals(1)
         self._apertura.setSuffix(" mm")
         self._apertura.setSpecialValueText("—")
+        fila_apertura = QHBoxLayout()
+        fila_apertura.addWidget(QLabel("Apertura"))
+        fila_apertura.addWidget(self._apertura, 1)
+        layout.addLayout(fila_apertura)
         self._focal = QDoubleSpinBox()
         self._focal.setRange(0.0, 5000.0)
         self._focal.setDecimals(1)
         self._focal.setSuffix(" mm")
         self._focal.setSpecialValueText("—")
-        fila_datos.addWidget(QLabel("Apertura"))
-        fila_datos.addWidget(self._apertura, 1)
-        fila_datos.addWidget(QLabel("Focal"))
-        fila_datos.addWidget(self._focal, 1)
-        layout.addLayout(fila_datos)
+        fila_focal = QHBoxLayout()
+        fila_focal.addWidget(QLabel("Focal"))
+        fila_focal.addWidget(self._focal, 1)
+        layout.addLayout(fila_focal)
 
         lecturas = QHBoxLayout()
         self._relacion = QLabel("—")
@@ -581,9 +592,12 @@ class TelescopeForm(QFrame):
         lecturas.addWidget(self._efectiva, 1)
         layout.addLayout(lecturas)
 
-        reductor = QHBoxLayout()
+        # Fila propia el checkbox (398 px de texto) y otra para el factor:
+        # juntos forzaban ~690 px de ancho mínimo por columna y, con las
+        # columnas Principal/Guía, scroll horizontal.
         self._reductor = QCheckBox("Con aplanador/reductor")
-        reductor.addWidget(self._reductor)
+        layout.addWidget(self._reductor)
+        reductor = QHBoxLayout()
         reductor.addStretch(1)
         reductor.addWidget(QLabel("Factor ×"))
         self._factor = QDoubleSpinBox()
@@ -627,6 +641,7 @@ class TelescopeForm(QFrame):
         layout.addLayout(imagenes)
         pista = QLabel("Solo visuales: el programa no analiza los charts.")
         pista.setObjectName("HintLabel")
+        pista.setWordWrap(True)
         layout.addWidget(pista)
         layout.addStretch(1)
 
@@ -785,22 +800,28 @@ class CameraForm(QFrame):
         form.addRow("Nombre *", self._nombre)
         layout.addLayout(form)
 
-        fila_datos = QHBoxLayout()
+        # Píxel y profundidad, una por fila: juntos sumaban 735 px de
+        # mínimo (la fila más ancha de la pestaña Cámara).
         self._pixel = QDoubleSpinBox()
         self._pixel.setRange(0.0, 100.0)
         self._pixel.setDecimals(3)
         self._pixel.setSuffix(" µm")
         self._pixel.setSpecialValueText("—")
+        fila_pixel = QHBoxLayout()
+        fila_pixel.addWidget(QLabel("Píxel"))
+        fila_pixel.addWidget(self._pixel, 1)
+        layout.addLayout(fila_pixel)
         self._bits = QSpinBox()
         self._bits.setRange(0, 64)
         self._bits.setSpecialValueText("—")
         self._bits.setSuffix(" bits")
-        fila_datos.addWidget(QLabel("Píxel"))
-        fila_datos.addWidget(self._pixel, 1)
-        fila_datos.addWidget(QLabel("Profundidad"))
-        fila_datos.addWidget(self._bits, 1)
-        layout.addLayout(fila_datos)
+        fila_bits = QHBoxLayout()
+        fila_bits.addWidget(QLabel("Profundidad"))
+        fila_bits.addWidget(self._bits, 1)
+        layout.addLayout(fila_bits)
 
+        # Sensor en dos filas (Ancho+Alto / Resolución): la de tres campos
+        # sumaba ~735 px y forzaba scroll horizontal en la pestaña Cámara.
         fila_sensor = QHBoxLayout()
         self._ancho = QSpinBox()
         self._ancho.setRange(0, 30000)
@@ -808,14 +829,16 @@ class CameraForm(QFrame):
         self._alto = QSpinBox()
         self._alto.setRange(0, 30000)
         self._alto.setSpecialValueText("—")
-        self._resolucion = QLabel("—")
         fila_sensor.addWidget(QLabel("Ancho"))
         fila_sensor.addWidget(self._ancho, 1)
         fila_sensor.addWidget(QLabel("Alto"))
         fila_sensor.addWidget(self._alto, 1)
-        fila_sensor.addWidget(QLabel("Resolución"))
-        fila_sensor.addWidget(self._resolucion, 1)
         layout.addLayout(fila_sensor)
+        resolucion = QHBoxLayout()
+        self._resolucion = QLabel("—")
+        resolucion.addWidget(QLabel("Resolución"))
+        resolucion.addWidget(self._resolucion, 1)
+        layout.addLayout(resolucion)
 
         flags = QHBoxLayout()
         self._refrigerada = QCheckBox("Refrigerada")
@@ -847,6 +870,7 @@ class CameraForm(QFrame):
         layout.addLayout(imagenes)
         pista = QLabel("Solo visuales: el programa no analiza las curvas de ganancia.")
         pista.setObjectName("HintLabel")
+        pista.setWordWrap(True)
         layout.addWidget(pista)
         layout.addStretch(1)
 
