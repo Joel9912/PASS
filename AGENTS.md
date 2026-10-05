@@ -1,6 +1,6 @@
 # AGENTS.md — PAS.S (Planning & Astronomical Stacking Suite)
 
-Proyecto en fase inicial: existe `main.py` (ventana con 6 pestañas), carpetas de código con sus `README.md` y esta documentación. `planners/` está implementado con catálogo real (OpenNGC + HYG + LDN); también `ui/planner_tab/` (4 subpestañas), `db/` y el diálogo de Configuración. Son stubs (`NotImplementedError` a propósito) las otras 5 pestañas, `stacks/`, `planetary/` y el CRUD de `equipment/`.
+Proyecto en fase inicial: existe `main.py` (ventana con 6 pestañas), carpetas de código con sus `README.md` y esta documentación. `planners/` está implementado con catálogo real (OpenNGC + HYG + LDN); también `ui/planner_tab/` (4 subpestañas), `ui/equipment_tab/` (Equipos y Ubicaciones), `equipment/` (CRUD + validaciones), `db/` y el diálogo de Configuración. Son stubs (`NotImplementedError` a propósito) las otras 4 pestañas, `stacks/` y `planetary/`.
 Sin CI: la verificación es `pytest` (la suite de `tests/`; el recuento vive en su README) + `ruff check` (lint, sin configuración propia). Sí hay migraciones de esquema (`_MIGRATIONS` en `db/connection.py`).
 
 ## Qué leer según la tarea

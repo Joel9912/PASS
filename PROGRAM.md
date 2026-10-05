@@ -31,9 +31,9 @@
 - **Enfoque:** Visualización y decisión de encuadre.
 
 ### 3. **Equipo**
-- El usuario monta sus setups con sus ubicaciones: campo amplio, nebulosas, galaxias (planetario: añadido futuro).
-- **Datos fríos** guardados: apertura, distancia focal, cámara (refrigerada, resolución, profundidad de bits, nombre), montura.
-- Imágenes adjuntas (diagramas de spot, etc.): el usuario las compara **visualmente**; el programa no las analiza.
+- El usuario monta sus equipos con sus ubicaciones: componentes globales (telescopio/cámara principal y de guía, montura, filtros) + ubicación, organizados por categoría (paisaje, campo amplio, espacio profundo, espacio profundo largo, planetario, general).
+- **Datos fríos** guardados: apertura, distancia focal, cámara (refrigerada, resolución, profundidad de bits, nombre), montura, precio y peso.
+- Imágenes adjuntas (diagramas de spot, charts, mapas de CL): el usuario las compara **visualmente**; el programa no las analiza.
 - **Enfoque:** Inventario personal.
 
 ### 4. **Planificador de Equipo**

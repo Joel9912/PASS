@@ -1,25 +1,24 @@
 # equipment/
 
 ## Qué es
-Modelos y persistencia del equipo del usuario: setups (telescopio + cámara + montura + ubicación + categoría) y localizaciones geográficas.
+Modelos y persistencia del equipo del usuario: setups (componentes globales + ubicación + categoría + filtros), las piezas globales (telescopios, cámaras, monturas, filtros), ubicaciones geográficas con su sitio (horizonte y CL) y las imágenes adjuntas.
 
 ## Estado actual
-- `models.py` — dataclasses: `Location`, `Telescope`, `Camera`, `Mount`, `EquipmentSetup`. Solo campos comparables (apertura, focal, resolución, bits, refrigeración).
-  - `Camera` incluye **`pixel_size_um`/`width_px`/`height_px`** (los que permiten el FOV; ya estaban en el esquema y faltaban en el modelo — C-1 de la auditoría).
-  - `Location` lleva además **`utc_offset_hours`**: desfase de la hora de reloj frente a UTC (España en verano = 2). Si es `None`, la lógica de `planners/` infiere el huso de la longitud (`round(lon/15)`, huso estándar).
-- `manager.py` — CRUD de setups en SQLite (`equipment_setups`); `list_setups()` devuelve dicts con todas las columnas **más `location_name`** (nombre de la ubicación vía `LEFT JOIN locations`, o `None` — M-17; la UI calcula el FOV a partir de ellos). `get()`/`list_setups()` **anotan `dict`**, el contrato que usa la UI (C-2). `count_sessions(setup_id)` cuenta las sesiones que apuntan al setup, para que la confirmación de borrado avise del `ON DELETE SET NULL` (M-20).
-- `localizations.py` — CRUD de localizaciones (`locations`); `list_locations()` (anota `list[dict]`, M-16) y `delete()` funcionan.
-- `images.py` — adjuntar imágenes al setup (`equipment_images`), **solo visuales**. `attach()` **copia** el fichero a `data/equipment_images/<setup_id>/` (decisión D-1): la imagen persiste aunque el original se mueva o se borre; si la copia falla, guarda la ruta original.
-- Esquema: `equipment_setups` incluye **`price_eur`** y **`weight_kg`** (decisión D-3).
-- El resto de operaciones CRUD están pendientes (`NotImplementedError`); su contrato de imágenes ya está fijado (D-5): `create`/`update` **re-sincronizan `setup.images`** —la lista es la verdad al guardar— y el diálogo solo la edita en memoria (cancelar no toca ficheros).
+- `models.py` — dataclasses `Location`, `Telescope`, `Camera`, `Mount`, `Filter`, `EquipmentSetup` (solo campos comparables) y los catálogos de etiquetas: **`CATEGORIES`** (6 categorías, `general` por defecto — dueño de la etiqueta, R2), `OPTICAL_TYPES`, `SUBTYPE_SUGGESTIONS`, `MOUNT_TYPES`, `FILTER_TYPES`, `OBSTACLE_TYPES`, `LP_LEVELS` y `DIRECTIONS` (8).
+- `validaciones.py` — todas las reglas de alto en un sitio: nombre obligatorio, rangos (Bortle 1-9, SQM ≥ 0, factor de reductor > 0…), 8 direcciones obligatorias y enums de catálogo; `ValueError` con mensaje en castellano. Las llaman `manager`/`localizations`/`components` antes de tocar la base.
+- `manager.py` — CRUD completo de setups (`create`/`update`/`delete`/`get`/`list_setups`): lecturas como **dict** (el contrato de la UI, C-2), SELECT con JOIN a componentes y ubicación, alias de FOV (`telescope_focal_mm` = **focal efectiva**, `camera_*`), `get()` expone también `filter_ids`, sincroniza `setup.images` (D-5) y `setup_filters`, y `count_sessions`/`count_setups_using` dan el número previo al aviso de borrado (M-20).
+- `components.py` — CRUD explícito de las 4 piezas globales (`list_/get_/create_/update_/delete_` × telescopio, cámara, montura y filtro): lecturas como dict (C-2), escrituras con dataclass validada; al borrar, imágenes en cascada + `purge` de sus ficheros.
+- `localizations.py` — CRUD de `locations`: bloque de sitio (obstáculos y CL de las 8 direcciones) en JSON con carga defensiva al listar, e imagen única de CL (`lp_map`).
+- `images.py` — API generalizada por entidad (`setup`/`telescope`/`camera`/`location`, mapa cerrado de tablas): `attach` **copia** a `data/…` (D-1), `list`/`remove`/`sync` (D-5: la lista es la verdad al guardar) y `purge` al borrar el padre.
+- `metrics.py` — funciones puras: `focal_efectiva` (única fuente de la regla del reductor), `escala_imagen` (206,265 × píxel µm / focal mm), `limite_dawes` (116 / apertura), `relacion_focal`, `veredicto_muestreo` (umbrales como parámetro) y `calculos()` del bloque «Cálculos»; dato faltante → `None`.
 
 ## Qué hacer aquí
 - Aquí SOLO datos y persistencia: **sin PyQt6 ni cálculos de planificación**.
 - Guardar solo "datos fríos" comparables; NO guardar gráficas de rendimiento para compararlas.
-- Las imágenes (spot, etc.) se adjuntan y se muestran: el usuario las compara visualmente, el programa no.
-- Acceso a datos siempre vía `db.connection.get_connection()`.
+- Las imágenes se adjuntan y se muestran: el usuario las compara visualmente, el programa no.
+- Acceso a datos siempre vía `db.connection.get_connection()`; nuevas columnas/tablas → migración en `_MIGRATIONS` (`db/connection.py`).
+- Al modificar la carpeta: actualizar "Estado actual" aquí mismo en la misma tarea.
 
 ## Planes futuros
-1. Completar CRUD de setups y localizaciones.
-2. Exportar/importar setups (JSON) para compartir configuraciones.
-3. Categoría `planetario` (astrofotografía planetaria) como añadido futuro.
+1. Exportar/importar setups (JSON) para compartir configuraciones.
+2. Aplicar `consider_lp` a las decisiones de captura (hoy solo se guarda; el paso 6 lo cablea).

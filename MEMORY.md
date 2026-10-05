@@ -4,7 +4,7 @@
 
 | Aspecto | Estado |
 |---------|--------|
-| **Etapa de desarrollo** | Esqueleto completo + **`planners/` implementado** + **pestaña Planificador implementada** (4 subpestañas); resto de pestañas aún placeholder |
+| **Etapa de desarrollo** | Esqueleto completo + **`planners/` implementado** + **pestañas Planificador (4 subpestañas) y Equipo implementadas**; resto de pestañas aún placeholder |
 | **Estructura de carpetas** | ✅ Creada: `db/`, `planners/`, `stacks/`, `equipment/`, `planetary/`, `ui/` (6 pestañas), `i18n/`, `tests/`, `data/` |
 | **Docs** | ✅ Raíz: README, AGENTS, PROGRAM, MEMORY, STRUCTURE + LICENSE GPL-3.0 + requirements.txt |
 | **Auditoría de código** | ✅ Tandas A, B y C aplicadas (deuda C cerrada 4/10/2026); pendientes anotados: M-02, D-4, D-7 y bajos (§4 del informe) |
@@ -13,6 +13,7 @@
 | **Librerías Python** | Instaladas en venv: PyQt6 6.11, **pyqtgraph 0.14.0**, astropy 8.0, numpy 2.5, PyYAML 6.0, pytest |
 | **Catálogos astronómicos** | ✅ OpenNGC (13 372 objetos) + HYG (41 487 estrellas mag ≤ 8) + **LDN (1 787)** en `data/pass.db` |
 | **Pestaña Planificador** | ✅ `ui/planner_tab/`: Búsqueda → Catálogo Personal → Planificación → Sesiones Planificadas, planetario QPainter, curva de tránsito PyQtGraph (un eje), plan de captura, barra de ubicación compartida |
+| **Pestaña Equipo** | ✅ `ui/equipment_tab/` (4/10/2026): equipos con componentes globales (Telescopio/Cámara/Montura/Filtros), bloque «Cálculos» con umbrales configurables y ubicaciones con horizonte/CL; backend `equipment/` CRUD completo + validaciones + `metrics.py`; cableado Equipo → Planificador en `main_window.py` |
 | **Integración SirIL** | Diseñada en `stacks/` (detección PATH + ruta usuario); sin implementar |
 | **APIs clima/seeing** | Clear Outside + Meteoblue con mocks (sin API keys todavía) → tarjetas "Sin datos" |
 | **Persistencia** | ✅ SQLite (stdlib) con esquema completo + migración de columnas (`_MIGRATIONS` en `db/connection.py`) |
@@ -23,10 +24,9 @@
 ### Objetivos Principales
 1. **UI de las pestañas pendientes** — estado y detalle en «Próximos Pasos» y en el README de cada carpeta.
 
-2. **Sistema básico de gestión de equipos**
-   - CRUD básico (Crear, Leer, Actualizar, Borrar) de setups de equipo
-   - Guardar equipos en formato local/JSON/archivo de texto
-   - Asociación de localizaciones geográficas
+2. **Sistema de gestión de equipos (resto)**
+   - Guardar equipos en formato local/JSON/archivo de texto (exportar/importar)
+   - Duplicar setups
 
 3. **Integración con APIs astronómicas**
    - API abierta para búsqueda de objetos (posición, fecha)
@@ -79,9 +79,8 @@
 ## 💡 Próximos Pasos Inmediatos
 *(solo pendientes: lo completado vive en «Situación Actual»)*
 
-1. 🔜 UI de `equipment_tab`: crear/editar localizaciones (con su `utc_offset_hours`) y setups — hace falta para que `LocationBar` deje de estar vacía
-2. 🔜 UI de `planner_equip_tab`: comparativa con las métricas que defina el usuario (`RankingWeights`, `CaptureWeights` expuestos)
-3. 🔌 Llamadas reales a Clear Outside/Meteoblue cuando haya API keys
-4. 🔌 i18n (`QTranslator` + `.ts/.qm`) empezando por `planner_tab/`
-5. 📂 Documentos de plan (fuera del repo): `plan-rediseno-planificacion.md` (rediseño de Planificación) e `informe-auditoria-codigo.md` (auditoría de código).
-6. 🔧 Bajos de la auditoría de Markdown (3/10/2026): marcador de estado por pestaña en la tabla del README raíz (B-2); orden de subpestañas y clima en `PROGRAM.md` (B-3); rutas con prefijo `planner_tab/` en `ui/README` (B-4); precisar en `equipment/README` que la UI usa `list_setups()` (B-6); añadir M-20 a «Planes futuros» de `ui/equipment_tab` (B-7).
+1. 🔜 UI de `planner_equip_tab`: comparativa con las métricas que defina el usuario (`RankingWeights`, `CaptureWeights` expuestos)
+2. 🔌 Llamadas reales a Clear Outside/Meteoblue cuando haya API keys
+3. 🔌 i18n (`QTranslator` + `.ts/.qm`) empezando por `planner_tab/`
+4. 📂 Documentos de plan (fuera del repo): `plan-rediseno-planificacion.md` (rediseño de Planificación) e `informe-auditoria-codigo.md` (auditoría de código).
+5. 🔧 Bajos de la auditoría de Markdown (3/10/2026): marcador de estado por pestaña en la tabla del README raíz (B-2); orden de subpestañas y clima en `PROGRAM.md` (B-3); rutas con prefijo `planner_tab/` en `ui/README` (B-4); precisar en `equipment/README` que la UI usa `list_setups()` (B-6).

@@ -13,9 +13,11 @@ Planning-Stacking-Suite/
 │
 ├── db/                   # Capa SQLite (stdlib sqlite3)
 │   ├── connection.py     # Conexión única → data/pass.db
-│   ├── schema.sql        # Tablas: locations, equipment_setups, equipment_images,
-│   │                     #   personal_catalog, planned_sessions, settings,
-│   │                     #   catalog (objetos) y stars (estrellas)
+│   ├── schema.sql        # Tablas: locations + bloque de sitio, equipment_setups,
+│   │                     #   telescopes/cameras/mounts/filters + setup_filters,
+│   │                     #   equipment_images/telescope_images/camera_images/
+│   │                     #   location_images, personal_catalog, planned_sessions,
+│   │                     #   settings, catalog (objetos) y stars (estrellas)
 │   └── README.md
 │
 ├── planners/             # Lógica de planificación (sin UI)
@@ -45,10 +47,13 @@ Planning-Stacking-Suite/
 │   └── README.md
 │
 ├── equipment/            # Datos de equipo (sin UI)
-│   ├── models.py             # Location, Telescope, Camera, Mount, EquipmentSetup
-│   ├── manager.py            # CRUD de setups
-│   ├── localizations.py      # CRUD de localizaciones
-│   ├── images.py             # Imágenes adjuntas (solo visuales)
+│   ├── models.py             # Dataclasses + catálogos (CATEGORIES, OPTICAL_TYPES…)
+│   ├── manager.py            # CRUD de setups (JOIN FOV, filter_ids, conteos)
+│   ├── components.py         # CRUD de las 4 piezas globales
+│   ├── localizations.py      # CRUD de ubicaciones (sitio en JSON, lp_map)
+│   ├── images.py             # Imágenes por entidad (solo visuales, sync/purge)
+│   ├── validaciones.py       # Todas las reglas de alto (ValueError en castellano)
+│   ├── metrics.py            # Escala ″/px, Dawes, veredicto de muestreo (puras)
 │   └── README.md
 │
 ├── planetary/            # Planetario: dos esferas, usuario al centro
@@ -58,9 +63,11 @@ Planning-Stacking-Suite/
 │   └── README.md
 │
 ├── ui/                   # Interfaz PyQt6 (una carpeta por pestaña)
-│   ├── main_window.py        # MainWindow: sidebar + contenido + pie (v0.1)
-│   │                         #   PlannerPage = 4 subpestañas (LocationBar vive en
-│   │                         #   Búsqueda, fila 3 izquierda, y se comparte por señal)
+│   ├── main_window.py        # MainWindow: sidebar + contenido + pie (v0.1);
+│   │                         #   páginas por clave (_PAGE_BUILDERS) y
+│   │                         #   _wire_equipo() Equipo → Planificador (LocationBar
+│   │                         #   vive en Búsqueda, fila 3 izquierda, y se comparte
+│   │                         #   por señal)
 │   ├── style.py              # Tema oscuro azulado (QSS + fuente 13pt)
 │   ├── config_tab/           # Diálogo «Configuración General» (modal: SirIL/clima)
 │   │   ├── config_dialog.py
@@ -86,7 +93,15 @@ Planning-Stacking-Suite/
 │   │       └── README.md
 │   ├── summary_tab/README.md     # Progreso de captura, sesión activa
 │   ├── planetary_tab/README.md   # Renderizado de las dos esferas
-│   ├── equipment_tab/README.md   # Gestión de setups/localizaciones
+│   ├── equipment_tab/        # ⭐ Implementado: Equipos (lista + cabecera +
+│   │   │                     #   Telescopio/Cámara/Montura/Filtros + Cálculos)
+│   │   │                     #   y Ubicaciones (ficha de sitio y CL)
+│   │   ├── __init__.py           # EquipmentPage (señales setups/locations_changed)
+│   │   ├── equipos.py            # EquiposTab
+│   │   ├── componentes.py        # Formularios + PartPicker/PartEditor + filtros
+│   │   ├── sitio.py              # HorizonWidget y LightPollutionWidget
+│   │   ├── ubicaciones.py        # UbicacionesTab
+│   │   └── README.md
 │   ├── planner_equip_tab/README.md  # Comparativas por métricas de usuario
 │   ├── stacker_tab/README.md     # Sesiones, calibración, auditoría, apilado
 │   └── README.md
@@ -102,6 +117,7 @@ Planning-Stacking-Suite/
 │   ├── test_planners.py
 │   ├── test_dialogos.py
 │   ├── test_equipment.py
+│   ├── test_metrics.py
 │   ├── test_analytical_transit.py
 │   ├── test_capture_plan.py
 │   ├── test_moon_distance.py
@@ -112,7 +128,8 @@ Planning-Stacking-Suite/
 │
 ├── data/                 # Datos locales (NO versionados)
 │   ├── pass.db               # Base SQLite (se crea en runtime)
-│   ├── equipment_images/     # Copias de imágenes adjuntas por setup (D-1)
+│   ├── equipment_images/     # Copias de imágenes adjuntas por entidad (D-1):
+│   │                         #   setup, telescope, camera y location
 │   ├── working/calibrados/   # Salida de calibración por sesión
 │   └── dss2_cache/           # Imágenes DSS2 descargadas
 │
