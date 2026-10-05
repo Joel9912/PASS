@@ -117,8 +117,10 @@ class Location:
     ``{"fuente": clave de LP_SOURCES | None, "km": distancia}`` — una sola
     fuente por dirección, con km > 0 solo si hay fuente. ``bortle`` es
     obligatorio en el formulario (1-9), ``sqm`` opcional, y
-    ``consider_lp`` decide si la CL entra en las decisiones de captura de
-    esta ubicación — de momento solo se guarda (paso 6 lo cablea).
+    ``consider_lp`` decide si la CL y los obstáculos entran en las
+    decisiones de captura de esta ubicación (etiqueta «Usar CL y
+    Obstáculos al Planificar») — de momento solo se guarda (paso 6 lo
+    cablea).
     ``lp_map`` es la imagen única de referencia (Light Pollution Map): al
     subir otra sustituye a la anterior.
     """

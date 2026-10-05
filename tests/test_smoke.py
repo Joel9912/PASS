@@ -231,7 +231,7 @@ def test_ubicaciones_fila_geografia_primero_y_vista_previa_mapa(tmp_path):
     textos = [rotulo.text() for rotulo in sitio.findChildren(QLabel)]
     assert "Mapa de Contaminación Lumínica" in textos
     assert "Referencia: el programa no la analiza." not in textos
-    assert sitio._considerar.text() == "Usar Contaminación Lumínica al Planificar"
+    assert sitio._considerar.text() == "Usar CL y Obstáculos al Planificar"
     assert sitio._considerar.parentWidget() is sitio._salida.parentWidget()
     caja = sitio._salida.parentWidget().layout()
     assert caja.indexOf(sitio._considerar) < caja.indexOf(sitio._salida)
@@ -240,6 +240,16 @@ def test_ubicaciones_fila_geografia_primero_y_vista_previa_mapa(tmp_path):
         assert disco.heightForWidth(300) == 300
     assert sitio._salida.hasHeightForWidth()
     assert sitio._salida.heightForWidth(500) == 440
+
+    # «Mostrar obstáculos»: debajo de la gráfica, arranca encendido y es
+    # solo pantalla — mueve el flag del disco sin tocar lo guardado.
+    assert sitio._mostrar_obst.isChecked()
+    assert caja.indexOf(sitio._mostrar_obst) > caja.indexOf(sitio._salida)
+    antes = sitio.valores()
+    sitio._mostrar_obst.setChecked(False)
+    assert not sitio._salida._mostrar_obstaculos
+    assert sitio.valores() == antes
+    sitio._mostrar_obst.setChecked(True)
 
     # Los dos discos arrancan a la misma cota: la casilla mide lo mismo
     # que la fila de nombre/botones del mapa (comparables de un vistazo).
@@ -388,6 +398,27 @@ def test_rosaceas_construyen_pintan_y_hacen_roundtrip():
     cx = 420 / 2 - 92 / 2  # centro del disco: hay barra (base informada)
     centro = imagen.pixelColor(round(cx * dpr), round(340 / 2 * dpr))
     assert (centro.red(), centro.green(), centro.blue()) != (0, 0, 0)
+
+    # «Mostrar obstáculos» es solo pintado: apagado, la cuña de N (45°)
+    # desaparece del borde superior (r = 142, mismos cálculos que
+    # paintEvent: hay barra y cx = 164) pero el dato no se toca.
+    x_cuña, y_cuña = round(cx * dpr), round((340 / 2 - 142 + 12) * dpr)
+    con = imagen.pixelColor(x_cuña, y_cuña)
+    salida.set_mostrar_obstaculos(False)
+    sin = salida.grab().toImage().pixelColor(x_cuña, y_cuña)
+    assert (con.red(), con.green(), con.blue()) != (
+        sin.red(),
+        sin.green(),
+        sin.blue(),
+    )
+    assert salida._obstacles["N"] == 45
+    salida.set_mostrar_obstaculos(True)
+    vuelta = salida.grab().toImage().pixelColor(x_cuña, y_cuña)
+    assert (vuelta.red(), vuelta.green(), vuelta.blue()) == (
+        con.red(),
+        con.green(),
+        con.blue(),
+    )
 
     # y sin datos vuelve al disco negro de fábrica (sin campo cacheado).
     salida.set_datos(None, None, {}, {})

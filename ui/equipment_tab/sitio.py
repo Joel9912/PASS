@@ -3,9 +3,10 @@
 Arriba, la rosácea con los 3 discos de `rosaceas.py` (orientación,
 obstrucciones y CL por dirección) a ancho completo; abajo, dos cuadros a
 mitades: la representación esquemática del sitio (``DiscoEsquematico``,
-con la casilla ``consider_lp`` «Usar Contaminación Lumínica al
-Planificar» en su fila superior, a la cota de la fila de nombre/botones
-del mapa, para que los dos discos arranquen iguales) y el mapa de CL
+con la casilla ``consider_lp`` «Usar CL y Obstáculos al Planificar» en
+su fila superior, a la cota de la fila de nombre/botones del mapa para
+que los dos discos arranquen iguales, y el interruptor solo visual
+«Mostrar obstáculos» bajo la gráfica) y el mapa de CL
 adjunto con su vista previa
 (``_VistaMapa``). Se sustituye a la antigua malla 3×3
 (``HorizonWidget``/``LightPollutionWidget``).
@@ -103,7 +104,7 @@ class SitioPanel(QWidget):
         self._lp_map: str | None = None
 
         # La casilla vive en la fila superior del cuadro del esquemático.
-        self._considerar = QCheckBox("Usar Contaminación Lumínica al Planificar")
+        self._considerar = QCheckBox("Usar CL y Obstáculos al Planificar")
         self._considerar.setChecked(True)
 
         layout = QVBoxLayout(self)
@@ -170,7 +171,7 @@ class SitioPanel(QWidget):
         return marco
 
     def _esquematico(self) -> QFrame:
-        """Cuadro de la representación del sitio, con la casilla de CL arriba."""
+        """El cuadro: casilla de planificación arriba, obstáculos abajo."""
         marco = QFrame()
         marco.setObjectName("GroupFrame")
         caja = QVBoxLayout(marco)
@@ -185,6 +186,17 @@ class SitioPanel(QWidget):
         caja.addWidget(self._considerar)
         self._salida = DiscoEsquematico()
         caja.addWidget(self._salida, 1)
+        # Interruptor de pantalla bajo la gráfica: oculta las cuñas rojas
+        # sin tocar lo guardado ni el planificador — no entra en
+        # ``valores()`` ni en la BD.
+        self._mostrar_obst = QCheckBox("Mostrar obstáculos")
+        self._mostrar_obst.setChecked(True)
+        self._mostrar_obst.setToolTip(
+            "Solo visual: quita las cuñas rojas de la gráfica. Los "
+            "obstáculos se guardan y se usan al planificar igual."
+        )
+        self._mostrar_obst.toggled.connect(self._salida.set_mostrar_obstaculos)
+        caja.addWidget(self._mostrar_obst)
         return marco
 
     def _mapa(self) -> QFrame:

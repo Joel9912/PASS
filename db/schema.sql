@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS locations (
     lp          TEXT,               -- {dir: {fuente, km}} CL por dirección
     bortle      INTEGER,            -- 1-9 (obligatorio en el formulario, no en la columna)
     sqm         REAL,               -- SQM cenital en mag/arcsec² (opcional)
-    -- «Tener en cuenta la CL en las capturas de esta ubicación»: de momento
+    -- «Usar CL y Obstáculos al Planificar»: de momento
     -- solo se guarda; el cableado a puntuación es el paso 6 (comparativa).
     consider_lp INTEGER NOT NULL DEFAULT 1,
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))

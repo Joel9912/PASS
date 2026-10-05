@@ -637,8 +637,9 @@ class DiscoEsquematico(QWidget):
     Sin datos de cielo (Bortle/SQM/fuentes) el disco queda negro con su
     rejilla, como la captura de referencia; con ellos se pinta el campo
     de color con la paleta ligada a mag/arcsec² y su barra, y encima van
-    las obstrucciones en rojo desde el borde hasta su altitud. Todo es
-    presentación: los valores entran por ``set_datos``.
+    las obstrucciones en rojo desde el borde hasta su altitud —ocultables
+    con ``set_mostrar_obstaculos``, solo pintado—. Todo es presentación:
+    los valores entran por ``set_datos``.
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -650,6 +651,8 @@ class DiscoEsquematico(QWidget):
         self._lp: dict[str, dict] = {d: {"fuente": None, "km": 0.0} for d in DIRECTIONS}
         self._fuentes: list[tuple[float, float, float, float, float]] = []
         self._campo: QImage | None = None
+        # Preferencia de pantalla: ¿pintar las cuñas rojas? Solo eso.
+        self._mostrar_obstaculos: bool = True
         self.setMinimumSize(320, 260)
 
     def sizeHint(self) -> QSize:
@@ -693,6 +696,15 @@ class DiscoEsquematico(QWidget):
         if fuentes != self._fuentes:
             self._fuentes = fuentes
             self._campo = self._construye_campo(fuentes) if fuentes else None
+        self.update()
+
+    def set_mostrar_obstaculos(self, mostrar: bool) -> None:
+        """Muestra/oculta las cuñas rojas (el interruptor «Mostrar obstáculos»).
+
+        Es puro pintado: los grados siguen en el widget y en la ubicación,
+        y el planificador no se entera de este interruptor.
+        """
+        self._mostrar_obstaculos = bool(mostrar)
         self.update()
 
     def _base_sqm(self) -> float | None:
@@ -742,7 +754,7 @@ class DiscoEsquematico(QWidget):
         return img
 
     def paintEvent(self, event) -> None:
-        """Pinta campo, rejilla, obstrucciones en rojo, letras y barra."""
+        """Pinta campo, rejilla, obstrucciones (si se muestran), letras y barra."""
         del event
         pintor = QPainter(self)
         pintor.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -778,15 +790,18 @@ class DiscoEsquematico(QWidget):
         self._pintar_rejilla(pintor, cx, cy, r)
 
         # Obstrucciones: rojo desde el borde hasta la altitud de cada una.
-        for direccion, grados in self._obstacles.items():
-            if grados <= 0:
-                continue
-            az = _AZIMUT[direccion]
-            pintor.setPen(QPen(QColor(150, 30, 25), 0.8))
-            pintor.setBrush(_ROJO)
-            pintor.drawPolygon(
-                _anillo(cx, cy, r, _r_altitud(r, grados), az - 22.5, az + 22.5)
-            )
+        # El interruptor «Mostrar obstáculos» solo decide si se pintan: los
+        # grados no se tocan.
+        if self._mostrar_obstaculos:
+            for direccion, grados in self._obstacles.items():
+                if grados <= 0:
+                    continue
+                az = _AZIMUT[direccion]
+                pintor.setPen(QPen(QColor(150, 30, 25), 0.8))
+                pintor.setBrush(_ROJO)
+                pintor.drawPolygon(
+                    _anillo(cx, cy, r, _r_altitud(r, grados), az - 22.5, az + 22.5)
+                )
 
         _pintar_letras(pintor, cx, cy, r)
         if base is not None:
