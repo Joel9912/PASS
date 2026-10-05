@@ -99,7 +99,9 @@ Planning-Stacking-Suite/
 │   │   ├── __init__.py           # EquipmentPage (señales setups/locations_changed)
 │   │   ├── equipos.py            # EquiposTab
 │   │   ├── componentes.py        # Formularios + PartPicker/PartEditor + filtros
-│   │   ├── sitio.py              # HorizonWidget y LightPollutionWidget
+│   │   ├── rosaceas.py           # Rosácea: rosa de vientos, disco de
+│   │   │                     #   obstrucciones, disco de CL y esquemático
+│   │   ├── sitio.py              # SitioPanel (rosácea + cuadros + CL)
 │   │   ├── ubicaciones.py        # UbicacionesTab
 │   │   └── README.md
 │   ├── planner_equip_tab/README.md  # Comparativas por métricas de usuario
