@@ -8,7 +8,10 @@ El veredicto de muestreo no impone verdad: usa dos **umbrales
 configurables** (claves de ``settings``: ``sampling_under_ratio`` y
 ``sampling_over_ratio`` sobre el límite de Dawes, defaults 1.0 y 0.5). Se
 leen con ``db.settings.get_float`` y llegan aquí como parámetros: las
-métricas las define el usuario.
+métricas las define el usuario. Si la ubicación informa su **seeing**,
+`rango_muestreo` recorta el intervalo adecuado con él y el veredicto
+pasa por el mismo filtro (sin veredicto ni rango si no hay dato: nada se
+inventa).
 """
 from .models import Camera, Telescope
 
@@ -72,28 +75,65 @@ def relacion_focal(
     return focal_efectiva_mm / aperture_mm
 
 
+def rango_muestreo(
+    resolucion: float | None,
+    umbral_sub: float = 1.0,
+    umbral_sob: float = 0.5,
+    seeing: float | None = None,
+) -> tuple[float, float] | None:
+    """Rango de escala adecuado ``[bajo, alto]`` en ″/px (None sin resolución).
+
+    La banda de Dawes es ``[resolución × umbral_sob, resolución ×
+    umbral_sub]`` — los mismos umbrales del veredicto: dentro de ella la
+    escala no está ni sub ni sobremuestreada. Si la ubicación informa su
+    seeing FWHM, se recorta además a lo que ese ciel permite muestrear
+    bien: ``[máx(bajo_dawes, seeing/4), mín(alto_dawes, seeing/2)]``.
+
+    Si las dos bandas salen disjuntas (el seeing y la resolución se
+    contradicen), gana la de escala más fina: es la que nunca pierde
+    detalle real; la otra solo aportaba eficiencia.
+    """
+    if not resolucion or resolucion <= 0:
+        return None
+    banda_optica = (resolucion * umbral_sob, resolucion * umbral_sub)
+    if seeing is None or seeing <= 0:
+        return banda_optica
+    banda_seeing = (seeing / 4.0, seeing / 2.0)
+    bajo = max(banda_optica[0], banda_seeing[0])
+    alto = min(banda_optica[1], banda_seeing[1])
+    if bajo > alto:  # disjuntas → la banda inferior (escala más fina)
+        return banda_seeing if banda_seeing[1] < banda_optica[0] else banda_optica
+    return (bajo, alto)
+
+
 def veredicto_muestreo(
     escala: float | None,
     resolucion: float | None,
     umbral_sub: float = 1.0,
     umbral_sob: float = 0.5,
+    seeing: float | None = None,
 ) -> str | None:
     """«Submuestreado» / «Adecuado» / «Sobremuestreado» según los umbrales.
 
-    - ``escala > umbral_sub × resolución`` → «Submuestreado»: el píxel es
-      tan grueso que no resuelve lo que la óptica da.
-    - ``escala < umbral_sob × resolución`` → «Sobremuestreado»: píxeles
-      más finos de lo que la óptica permite aprovechar.
-    - En el intervalo → «Adecuado».
+    El veredicto es la posición de ``escala`` dentro de `rango_muestreo`
+    (con los mismos umbrales y, si se pasa, el seeing de la ubicación):
+
+    - por encima del alto → «Submuestreado»: el píxel es tan grueso que
+      no resuelve lo que se ve.
+    - por debajo del bajo → «Sobremuestreado»: píxeles más finos de lo
+      que la óptica permite aprovechar.
+    - dentro, **fronteras incluidas** → «Adecuado».
 
     Sin escala o sin resolución no hay veredicto: ``None`` (la UI pinta
     «—»).
     """
-    if escala is None or resolucion is None or resolucion <= 0:
+    rango = rango_muestreo(resolucion, umbral_sub, umbral_sob, seeing)
+    if escala is None or rango is None:
         return None
-    if escala > umbral_sub * resolucion:
+    bajo, alto = rango
+    if escala > alto:
         return "Submuestreado"
-    if escala < umbral_sob * resolucion:
+    if escala < bajo:
         return "Sobremuestreado"
     return "Adecuado"
 
@@ -103,14 +143,17 @@ def calculos(
     camara: Camera,
     umbral_sub: float = 1.0,
     umbral_sob: float = 0.5,
-) -> dict[str, float | str | None]:
+    seeing: float | None = None,
+) -> dict[str, float | str | tuple[float, float] | None]:
     """Todas las filas del bloque «Cálculos» para la pareja en pantalla.
 
     Toma el telescopio y la cámara **principales tal como están en los
     formularios** (con la entrada del reductor dentro del telescopio) y
-    devuelve ``focal_efectiva``, ``escala``, ``dawes``, ``relacion_focal``
-    y ``muestreo``; cada clave vale ``None`` cuando falta un dato (la UI
-    pinta «—» y explica qué falta).
+    devuelve ``focal_efectiva``, ``escala``, ``dawes``, ``relacion_focal``,
+    ``muestreo`` y ``muestreo_rango`` (el intervalo adecuado ″/px que
+    pintan la pista y la barra, recortado por el ``seeing`` de la
+    ubicación si la hay); cada clave vale ``None`` cuando falta un dato
+    (la UI pinta «—» y explica qué falta).
     """
     focal = focal_efectiva(
         telescopio.focal_mm, telescopio.reducer, telescopio.reducer_factor
@@ -122,5 +165,6 @@ def calculos(
         "escala": escala,
         "dawes": dawes,
         "relacion_focal": relacion_focal(focal, telescopio.aperture_mm),
-        "muestreo": veredicto_muestreo(escala, dawes, umbral_sub, umbral_sob),
+        "muestreo": veredicto_muestreo(escala, dawes, umbral_sub, umbral_sob, seeing),
+        "muestreo_rango": rango_muestreo(dawes, umbral_sub, umbral_sob, seeing),
     }

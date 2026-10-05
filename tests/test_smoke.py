@@ -569,6 +569,63 @@ def test_subtipo_es_solo_seleccionable_y_conserva_el_guardado(memory_db):
     form.deleteLater()
 
 
+def test_calculos_con_seeing_rango_y_barra(memory_db):
+    """Cálculos: el seeing recorta el rango, colorea el veredicto y pinta la barra.
+
+    Regresiones del muestreo por rangos: la pista añade «Rango adecuado:
+    X–Y ″/px», la etiqueta de Muestreo se tiñe según el veredicto
+    (naranja/verde/violeta), la barra de 3 zonas pinta, y elegir una
+    ubicación con seeing cambia rango y veredicto (sin ubicación o sin
+    dato manda solo Dawes con los umbrales de Configuración).
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import QApplication
+
+    from equipment import localizations
+    from equipment.models import DIRECTIONS, Location
+    from ui.equipment_tab.equipos import EquiposTab
+
+    _app = QApplication.instance() or QApplication([])
+    tab = EquiposTab()
+
+    tel = tab._tel_principal.form
+    tel._apertura.setValue(80.0)
+    tel._focal.setValue(400.0)
+    cam = tab._cam_principal.form
+    cam._pixel.setValue(2.4)  # ≈ 1,24 ″/px
+
+    # Sin ubicación: solo Dawes (0,725–1,45) → «Adecuado» en verde.
+    assert "Rango adecuado:" in tab._pista_calculos.text()
+    assert tab._muestreo.text() == "Adecuado"
+    assert "#2ECC71" in tab._muestreo.styleSheet()
+    assert not tab._barra.grab().isNull()
+
+    # Ubicación con seeing de 1 ″ → banda (0,25–0,5): la misma escala es
+    # submuestreada (naranja) y la pista enseña el rango recortado.
+    pk = localizations.create(
+        Location(
+            name="Cielo fino",
+            latitude=40.0,
+            longitude=-3.0,
+            bortle=4,
+            seeing_arcsec=1.0,
+            obstacles={d: 0 for d in DIRECTIONS},
+            lp={d: {"fuente": None, "km": 0.0} for d in DIRECTIONS},
+        )
+    )
+    tab.reload_locations()
+    tab._ubicacion.setCurrentIndex(tab._ubicacion.findData(pk))
+
+    assert "Rango adecuado: 0.25–0.50 ″/px." in tab._pista_calculos.text()
+    assert tab._muestreo.text() == "Submuestreado"
+    assert "#F39C12" in tab._muestreo.styleSheet()
+
+    tab.deleteLater()
+
+
 def test_equipo_cableado_en_la_ventana(monkeypatch):
     """Paso 3: Equipo ya no es placeholder y sus señales llegan al Planificador.
 

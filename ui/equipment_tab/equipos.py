@@ -17,6 +17,7 @@ base.
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QColor, QPainter, QPainterPath
 from PyQt6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -30,6 +31,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSplitter,
     QTabWidget,
     QVBoxLayout,
@@ -56,6 +58,83 @@ from .componentes import (
 def _formato(valor: float | None, unidad: str = "") -> str:
     """Pinta una métrica: «—» si falta el dato, 2 decimales con unidad si no."""
     return "—" if valor is None else f"{valor:.2f}{unidad}"
+
+
+#: Colores del veredicto de muestreo (etiqueta y barra de zonas), decididos
+#: por el usuario: naranja = submuestreado, verde = adecuado y violeta =
+#: sobremuestreado. Legibles sobre el fondo oscuro del tema.
+_VEREDICTO_COLOR = {
+    "Submuestreado": "#F39C12",
+    "Adecuado": "#2ECC71",
+    "Sobremuestreado": "#A78BFA",
+}
+
+
+class BarraMuestreo(QWidget):
+    """Mini barra de 3 zonas con el marcador de la escala actual.
+
+    Zonas según el rango adecuado de `equipment.metrics.rango_muestreo`:
+    violeta (escala fina, sobremuestreado), verde (adecuado) y naranja
+    (escala gruesa, submuestreado). El dominio va de 0 a
+    ``máx(escala, alto del rango) × 1,15`` para que el marcador nunca se
+    salga; sin rango (no hay apertura) se pinta una barra gris lisa de
+    «sin datos».
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        """Barra apilable de alto fijo; los datos llegan con `pintar`."""
+        super().__init__(parent)
+        self._escala: float | None = None
+        self._rango: tuple[float, float] | None = None
+        self.setFixedHeight(16)
+        self.setMinimumWidth(160)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setToolTip(
+            "Zonas del rango adecuado: violeta sobremuestreado · "
+            "verde adecuado · naranja submuestreado (la línea marca la escala)."
+        )
+
+    def pintar(
+        self, escala: float | None, rango: tuple[float, float] | None
+    ) -> None:
+        """Actualiza escala y rango y repinta (``None`` = sin dato)."""
+        self._escala = escala if escala and escala > 0 else None
+        self._rango = rango
+        self.update()
+
+    def paintEvent(self, evento) -> None:
+        """Pinta las tres zonas redondeadas y el marcador de la escala."""
+        del evento  # el repintado es completo: no hace falta usar el rect
+        pintor = QPainter(self)
+        pintor.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        ancho, alto = self.width(), self.height()
+        ruta = QPainterPath()
+        ruta.addRoundedRect(0.0, 0.0, float(ancho), float(alto), 4.0, 4.0)
+        pintor.setClipPath(ruta)
+
+        if self._rango is None:
+            pintor.fillRect(0, 0, ancho, alto, QColor("#4A5058"))
+        else:
+            bajo, alto_rango = self._rango
+            fin = max(self._escala or 0.0, alto_rango) * 1.15 or 1.0
+            x_bajo = max(0, min(ancho, int(bajo / fin * ancho)))
+            x_alto = max(x_bajo, min(ancho, int(alto_rango / fin * ancho)))
+            pintor.fillRect(
+                0, 0, x_bajo, alto, QColor(_VEREDICTO_COLOR["Sobremuestreado"])
+            )
+            pintor.fillRect(
+                x_bajo, 0, x_alto - x_bajo, alto,
+                QColor(_VEREDICTO_COLOR["Adecuado"]),
+            )
+            pintor.fillRect(
+                x_alto, 0, ancho - x_alto, alto,
+                QColor(_VEREDICTO_COLOR["Submuestreado"]),
+            )
+        if self._escala is not None and self._rango is not None:
+            fin = max(self._escala, self._rango[1]) * 1.15
+            x = max(2, min(ancho - 2, int(self._escala / fin * ancho)))
+            pintor.fillRect(x - 2, 0, 5, alto, QColor("#0d1117"))
+            pintor.fillRect(x - 1, 0, 3, alto, QColor("#e6edf3"))
 
 
 class EquiposTab(QWidget):
@@ -134,6 +213,8 @@ class EquiposTab(QWidget):
             editor.saved.connect(self._tras_pieza_guardada)
         self._filtros.saved.connect(self.setups_changed.emit)
         self._filtros.changed.connect(self._recalcular)  # casilla → suma en vivo
+        # Cambiar de ubicación cambia el seeing que recorta el rango.
+        self._ubicacion.currentIndexChanged.connect(lambda _i: self._recalcular())
         self._recargar_lista(select_id=None)
 
     # -- construcción ------------------------------------------------------
@@ -288,7 +369,15 @@ class EquiposTab(QWidget):
             "Sobre el telescopio y la cámara principales en pantalla."
         )
         self._pista_calculos.setObjectName("HintLabel")
-        lay.addWidget(self._pista_calculos)
+        self._pista_calculos.setWordWrap(True)
+        # Barra de zonas a la izquierda de la pista: el usuario aprobó
+        # «Rango adecuado: …» junto a los «Falta:…» y su barra con marcador.
+        self._barra = BarraMuestreo()
+        fila_pista = QHBoxLayout()
+        fila_pista.setSpacing(8)
+        fila_pista.addWidget(self._barra)
+        fila_pista.addWidget(self._pista_calculos, 1)
+        lay.addLayout(fila_pista)
         return marco
 
     # -- lista y carga -----------------------------------------------------
@@ -303,6 +392,26 @@ class EquiposTab(QWidget):
             self._ubicacion.addItem(str(lugar["name"]), lugar["id"])
         self._ubicacion.setCurrentIndex(max(0, self._ubicacion.findData(actual)))
         self._ubicacion.blockSignals(False)
+        # El seeing de la ubicación recorta el rango: si cambió (p. ej. al
+        # volver de Ubicaciones), recalcular. El primer relleno pasa durante
+        # la construcción de la cabecera, cuando los editores aún no existen.
+        if self._editores:
+            self._recalcular()
+
+    def _seeing_ubicacion(self) -> float | None:
+        """Seeing FWHM de la ubicación elegida en la cabecera (None si no hay).
+
+        Se lee de la BD en cada recálculo: la tabla es corta y así un
+        cambio en la pestaña Ubicaciones se refleja al instante (sin
+        caché que desincronice). «—» o ubicación sin dato → ``None``.
+        """
+        ubicacion_id = self._ubicacion.currentData()
+        if ubicacion_id is None:
+            return None
+        for lugar in localizations.list_locations():
+            if lugar["id"] == ubicacion_id:
+                return lugar.get("seeing_arcsec")
+        return None
 
     def _recargar_lista(self, select_id: int | None) -> None:
         """Repuebla la lista y carga ``select_id`` (si no, la primera fila)."""
@@ -455,7 +564,12 @@ class EquiposTab(QWidget):
     # -- cálculos ----------------------------------------------------------
 
     def _recalcular(self) -> None:
-        """Repinta «Cálculos» con la pareja principal en pantalla (en vivo)."""
+        """Repinta «Cálculos» con la pareja principal en pantalla (en vivo).
+
+        El seeing de la ubicación elegida en la cabecera recorta el rango
+        adecuado (y con él el veredicto); sin ubicación o sin dato manda
+        solo Dawes con los umbrales de Configuración.
+        """
         telescopio = self._tel_principal.form.a_modelo()
         camara = self._cam_principal.form.a_modelo()
         filas = calculos(
@@ -463,6 +577,7 @@ class EquiposTab(QWidget):
             camara,
             get_float("sampling_under_ratio", 1.0),
             get_float("sampling_over_ratio", 0.5),
+            self._seeing_ubicacion(),
         )
         self._escala.setText(_formato(filas["escala"], " ″/px"))
         self._dawes.setText(_formato(filas["dawes"], " ″"))
@@ -470,7 +585,10 @@ class EquiposTab(QWidget):
             f"F/{filas['relacion_focal']:.1f}" if filas["relacion_focal"] else "—"
         )
         self._efectiva.setText(_formato(filas["focal_efectiva"], " mm"))
-        self._muestreo.setText(filas["muestreo"] or "—")
+        veredicto = filas["muestreo"]
+        self._muestreo.setText(veredicto or "—")
+        color = _VEREDICTO_COLOR.get(veredicto) if veredicto else None
+        self._muestreo.setStyleSheet(f"color: {color};" if color else "")
         faltan = []
         if telescopio.focal_mm is None:
             faltan.append("focal")
@@ -478,10 +596,14 @@ class EquiposTab(QWidget):
             faltan.append("píxel de la cámara")
         if telescopio.aperture_mm is None:
             faltan.append("apertura")
-        base = "Sobre el telescopio y la cámara principales en pantalla."
-        self._pista_calculos.setText(
-            f"{base} Falta: {' · '.join(faltan)}." if faltan else base
-        )
+        rango = filas["muestreo_rango"]
+        piezas = ["Sobre el telescopio y la cámara principales en pantalla."]
+        if rango:
+            piezas.append(f"Rango adecuado: {rango[0]:.2f}–{rango[1]:.2f} ″/px.")
+        if faltan:
+            piezas.append(f"Falta: {' · '.join(faltan)}.")
+        self._pista_calculos.setText(" ".join(piezas))
+        self._barra.pintar(filas["escala"], rango)
         self._repinta_totales()
 
     def _repinta_totales(self) -> None:

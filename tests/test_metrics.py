@@ -18,6 +18,7 @@ from equipment.metrics import (
     escala_imagen,
     focal_efectiva,
     limite_dawes,
+    rango_muestreo,
     relacion_focal,
     veredicto_muestreo,
 )
@@ -101,6 +102,56 @@ def test_veredicto_muestreo_en_la_frontera_es_adecuado():
     assert veredicto_muestreo(0.5, 1.0) == "Adecuado"   # == umbral_sob × res
 
 
+def test_rango_de_muestreo_con_y_sin_seeing():
+    """Rango adecuado: banda de Dawes sola o recortada por el seeing.
+
+    Sin seeing es exactamente la banda de los umbrales (lo que ya se
+    usaba); con seeing se recorta a ``[máx(bajo, S/4), mín(alto, S/2)]``
+    y, si las bandas salen disjuntas, gana la de escala más fina.
+    """
+    assert rango_muestreo(1.45) == pytest.approx((0.725, 1.45))
+    # Seeing peor que la banda de Dawes → recorta por arriba:
+    # [máx(0,725 · 0,75), mín(1,45 · 1,5)] = (0,75 · 1,45).
+    assert rango_muestreo(1.45, seeing=3.0) == pytest.approx((0.75, 1.45))
+    # Seeing mejor que la óptica (1,45 > 1): disjuntas → gana la del seeing.
+    assert rango_muestreo(1.45, seeing=1.0) == pytest.approx((0.25, 0.5))
+    # Los umbrales siguen mandando sobre las dos bandas.
+    assert rango_muestreo(1.45, umbral_sob=0.8, seeing=3.0) == pytest.approx(
+        (1.16, 1.45)
+    )
+
+    # Sin apertura no hay banda; seeing 0 cuenta como no informado.
+    assert rango_muestreo(None) is None
+    assert rango_muestreo(0.0) is None
+    assert rango_muestreo(1.45, seeing=0.0) == pytest.approx((0.725, 1.45))
+
+
+def test_veredicto_y_calculos_usan_el_seeing():
+    """El seeing de la ubicación recorta el veredicto y añade `muestreo_rango`.
+
+    El mismo equipo pasa de «Adecuado» (solo Dawes) a «Submuestreado» al
+    elegir una ubicación con seeing de 1 ″. La llamada sin ``seeing`` —
+    la de antes de este cambio — sigue funcionando igual.
+    """
+    telescopio = Telescope(name="ED80", aperture_mm=80.0, focal_mm=400.0)
+    camara = Camera(name="Cooled", pixel_size_um=2.4)
+    escala = escala_imagen(400.0, 2.4)  # ≈ 1,24 ″/px
+
+    # Solo Dawes (1,45 ″): 1,24 está en (0,725 · 1,45) → adecuado.
+    assert veredicto_muestreo(escala, 1.45) == "Adecuado"
+    # Con seeing 1 ″ la banda es (0,25 · 0,5): la misma escala es gruesa.
+    assert veredicto_muestreo(escala, 1.45, seeing=1.0) == "Submuestreado"
+
+    filas = calculos(telescopio, camara, seeing=1.0)
+    assert filas["muestreo_rango"] == pytest.approx((0.25, 0.5))
+    assert filas["muestreo"] == "Submuestreado"
+
+    filas_sin = calculos(telescopio, camara)  # firma antigua, sin seeing
+    assert filas_sin["muestreo_rango"] == pytest.approx((0.725, 1.45))
+    assert filas_sin["muestreo"] == "Adecuado"
+    assert set(filas_sin) == set(filas)
+
+
 def test_calculos_del_bloque_completo():
     """El bloque «Cálculos» devuelve las 5 filas de la pareja en pantalla."""
     telescopio = Telescope(
@@ -129,7 +180,14 @@ def test_calculos_sin_datos_pintan_none():
     """Equipo vacío → todas las claves presentes con None (la UI pinta «—»)."""
     filas = calculos(Telescope(), Camera())
 
-    assert set(filas) == {"focal_efectiva", "escala", "dawes", "relacion_focal", "muestreo"}
+    assert set(filas) == {
+        "focal_efectiva",
+        "escala",
+        "dawes",
+        "relacion_focal",
+        "muestreo",
+        "muestreo_rango",
+    }
     assert all(valor is None for valor in filas.values())
 
 
