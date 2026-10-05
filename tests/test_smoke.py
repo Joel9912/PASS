@@ -177,6 +177,54 @@ def test_equipment_page_construye_con_sus_dos_subpestanas():
     pagina.deleteLater()
 
 
+def test_ubicaciones_fila_geografia_primero_y_vista_previa_mapa(tmp_path):
+    """Paso 2b: fila Geografía|Cielo y vista previa del mapa de CL.
+
+    Regresiones de la revisión: la fila superior va **Geografía primero**
+    (no al revés) y la imagen cargada aparece en el cuadro de la derecha
+    para modelar con la referencia a la vista — vacío sin mapa y aviso si
+    la ruta no se puede cargar.
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtGui import QImage
+    from PyQt6.QtWidgets import QApplication
+
+    from ui.equipment_tab import EquipmentPage
+
+    _app = QApplication.instance() or QApplication([])
+    pagina = EquipmentPage()
+    tab = pagina.ubicaciones
+
+    # La fila superior: el primer hueco es la caja de Geografía (contiene
+    # el Nombre) y el segundo la de Cielo.
+    fila = tab._fila_superior.layout()
+    primera = fila.itemAt(0).widget()
+    assert primera is not None and primera.isAncestorOf(tab._nombre)
+
+    # Vista previa: sin mapa → vacía; con imagen → cargada a tamaño real.
+    vista = tab._sitio._vista
+    tab._sitio.set_valores({}, {}, None, True)
+    assert vista._original.isNull()
+
+    ruta = tmp_path / "mapa.png"
+    imagen = QImage(8, 6, QImage.Format.Format_RGB32)
+    imagen.fill(0)
+    assert imagen.save(str(ruta))
+    tab._sitio.set_valores({}, {}, str(ruta), True)
+    assert not vista._original.isNull()
+    assert vista._original.width() == 8
+
+    # Ruta inexistente → sin imagen y aviso en el propio rótulo.
+    tab._sitio.set_valores({}, {}, str(tmp_path / "no_existe.png"), True)
+    assert vista._original.isNull()
+    assert "No se pudo" in vista.text()
+
+    pagina.deleteLater()
+
+
 def test_rosaceas_construyen_pintan_y_hacen_roundtrip():
     """Paso 2: los discos de la rosácea construyen, pintan y roundtrip.
 

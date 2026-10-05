@@ -3,8 +3,9 @@
 Arriba, la rosácea con los 3 discos de `rosaceas.py` (orientación,
 obstrucciones y CL por dirección); abajo, los dos cuadros grandes: la
 representación esquemática del sitio (``DiscoEsquematico``) y el mapa de
-CL adjunto, más la casilla ``consider_lp``. Se sustituye a la antigua
-malla 3×3 (``HorizonWidget``/``LightPollutionWidget``).
+CL adjunto con su vista previa (``_VistaMapa``), más la casilla
+``consider_lp``. Se sustituye a la antigua malla 3×3
+(``HorizonWidget``/``LightPollutionWidget``).
 
 Regla UX global (§9): **nada se persiste hasta «Guardar ubicación»** —
 los discos mantienen el estado en memoria y la copia a ``data/`` del mapa
@@ -15,6 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import (
     QCheckBox,
     QFileDialog,
@@ -22,6 +24,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -35,6 +38,50 @@ from .rosaceas import (
 
 #: Ficheros de imagen admitidos para el mapa de CL.
 _FILTRO_IMAGENES = "Imágenes (*.png *.jpg *.jpeg *.bmp);;Todos los archivos (*)"
+
+
+class _VistaMapa(QLabel):
+    """Vista previa del mapa de CL, escalada al cuadro disponible.
+
+    La imagen original se conserva intacta y se reescala al cambiar de
+    tamaño; el ``sizePolicy`` en Ignored evita que el tamaño del pixmap
+    alimente al layout (bucle de redimensionado).
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        """Rótulo centrado, con un mínimo por si el cuadro queda estrecho."""
+        super().__init__(parent)
+        self._original = QPixmap()
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+        self.setMinimumSize(160, 120)
+
+    def set_ruta(self, ruta: str | None) -> None:
+        """Carga la imagen de ``ruta`` (o la vacía) y la escala al cuadro."""
+        self._original = QPixmap(ruta) if ruta else QPixmap()
+        if self._original.isNull():
+            self.setText("No se pudo cargar la imagen" if ruta else "")
+            return
+        self.setText("")
+        self._escalar()
+
+    def resizeEvent(self, event) -> None:
+        """Reescala al redimensionar para aprovechar todo el cuadro."""
+        super().resizeEvent(event)
+        self._escalar()
+
+    def _escalar(self) -> None:
+        """Pone el pixmap manteniendo la proporción del original."""
+        if self._original.isNull():
+            return
+        self.setPixmap(
+            self._original.scaled(
+                max(1, self.width() - 4),
+                max(1, self.height() - 4),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
 
 
 class SitioPanel(QWidget):
@@ -149,7 +196,10 @@ class SitioPanel(QWidget):
         referencia.setObjectName("HintLabel")
         referencia.setWordWrap(True)
         caja.addWidget(referencia)
-        caja.addStretch(1)
+        # Vista previa: el usuario modela discos y obstrucciones con la
+        # referencia a la vista (ocupa todo el resto del cuadro).
+        self._vista = _VistaMapa()
+        caja.addWidget(self._vista, 1)
         return marco
 
     # -- estado ------------------------------------------------------------
@@ -208,7 +258,7 @@ class SitioPanel(QWidget):
         self._actualizar_mapa()
 
     def _actualizar_mapa(self) -> None:
-        """Pinta el nombre del archivo y habilita «Quitar» si hay mapa."""
+        """Pinta nombre, vista previa y «Quitar» habilitado si hay mapa."""
         if self._lp_map:
             self._mapa_lbl.setText(Path(self._lp_map).name)
             self._mapa_lbl.setToolTip(self._lp_map)
@@ -216,3 +266,4 @@ class SitioPanel(QWidget):
             self._mapa_lbl.setText("Sin mapa")
             self._mapa_lbl.setToolTip("")
         self._boton_quitar.setEnabled(bool(self._lp_map))
+        self._vista.set_ruta(self._lp_map)

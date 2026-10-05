@@ -3,7 +3,7 @@
 Layout simétrico al de Equipos: ``QSplitter`` con la lista y los botones
 «Nueva…»/«Eliminar» a la izquierda; a la derecha, la cabecera con
 «Guardar ubicación» (siempre visible) y, en scroll, la ficha completa —
-Cielo (Bortle/SQM) y Geografía en fila superior a medio ancho con
+Geografía y Cielo (Bortle/SQM) en fila superior a medio ancho con
 parejas de campos, y debajo el ``SitioPanel`` (rosácea + esquemático +
 mapa de CL).
 
@@ -95,7 +95,10 @@ class UbicacionesTab(QWidget):
         flay = QVBoxLayout(ficha)
         flay.setContentsMargins(0, 0, 6, 0)
         flay.setSpacing(10)
-        flay.addWidget(self._fila_cielo_geografia())
+        # Guardada como atributo: el orden Geografía|Cielo es contractual
+        # (lo comprueba el test de regresión de la revisión).
+        self._fila_superior = self._fila_cielo_geografia()
+        flay.addWidget(self._fila_superior)
         self._sitio = SitioPanel()
         flay.addWidget(self._sitio)
         flay.addStretch(1)
@@ -132,14 +135,14 @@ class UbicacionesTab(QWidget):
         return marco
 
     def _fila_cielo_geografia(self) -> QFrame:
-        """Fila superior: Cielo (Bortle/SQM) a la izquierda y Geografía a medio ancho."""
+        """Fila superior: Geografía a la izquierda y Cielo (Bortle/SQM) a medio ancho."""
         marco = QFrame()
         marco.setObjectName("GroupFrame")
         lay = QHBoxLayout(marco)
         lay.setContentsMargins(12, 6, 12, 10)
         lay.setSpacing(12)
-        lay.addWidget(self._cielo(), 1)
         lay.addWidget(self._geografia(), 1)
+        lay.addWidget(self._cielo(), 1)
         return marco
 
     def _cielo(self) -> QWidget:
