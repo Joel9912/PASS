@@ -23,7 +23,6 @@ from PyQt6.QtWidgets import (
     QFrame,
     QGridLayout,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -275,6 +274,13 @@ class EquiposTab(QWidget):
             form.addWidget(campo_a, fila, 1)
             form.addWidget(QLabel(etiqueta_b), fila, 2)
             form.addWidget(campo_b, fila, 3)
+        # Afine A: aviso inline «Falta: nombre» bajo el campo (sin cuadro de
+        # diálogo); solo se enseña al guardar vacío y se quita al teclear.
+        self._falta_nombre = QLabel("Falta: nombre")
+        self._falta_nombre.setStyleSheet("color: #F85149; font-size: 12px;")
+        self._falta_nombre.hide()
+        self._nombre.textChanged.connect(lambda _texto: self._falta_nombre.hide())
+        form.addWidget(self._falta_nombre, len(parejas), 0, 1, 2)
         form.setColumnStretch(1, 1)
         form.setColumnStretch(3, 1)
         lay.addLayout(form)
@@ -414,7 +420,11 @@ class EquiposTab(QWidget):
         return None
 
     def _recargar_lista(self, select_id: int | None) -> None:
-        """Repuebla la lista y carga ``select_id`` (si no, la primera fila)."""
+        """Repuebla la lista y carga ``select_id`` (si no, la primera fila).
+
+        Con la lista vacía se pinta una fila de ayuda no seleccionable
+        (afine A): la lista explica qué hacer en vez de dejar un hueco.
+        """
         self._cargando = True
         self._lista.clear()
         ids: list[int] = []
@@ -426,6 +436,10 @@ class EquiposTab(QWidget):
             item.setData(Qt.ItemDataRole.UserRole, equipo["id"])
             self._lista.addItem(item)
             ids.append(equipo["id"])
+        if not ids:
+            vacio = QListWidgetItem("(sin equipos — pulsa «Nuevo…»)")
+            vacio.setFlags(vacio.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+            self._lista.addItem(vacio)
         objetivo = select_id if select_id in ids else (ids[0] if ids else None)
         if objetivo is not None:
             self._lista.setCurrentRow(ids.index(objetivo))
@@ -487,16 +501,17 @@ class EquiposTab(QWidget):
     # -- acciones ----------------------------------------------------------
 
     def _nuevo(self) -> None:
-        """Alta en memoria: pide nombre y deja la ficha lista para «Guardar»."""
-        nombre, ok = QInputDialog.getText(self, "Nuevo equipo", "Nombre del equipo:")
-        if not ok or not nombre.strip():
-            return
+        """Alta en memoria: deja la ficha en blanco con el cursor en Nombre.
+
+        Sin diálogo de nombre (afine A): el texto se teclea en la propia
+        ficha y nada se persiste hasta «Guardar equipo» (§9).
+        """
         self._cargando = True
         self._lista.setCurrentRow(-1)  # ninguna fila seleccionada
         self._cargando = False
         self._setup_id = None
         self._imagenes_setup = []
-        self._nombre.setText(nombre.strip())
+        self._nombre.clear()
         self._categoria.setCurrentIndex(max(0, self._categoria.findData("general")))
         self._ubicacion.setCurrentIndex(0)
         self._notas.clear()
@@ -508,7 +523,16 @@ class EquiposTab(QWidget):
         self._nombre.setFocus()
 
     def _guardar(self) -> None:
-        """Persiste el equipo: create si es nuevo, update si venía de la base."""
+        """Persiste el equipo: create si es nuevo, update si venía de la base.
+
+        Afine A: sin nombre no se persiste nada y la cabecera enseña el
+        hint «Falta: nombre» (sin cuadro de diálogo; se quita al teclear).
+        El resto de errores de guardado siguen con su aviso modal.
+        """
+        if not self._nombre.text().strip():
+            self._falta_nombre.show()
+            self._nombre.setFocus()
+            return
         setup = EquipmentSetup(
             id=self._setup_id,
             name=self._nombre.text().strip(),

@@ -626,6 +626,63 @@ def test_calculos_con_seeing_rango_y_barra(memory_db):
     tab.deleteLater()
 
 
+def test_afines_nuevo_sin_dialogo_lista_vacia_y_falta_nombre(memory_db, monkeypatch):
+    """Afines A de Equipos: «Nuevo…» sin diálogo, ayuda en lista vacía y «Falta: nombre».
+
+    Regresiones: «Nuevo…» no debe abrir ningún QInputDialog (deja la
+    ficha en blanco), una lista sin equipos pinta una fila de ayuda no
+    seleccionable, y «Guardar equipo» sin nombre enseña el hint inline
+    «Falta: nombre» sin aviso modal —que se quita al teclear— sin
+    persistir nada.
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    import pytest
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtWidgets import QApplication, QInputDialog, QMessageBox
+
+    from ui.equipment_tab.equipos import EquiposTab
+
+    _app = QApplication.instance() or QApplication([])
+    tab = EquiposTab()
+
+    # Lista vacía → una fila de ayuda, no seleccionable.
+    assert tab._lista.count() == 1
+    ayuda = tab._lista.item(0)
+    assert "sin equipos" in ayuda.text()
+    assert not bool(ayuda.flags() & Qt.ItemFlag.ItemIsSelectable)
+
+    # «Nuevo…»: si abriera el diálogo de nombre, el test revienta.
+    def _sin_dialogo(*_args, **_kwargs):
+        pytest.fail("«Nuevo…» no debe abrir QInputDialog")
+
+    monkeypatch.setattr(QInputDialog, "getText", _sin_dialogo)
+    tab._nuevo()
+    assert tab._setup_id is None
+    assert tab._nombre.text() == ""
+
+    # Guardar sin nombre → hint inline, sin aviso modal y sin persistir.
+    def _sin_modal(*_args, **_kwargs):
+        pytest.fail("«Falta: nombre» no debe abrir aviso modal")
+
+    monkeypatch.setattr(QMessageBox, "warning", _sin_modal)
+    tab._guardar()
+    assert tab._setup_id is None
+    assert not tab._falta_nombre.isHidden()
+
+    # Al teclear desaparece el hint y el equipo se guarda (fila real).
+    tab._nombre.setText("Equipo nuevo")
+    assert tab._falta_nombre.isHidden()
+    tab._guardar()
+    assert tab._setup_id is not None
+    assert tab._lista.count() == 1
+    assert "Equipo nuevo" in tab._lista.item(0).text()
+
+    tab.deleteLater()
+
+
 def test_equipo_cableado_en_la_ventana(monkeypatch):
     """Paso 3: Equipo ya no es placeholder y sus señales llegan al Planificador.
 
