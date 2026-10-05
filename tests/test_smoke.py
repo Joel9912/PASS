@@ -282,14 +282,16 @@ def test_ubicaciones_fila_geografia_primero_y_vista_previa_mapa(tmp_path):
 
 
 def test_ubicacion_altitud_desfase_y_sqm(memory_db):
-    """Revisión 2: la altitud sobrevive al guardar, desfase y SQM «—».
+    """Revisión 2: la altitud sobrevive al guardar, desfase, SQM «—» y seeing.
 
     Regresiones de los tres defectos reportados: ``list_locations`` trae la
     columna ``altitude`` (la ficha leía ``altitude_m`` y se quedaba en 0 al
     recargar); con «Huso automático» el Desfase muestra ``round(lon/15)``
     —la misma regla que el planificador— y queda fijo, y sin el check se
     edita; y el SQM vuelve a vacío («-» al salir del campo → «—», en vez
-    de revertir al valor anterior).
+    de revertir al valor anterior). El Seeing típico del bloque Cielo
+    guarda y recarga, y la pista antigua de Bortle/SQM ya no existe: su
+    texto vive en los tooltips de los dos campos.
     """
     import os
 
@@ -297,7 +299,7 @@ def test_ubicacion_altitud_desfase_y_sqm(memory_db):
 
     from PyQt6.QtCore import QEvent
     from PyQt6.QtTest import QTest
-    from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtWidgets import QApplication, QLabel
 
     from ui.equipment_tab.ubicaciones import UbicacionesTab
 
@@ -308,6 +310,7 @@ def test_ubicacion_altitud_desfase_y_sqm(memory_db):
     tab._longitud.setValue(-84.282)
     tab._altitud.setValue(822.0)
     tab._bortle.setCurrentIndex(5)
+    tab._seeing.setValue(2.5)
 
     # Huso automático: el Desfase indica round(-84,282 / 15) = -6 y fijo.
     assert tab._huso.value() == -6.0
@@ -316,6 +319,14 @@ def test_ubicacion_altitud_desfase_y_sqm(memory_db):
     tab._guardar()
     # Regresión: la altitud no se borra al guardar (clave «altitude»).
     assert tab._altitud.value() == 822.0
+    # El seeing típico sobrevive a guardar (create + recarga desde la BD).
+    assert tab._seeing.value() == 2.5
+    # La pista de Bortle/SQM desapareció: el seeing ocupa su fila.
+    assert [
+        etiqueta.text()
+        for etiqueta in tab.findChildren(QLabel)
+        if "Bortle obligatorio" in etiqueta.text()
+    ] == []
     # La longitud sigue mandando y el desfase sigue automático al recargar.
     assert tab._huso.value() == -6.0
     assert not tab._huso.isEnabled()

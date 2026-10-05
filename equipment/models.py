@@ -121,7 +121,9 @@ class Location:
     y ``lp`` la fuente de CL de cada una como
     ``{"fuente": clave de LP_SOURCES | None, "km": distancia}`` — una sola
     fuente por dirección, con km > 0 solo si hay fuente. ``bortle`` es
-    obligatorio en el formulario (1-9), ``sqm`` opcional, y
+    obligatorio en el formulario (1-9), ``sqm`` y ``seeing_arcsec``
+    (seeing típico FWHM en ″: el muestreo del equipo lo usa si está
+    informado y, sin él, no se inventa) opcionales, y
     ``consider_lp`` decide si la CL y los obstáculos entran en las
     decisiones de captura de esta ubicación (etiqueta «Usar CL y
     Obstáculos al Planificar») — de momento solo se guarda (paso 6 lo
@@ -140,6 +142,7 @@ class Location:
     lp: dict[str, dict[str, str | float | None]] = field(default_factory=dict)
     bortle: int | None = None
     sqm: float | None = None
+    seeing_arcsec: float | None = None  # FWHM en ″ (None = sin dato)
     consider_lp: bool = True
     lp_map: str | None = None
 

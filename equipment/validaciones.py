@@ -52,6 +52,8 @@ def validar_ubicacion(location: Location) -> None:
         raise ValueError("Bortle obligatorio: indica un nivel del 1 al 9.")
     if location.sqm is not None and location.sqm < 0:
         raise ValueError("El SQM no puede ser negativo.")
+    if location.seeing_arcsec is not None and location.seeing_arcsec < 0:
+        raise ValueError("El seeing no puede ser negativo.")
     # El sitio se guarda SIEMPRE con las 8 direcciones (roundtrip completo).
     if set(location.obstacles) != set(DIRECTIONS):
         raise ValueError("El horizonte debe describir las 8 direcciones (N, NE, E, SE, S, SO, O, NO).")

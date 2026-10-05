@@ -3,7 +3,7 @@
 Layout simétrico al de Equipos: ``QSplitter`` con la lista y los botones
 «Nueva…»/«Eliminar» a la izquierda; a la derecha, la cabecera con
 «Guardar ubicación» (siempre visible) y, en scroll, la ficha completa —
-Geografía y Cielo (Bortle/SQM) en fila superior a medio ancho con
+Geografía y Cielo (Bortle/SQM/Seeing) en fila superior a medio ancho con
 parejas de campos, y debajo el ``SitioPanel`` (rosácea + esquemático +
 mapa de CL).
 
@@ -147,7 +147,7 @@ class UbicacionesTab(QWidget):
         return marco
 
     def _cielo(self) -> QWidget:
-        """Bortle (obligatorio) y SQM cenital en pareja, con su pista."""
+        """Bortle (obligatorio), SQM cenital y Seeing típico; sin pista, que pasó a tooltips."""
         caja = QWidget()
         lay = QVBoxLayout(caja)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -164,7 +164,10 @@ class UbicacionesTab(QWidget):
         self._bortle.addItem("Elige un nivel…", None)
         for nivel in range(1, 10):
             self._bortle.addItem(str(nivel), nivel)
-        self._bortle.setToolTip("1 = cielo pristineo · 9 = centro urbano iluminado.")
+        self._bortle.setToolTip(
+            "1 = cielo pristineo · 9 = centro urbano iluminado. "
+            "Obligatorio: la CL alimenta las decisiones de captura."
+        )
         rejilla.addWidget(self._bortle, 0, 1)
         rejilla.addWidget(QLabel("SQM cenital"), 0, 2)
         self._sqm = QDoubleSpinBox()
@@ -173,24 +176,32 @@ class UbicacionesTab(QWidget):
         self._sqm.setSpecialValueText("—")
         self._sqm.setSuffix(" mag/arcsec²")
         self._sqm.setToolTip(
-            "Magnitud por segundo de arco cuadrado en el cenit (opcional)."
+            "Magnitud por segundo de arco cuadrado en el cenit (opcional). "
+            "El informado es la referencia de la gráfica; en «—» se asume "
+            "con el Bortle."
         )
         sin_botones(self._sqm)
         # Para que el SQM pueda volver a vacío: ver `eventFilter`.
         self._sqm.installEventFilter(self)
         rejilla.addWidget(self._sqm, 0, 3)
+        # Seeing típico en la fila donde estaba la pista de Bortle/SQM
+        # (el usuario pidió sustituirla por este campo): «—» = sin dato y
+        # el muestreo del equipo, si lo hay, recurre a su resolución.
+        rejilla.addWidget(QLabel("Seeing típico"), 1, 0)
+        self._seeing = QDoubleSpinBox()
+        self._seeing.setRange(0.0, 30.0)
+        self._seeing.setDecimals(1)
+        self._seeing.setSpecialValueText("—")
+        self._seeing.setSuffix(" ″ FWHM")
+        self._seeing.setToolTip(
+            "Seeing típico (FWHM) de este sitio: el muestreo del equipo "
+            "se evalúa contra él. «—» = sin dato, no se inventa."
+        )
+        sin_botones(self._seeing)
+        rejilla.addWidget(self._seeing, 1, 1)
         rejilla.setColumnStretch(1, 1)
         rejilla.setColumnStretch(3, 1)
         lay.addLayout(rejilla)
-
-        pista = QLabel(
-            "Bortle obligatorio: la CL alimenta las decisiones de captura. "
-            "El SQM informado es la referencia de la gráfica; en «—» se "
-            "asume con el Bortle."
-        )
-        pista.setObjectName("HintLabel")
-        pista.setWordWrap(True)
-        lay.addWidget(pista)
         return caja
 
     def _geografia(self) -> QWidget:
@@ -310,6 +321,7 @@ class UbicacionesTab(QWidget):
                 self._auto.setChecked(True)
                 self._bortle.setCurrentIndex(0)
                 self._sqm.setValue(0.0)
+                self._seeing.setValue(0.0)
                 self._sitio.set_valores({}, {}, None, True)
             else:
                 self._ubicacion_id = fila["id"]
@@ -325,6 +337,7 @@ class UbicacionesTab(QWidget):
                     max(0, self._bortle.findData(fila.get("bortle")))
                 )
                 self._sqm.setValue(float(fila.get("sqm") or 0.0))
+                self._seeing.setValue(float(fila.get("seeing_arcsec") or 0.0))
                 imagenes = list_images("location", fila["id"])
                 self._sitio.set_valores(
                     fila.get("obstacles") or {},
@@ -387,6 +400,10 @@ class UbicacionesTab(QWidget):
         """SQM informado (``None`` si está en «—», que es 0)."""
         return self._sqm.value() if self._sqm.value() > 0 else None
 
+    def _seeing_actual(self) -> float | None:
+        """Seeing informado (``None`` si está en «—», que es 0)."""
+        return self._seeing.value() if self._seeing.value() > 0 else None
+
     # -- acciones ----------------------------------------------------------
 
     def _nueva(self) -> None:
@@ -411,6 +428,7 @@ class UbicacionesTab(QWidget):
             lp=fuentes,
             bortle=self._bortle.currentData(),
             sqm=self._sqm_actual(),
+            seeing_arcsec=self._seeing_actual(),
             consider_lp=considerar,
             lp_map=mapa,
         )

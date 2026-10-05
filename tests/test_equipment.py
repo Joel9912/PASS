@@ -230,7 +230,7 @@ def test_migra_las_referencias_y_quita_las_columnas_de_la_v1(memory_db):
 
 
 def test_migra_el_sitio_de_las_ubicaciones(memory_db):
-    """Una base antigua recibe las columnas de sitio de la Equipo v2."""
+    """Una base antigua recibe las columnas de sitio (y el seeing)."""
     from db import connection as db_conn
 
     conn = sqlite3.connect(":memory:")
@@ -242,7 +242,7 @@ def test_migra_el_sitio_de_las_ubicaciones(memory_db):
 
     db_conn.init_db(conn)
 
-    sitio = {"obstacles", "lp", "bortle", "sqm", "consider_lp"}
+    sitio = {"obstacles", "lp", "bortle", "sqm", "seeing_arcsec", "consider_lp"}
     columnas = {row[1] for row in conn.execute("PRAGMA table_info(locations)")}
     assert sitio <= columnas
     frescas = {row[1] for row in memory_db.execute("PRAGMA table_info(locations)")}
@@ -380,6 +380,7 @@ _CASOS_INVALIDOS = [
     (_ubicacion(bortle=0), validar_ubicacion, "Bortle"),
     (_ubicacion(bortle=10), validar_ubicacion, "Bortle"),
     (_ubicacion(sqm=-1), validar_ubicacion, "SQM"),
+    (_ubicacion(seeing_arcsec=-1), validar_ubicacion, "seeing"),
     (_ubicacion(obstacles={}), validar_ubicacion, "8 direcciones"),
     (
         _ubicacion(obstacles={d: (99 if d == "N" else 0) for d in DIRECTIONS}),

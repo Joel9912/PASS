@@ -23,6 +23,9 @@ _MIGRATIONS: dict[str, tuple[str, ...]] = {
         # no admite ADD COLUMN NOT NULL sin default y no queremos inventarlo.
         "bortle INTEGER",
         "sqm REAL",
+        # Seeing típico de la ubicación (FWHM en ″): alimenta el rango de
+        # muestreo del equipo; sin dato no se inventa.
+        "seeing_arcsec REAL",
         "consider_lp INTEGER NOT NULL DEFAULT 1",
     ),
     "equipment_setups": (
