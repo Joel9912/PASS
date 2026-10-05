@@ -771,6 +771,99 @@ def test_ficha_sin_hint_de_solo_visuales_y_cabe_sin_scroll(memory_db):
     _app.processEvents()
 
 
+def test_equipos_seccion_lista_arriba_sin_splitter(memory_db):
+    """La lista «Equipos guardados» es una sección de la fila superior, sin splitter.
+
+    Regresión de la reestructuración: la barra lateral (QSplitter)
+    ocupaba toda la pestaña y estrechaba la ficha. Ahora la pestaña
+    tiene dos filas — `[sección lista (ancho fijo 280) | cabecera
+    Equipo]` y, debajo, el panel con scroll **a todo el ancho**—, con
+    la sección y la cabecera a la misma altura y sus botones en fila
+    bajo la lista.
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import (
+        QApplication,
+        QFrame,
+        QLabel,
+        QListWidget,
+        QPushButton,
+        QScrollArea,
+        QSplitter,
+    )
+
+    from ui.equipment_tab.equipos import EquiposTab
+
+    _app = QApplication.instance() or QApplication([])
+    tab = EquiposTab()
+    tab.resize(1000, 600)
+    tab.show()
+    _app.processEvents()
+
+    assert tab.findChildren(QSplitter) == [], "no debe quedar ningún QSplitter"
+
+    # La sección: marco de ancho fijo con su título PanelTitle.
+    secciones = [
+        frame
+        for frame in tab.findChildren(QFrame)
+        if frame.objectName() == "GroupFrame" and frame.minimumWidth() == 280
+    ]
+    assert len(secciones) == 1, "debe haber exactamente una sección de lista a 280 px"
+    seccion = secciones[0]
+    titulos = [
+        etiqueta
+        for etiqueta in seccion.findChildren(QLabel)
+        if etiqueta.objectName() == "PanelTitle" and etiqueta.text() == "Equipos guardados"
+    ]
+    assert len(titulos) == 1, "la sección debe titularse «Equipos guardados»"
+
+    # La lista limita su alto: si creciera (sizeHint natural de 192 px)
+    # inflaría la fila superior y la ficha de abajo volvería a scrollear.
+    listas = seccion.findChildren(QListWidget)
+    assert len(listas) == 1 and listas[0].maximumHeight() <= 60
+
+    # Fila superior: sección y cabecera comparten altura (la cabecera
+    # es la que manda; la sección no la supera ni en sizeHint).
+    guardar = [
+        boton
+        for boton in tab.findChildren(QPushButton)
+        if boton.text() == "Guardar equipo"
+    ]
+    assert len(guardar) == 1
+    cabecera = guardar[0].parent()
+    while cabecera is not None and not (
+        isinstance(cabecera, QFrame) and cabecera.objectName() == "GroupFrame"
+    ):
+        cabecera = cabecera.parent()
+    assert cabecera is not None, "sin cabecera GroupFrame con «Guardar equipo»"
+    assert abs(seccion.y() - cabecera.y()) <= 2, "sección y cabecera deben ir a la par"
+    assert abs(seccion.height() - cabecera.height()) <= 2, "misma altura en la fila superior"
+    assert seccion.sizeHint().height() <= cabecera.sizeHint().height(), (
+        "el sizeHint de la sección no debe superar al de la cabecera"
+    )
+
+    # Los botones de la sección van en fila (misma altura).
+    textos = {boton.text() for boton in seccion.findChildren(QPushButton)}
+    assert textos == {"➕ Nuevo…", "🗑"}, f"botones de la sección: {sorted(textos)}"
+    nuevos = seccion.findChildren(QPushButton)
+    assert abs(nuevos[0].y() - nuevos[1].y()) <= 2, "los botones deben compartir fila"
+
+    # El scroll va debajo y a todo el ancho de la pestaña.
+    areas = tab.findChildren(QScrollArea)
+    assert len(areas) == 1
+    area = areas[0]
+    assert area.y() >= seccion.y() + seccion.height(), "el scroll debe ir bajo la fila superior"
+    assert area.width() >= tab.width() - 30, (
+        f"scroll a {area.width()} px de {tab.width()} (debe ir a todo el ancho)"
+    )
+
+    tab.deleteLater()
+    _app.processEvents()
+
+
 def test_afines_nuevo_sin_dialogo_lista_vacia_y_falta_nombre(memory_db, monkeypatch):
     """Afines A de Equipos: «Nuevo…» sin diálogo, ayuda en lista vacía y «Falta: nombre».
 

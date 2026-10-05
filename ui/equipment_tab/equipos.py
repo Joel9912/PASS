@@ -1,11 +1,13 @@
-"""Subpestaña **Equipos**: lista, cabecera, sub-subpestañas y bloque Cálculos.
+"""Subpestaña **Equipos**: sección «Equipos guardados», cabecera y ficha.
 
-Layout: ``QSplitter`` horizontal — a la izquierda la lista de equipos con
-«Nuevo…»/«Eliminar»; a la derecha la cabecera (nombre*, categoría,
-ubicación, precio/peso — **suma en vivo, solo lectura** — y notas — a dos
-columnas — y «Guardar equipo») **fuera del scroll** para que su Guardar
-esté siempre visible, y en el panel con scroll las sub-subpestañas
-Telescopio / Cámara / Montura / Filtros y el bloque «Cálculos».
+Layout: dos filas — la superior es `[sección «Equipos guardados» (ancho
+fijo 280) | cabecera Equipo]`, con la lista y sus botones «Nuevo…»/
+«Eliminar» **a la altura** de la cabecera (no a toda la altura de la
+pestaña); en la fila inferior, un scroll **a todo el ancho** con las
+sub-subpestañas Telescopio / Cámara / Montura / Filtros y el bloque
+«Cálculos». La cabecera (nombre*, categoría, ubicación, precio/peso —
+**suma en vivo, solo lectura** — y notas — a dos columnas — y «Guardar
+equipo») vive fuera del scroll para que su Guardar esté siempre visible.
 
 Regla UX global (§9): **nada se persiste hasta «Guardar equipo»**: lo que
 toca las piezas globales lo decide su propio botón «Guardar componente»
@@ -31,7 +33,6 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
-    QSplitter,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -201,7 +202,7 @@ class EquiposTab(QWidget):
     setups_changed = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        """Monta el splitter lista/ficha y carga el primer equipo si hay."""
+        """Monta las dos filas (lista + cabecera / scroll) y carga el primer equipo si hay."""
         super().__init__(parent)
         self._setup_id: int | None = None
         self._imagenes_setup: list[str] = []
@@ -211,37 +212,18 @@ class EquiposTab(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(10)
-        splitter = QSplitter(Qt.Orientation.Horizontal)
 
-        # Izquierda: lista + acciones (siempre visibles, no scrollean).
-        izquierda = QWidget()
-        vlay = QVBoxLayout(izquierda)
-        vlay.setContentsMargins(0, 0, 0, 0)
-        vlay.setSpacing(8)
-        self._lista = QListWidget()
-        self._lista.currentRowChanged.connect(self._al_elegir_fila)
-        vlay.addWidget(self._lista, 1)
-        # Botones apilados: en fila sumaban 268 px de mínimo y estrechaban
-        # las columnas Principal/Guía del formulario (scroll horizontal).
-        acciones = QVBoxLayout()
-        boton_nuevo = QPushButton("➕ Nuevo…")
-        boton_nuevo.clicked.connect(self._nuevo)
-        acciones.addWidget(boton_nuevo)
-        self._boton_eliminar = QPushButton("🗑 Eliminar")
-        self._boton_eliminar.clicked.connect(self._eliminar)
-        self._boton_eliminar.setEnabled(False)
-        acciones.addWidget(self._boton_eliminar)
-        vlay.addLayout(acciones)
-        splitter.addWidget(izquierda)
+        # Fila superior: la sección de la lista a la izquierda (ancho
+        # fijo, a la misma altura que la cabecera) y la cabecera a la
+        # derecha. El alto lo manda la cabecera; la lista se estira.
+        fila_sup = QHBoxLayout()
+        fila_sup.setSpacing(10)
+        fila_sup.addWidget(self._seccion_lista())
+        fila_sup.addWidget(self._cabecera(), 1)
+        layout.addLayout(fila_sup)
 
-        # Derecha: cabecera con «Guardar equipo» SIEMPRE visible (fuera del
-        # scroll, igual que en Ubicaciones) y, debajo, sub-subpestañas y
-        # cálculos en un panel con scroll vertical.
-        derecha = QWidget()
-        dlay = QVBoxLayout(derecha)
-        dlay.setContentsMargins(0, 0, 0, 0)
-        dlay.setSpacing(10)
-        dlay.addWidget(self._cabecera())
+        # Fila inferior: sub-subpestañas y cálculos en un panel con
+        # scroll vertical, **a todo el ancho** (ya no hay barra lateral).
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         contenido = QWidget()
@@ -252,12 +234,7 @@ class EquiposTab(QWidget):
         interior.addWidget(self._bloque_calculos())
         interior.addStretch(1)
         scroll.setWidget(contenido)
-        dlay.addWidget(scroll, 1)
-        splitter.addWidget(derecha)
-        splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 1)
-        splitter.setSizes([260, 760])
-        layout.addWidget(splitter)
+        layout.addWidget(scroll, 1)
 
         # Cableado interno: los cálculos viven de cualquier cambio en
         # pantalla; las piezas guardadas refrescan combos y avisan fuera.
@@ -271,6 +248,54 @@ class EquiposTab(QWidget):
         self._recargar_lista(select_id=None)
 
     # -- construcción ------------------------------------------------------
+
+    def _seccion_lista(self) -> QFrame:
+        """Sección «Equipos guardados»: su lista con scroll propio y sus botones.
+
+        Ancho fijo (280 px) para que quepa a la izquierda de la cabecera
+        **a la misma altura** que ella. Alturas alafiladas para no
+        superar a la cabecera (si la sección creciera, la fila superior
+        crecería y la ficha de abajo volvería a scrollear):
+
+        - el título va con word-wrap porque `PanelTitle` (13 pt) pide
+          306 px en una sola línea y solo hay 256;
+        - la lista limita su alto (40–60 px, ~3 filas visibles y scroll
+          interno) porque su sizeHint natural es de 192 px;
+        - los botones van en fila («➕ Nuevo…» + «🗑 Eliminar» no caben
+          en 256 → «🗑» con tooltip), que ahorra 31 px sobre apilarlos.
+        """
+        marco = QFrame()
+        marco.setObjectName("GroupFrame")
+        marco.setFixedWidth(280)
+        lay = QVBoxLayout(marco)
+        lay.setContentsMargins(12, 4, 12, 6)
+        lay.setSpacing(6)
+
+        titulo = QLabel("Equipos guardados")
+        titulo.setObjectName("PanelTitle")
+        titulo.setWordWrap(True)
+        lay.addWidget(titulo)
+
+        self._lista = QListWidget()
+        # El sizeHint natural de QListWidget (192 px) dispararía la fila
+        # superior; con tope la sección cabe a la altura de la cabecera.
+        self._lista.setMinimumHeight(40)
+        self._lista.setMaximumHeight(60)
+        self._lista.currentRowChanged.connect(self._al_elegir_fila)
+        lay.addWidget(self._lista, 1)
+
+        acciones = QHBoxLayout()
+        acciones.setSpacing(6)
+        boton_nuevo = QPushButton("➕ Nuevo…")
+        boton_nuevo.clicked.connect(self._nuevo)
+        acciones.addWidget(boton_nuevo, 1)
+        self._boton_eliminar = QPushButton("🗑")
+        self._boton_eliminar.setToolTip("Eliminar el equipo seleccionado")
+        self._boton_eliminar.clicked.connect(self._eliminar)
+        self._boton_eliminar.setEnabled(False)
+        acciones.addWidget(self._boton_eliminar)
+        lay.addLayout(acciones)
+        return marco
 
     def _cabecera(self) -> QFrame:
         """Cabecera del equipo a dos columnas: identidad, la suma precio/peso, notas y su «Guardar»."""
