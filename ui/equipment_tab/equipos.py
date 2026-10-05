@@ -2,10 +2,10 @@
 
 Layout: ``QSplitter`` horizontal — a la izquierda la lista de equipos con
 «Nuevo…»/«Eliminar»; a la derecha la cabecera (nombre*, categoría,
-ubicación, precio, peso, notas — a dos columnas — y «Guardar equipo»)
-**fuera del scroll** para que su Guardar esté siempre visible, y en el
-panel con scroll las sub-subpestañas Telescopio / Cámara / Montura /
-Filtros y el bloque «Cálculos».
+ubicación, precio/peso — **suma en vivo, solo lectura** — y notas — a dos
+columnas — y «Guardar equipo») **fuera del scroll** para que su Guardar
+esté siempre visible, y en el panel con scroll las sub-subpestañas
+Telescopio / Cámara / Montura / Filtros y el bloque «Cálculos».
 
 Regla UX global (§9): **nada se persiste hasta «Guardar equipo»**: lo que
 toca las piezas globales lo decide su propio botón «Guardar componente»
@@ -19,7 +19,6 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QComboBox,
-    QDoubleSpinBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -49,7 +48,8 @@ from .componentes import (
     MountForm,
     PartEditor,
     TelescopeForm,
-    sin_botones,
+    spin_peso,
+    spin_precio,
 )
 
 
@@ -133,12 +133,13 @@ class EquiposTab(QWidget):
             editor.changed.connect(self._recalcular)
             editor.saved.connect(self._tras_pieza_guardada)
         self._filtros.saved.connect(self.setups_changed.emit)
+        self._filtros.changed.connect(self._recalcular)  # casilla → suma en vivo
         self._recargar_lista(select_id=None)
 
     # -- construcción ------------------------------------------------------
 
     def _cabecera(self) -> QFrame:
-        """Cabecera del equipo a dos columnas: identidad, precio/peso, notas y su «Guardar»."""
+        """Cabecera del equipo a dos columnas: identidad, la suma precio/peso, notas y su «Guardar»."""
         marco = QFrame()
         marco.setObjectName("GroupFrame")
         lay = QVBoxLayout(marco)
@@ -164,18 +165,20 @@ class EquiposTab(QWidget):
         for clave, etiqueta in CATEGORIES.items():
             self._categoria.addItem(etiqueta, clave)
         self._ubicacion = QComboBox()
-        self._precio = QDoubleSpinBox()
-        self._precio.setRange(0.0, 100000.0)
-        self._precio.setDecimals(0)
-        self._precio.setSuffix(" €")
-        self._precio.setSpecialValueText("—")
-        sin_botones(self._precio)
-        self._peso = QDoubleSpinBox()
-        self._peso.setRange(0.0, 300.0)
-        self._peso.setDecimals(1)
-        self._peso.setSuffix(" kg")
-        self._peso.setSpecialValueText("—")
-        sin_botones(self._peso)
+        # Precio/peso SOLO LECTURA: la cabecera pinta la suma en vivo de
+        # las piezas en pantalla y «Guardar equipo» persiste ese total.
+        self._precio = spin_precio()
+        self._precio.setReadOnly(True)
+        self._precio.setToolTip(
+            "Suma del precio de las piezas y los filtros marcados "
+            "(se guarda con «Guardar equipo»)."
+        )
+        self._peso = spin_peso()
+        self._peso.setReadOnly(True)
+        self._peso.setToolTip(
+            "Suma del peso de las piezas en pantalla: +0,5 kg por cada "
+            "telescopio con «Con aplanador/reductor»."
+        )
         self._notas = QLineEdit()
         self._notas.setPlaceholderText("Notas (opcional)")
         parejas = (
@@ -340,8 +343,6 @@ class EquiposTab(QWidget):
                     max(0, self._categoria.findData("general"))
                 )
                 self._ubicacion.setCurrentIndex(0)
-                self._precio.setValue(0.0)
-                self._peso.setValue(0.0)
                 self._notas.clear()
                 for editor in self._editores:
                     editor.cargar(None)
@@ -356,8 +357,6 @@ class EquiposTab(QWidget):
                 self._ubicacion.setCurrentIndex(
                     max(0, self._ubicacion.findData(fila.get("location_id")))
                 )
-                self._precio.setValue(float(fila.get("price_eur") or 0.0))
-                self._peso.setValue(float(fila.get("weight_kg") or 0.0))
                 self._notas.setText(str(fila.get("notes") or ""))
                 self._tel_principal.cargar(fila.get("telescope_id"))
                 self._tel_guia.cargar(fila.get("guide_telescope_id"))
@@ -391,8 +390,6 @@ class EquiposTab(QWidget):
         self._nombre.setText(nombre.strip())
         self._categoria.setCurrentIndex(max(0, self._categoria.findData("general")))
         self._ubicacion.setCurrentIndex(0)
-        self._precio.setValue(0.0)
-        self._peso.setValue(0.0)
         self._notas.clear()
         for editor in self._editores:
             editor.cargar(None)
@@ -485,6 +482,32 @@ class EquiposTab(QWidget):
         self._pista_calculos.setText(
             f"{base} Falta: {' · '.join(faltan)}." if faltan else base
         )
+        self._repinta_totales()
+
+    def _repinta_totales(self) -> None:
+        """Cabecera: precio/peso = suma en vivo de las piezas en pantalla.
+
+        Precio: los 5 formularios + el de cada filtro marcado. Peso: los 5
+        formularios + 0,5 kg por cada telescopio con «Con aplanador/
+        reductor» (el accesorio pesa aunque la óptica no informe su peso);
+        los filtros no pesan. 0 = nada informado → el spin pinta «—».
+        «Guardar equipo» persiste estos totales (D-3).
+        """
+        modelos = [
+            self._tel_principal.form.a_modelo(),
+            self._tel_guia.form.a_modelo(),
+            self._cam_principal.form.a_modelo(),
+            self._cam_guia.form.a_modelo(),
+            self._montura.form.a_modelo(),
+        ]
+        precio = sum(modelo.price_eur or 0.0 for modelo in modelos)
+        peso = sum(modelo.weight_kg or 0.0 for modelo in modelos)
+        for telescopio in modelos[:2]:
+            if telescopio.reducer:
+                peso += 0.5
+        precio += sum(self._filtros.precios_marcados())
+        self._precio.setValue(precio)
+        self._peso.setValue(peso)
 
     def _tras_pieza_guardada(self) -> None:
         """Una pieza cambió en la base: repuebla combos y avisa a la ventana."""

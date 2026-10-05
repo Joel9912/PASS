@@ -433,6 +433,87 @@ def test_rosaceas_construyen_pintan_y_hacen_roundtrip():
         widget.deleteLater()
 
 
+def test_cabecera_suma_precio_peso_y_lo_persiste(memory_db):
+    """Cabecera: precio/peso son la suma en vivo (solo lectura) y se guarda.
+
+    Regresiones del rediseño: los dos campos de la cabecera ya no se
+    teclean (son calculados); los 5 formularios y cada filtro marcado
+    suman precio, cada telescopio con «Con aplanador/reductor» añade
+    0,5 kg de peso y sin datos se pinta «—» (0). Al «Guardar equipo» la
+    suma queda en ``price_eur``/``weight_kg`` del setup (D-3) — sustituye
+    al valor manual— y sobrevive a la recarga.
+    """
+    import os
+
+    import pytest
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import QApplication, QCheckBox
+
+    from equipment import components, manager
+    from equipment.models import Filter
+    from ui.equipment_tab.componentes import _FiltroDialog
+    from ui.equipment_tab.equipos import EquiposTab
+
+    _app = QApplication.instance() or QApplication([])
+    tab = EquiposTab()
+
+    # Sin datos: «—» (0) en los dos campos y no admiten teclear.
+    assert tab._precio.value() == 0.0 and tab._peso.value() == 0.0
+    assert tab._precio.isReadOnly() and tab._peso.isReadOnly()
+
+    # Lo tecleado en los formularios suma al momento (changed en vivo).
+    tel = tab._tel_principal.form
+    tel._nombre.setText("ED80")
+    tel._precio.setValue(650)
+    tel._peso.setValue(2.7)
+    tel._reductor.setChecked(True)  # +0,5 kg por el aplanador
+    cam = tab._cam_principal.form
+    cam._nombre.setText("ASI2600")
+    cam._precio.setValue(1550)
+    cam._peso.setValue(0.7)
+    montura = tab._montura.form
+    montura._nombre.setText("AM5")
+    montura._precio.setValue(2100)
+    montura._peso.setValue(5.5)
+    assert tab._precio.value() == pytest.approx(4300.0)
+    assert tab._peso.value() == pytest.approx(9.4)
+
+    # «Guardar componente» persiste precio/peso de cada pieza.
+    for editor in (tab._tel_principal, tab._cam_principal, tab._montura):
+        editor._guardar()
+    guardado = components.get_telescope(tab._tel_principal.selected_id())
+    assert guardado["price_eur"] == pytest.approx(650)
+    assert guardado["weight_kg"] == pytest.approx(2.7)
+
+    # Un filtro marcado suma precio (sin peso) al alternar su casilla.
+    components.create_filter(Filter(name="UHC", filter_type="uhc", price_eur=45))
+    tab._filtros.reload()
+    assert tab._filtros._tabla.horizontalHeaderItem(2).text() == "Precio"
+    casilla = tab._filtros._tabla.cellWidget(0, 3).findChild(QCheckBox)
+    casilla.click()
+    assert tab._precio.value() == pytest.approx(4345.0)
+    assert tab._peso.value() == pytest.approx(9.4)
+
+    # El diálogo del filtro recoge y devuelve su precio.
+    dialogo = _FiltroDialog(tab._filtros, {"name": "UHC", "price_eur": 45})
+    assert dialogo.filtro().price_eur == pytest.approx(45)
+    dialogo.deleteLater()
+
+    # «Guardar equipo» persiste la suma (D-3) y al recargar sigue en pie.
+    tab._nombre.setText("Prueba suma")
+    tab._guardar()
+    fila = manager.get(tab._setup_id)
+    assert fila["price_eur"] == pytest.approx(4345.0)
+    assert fila["weight_kg"] == pytest.approx(9.4)
+    assert fila["telescope_id"] == tab._tel_principal.selected_id()
+    assert tab._precio.value() == pytest.approx(4345.0)
+    assert tab._peso.value() == pytest.approx(9.4)
+
+    tab.deleteLater()
+
+
 def test_equipo_cableado_en_la_ventana(monkeypatch):
     """Paso 3: Equipo ya no es placeholder y sus señales llegan al Planificador.
 

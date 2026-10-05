@@ -123,6 +123,32 @@ def sin_botones(spin: QAbstractSpinBox) -> None:
     spin.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
 
 
+def spin_precio() -> QDoubleSpinBox:
+    """Spin de precio en € (sin flechas; 0 = «—» = no informado).
+
+    Lo usan los formularios de pieza, el diálogo de filtro y la cabecera
+    del equipo (ahí, en solo lectura, pintando la suma en vivo).
+    """
+    spin = QDoubleSpinBox()
+    spin.setRange(0.0, 1_000_000.0)
+    spin.setDecimals(0)
+    spin.setSuffix(" €")
+    spin.setSpecialValueText("—")
+    sin_botones(spin)
+    return spin
+
+
+def spin_peso() -> QDoubleSpinBox:
+    """Spin de peso en kg (sin flechas; 0 = «—» = no informado)."""
+    spin = QDoubleSpinBox()
+    spin.setRange(0.0, 1000.0)
+    spin.setDecimals(1)
+    spin.setSuffix(" kg")
+    spin.setSpecialValueText("—")
+    sin_botones(spin)
+    return spin
+
+
 def _etiqueta_archivo(ruta: str) -> tuple[str, str]:
     """(nombre para la lista, ruta completa para el dato): imagen adjunta."""
     return Path(ruta).name, ruta
@@ -136,7 +162,7 @@ def _combo_opciones(combo: QComboBox, opciones: dict[str, str]) -> None:
 
 
 class _FiltroDialog(QDialog):
-    """Alta/edición de un filtro global (nombre*, tipo, notas).
+    """Alta/edición de un filtro global (nombre*, tipo, precio, notas).
 
     Solo valida en backend al aceptar el llamante: aquí se recogen los
     campos y el ``ValueError`` de `validar_filtro` se enseña en un aviso.
@@ -157,6 +183,9 @@ class _FiltroDialog(QDialog):
         if tipo:
             self._tipo.setCurrentIndex(max(0, self._tipo.findData(tipo)))
         form.addRow("Tipo", self._tipo)
+        self._precio = spin_precio()
+        self._precio.setValue(float((fila or {}).get("price_eur") or 0.0))
+        form.addRow("Precio", self._precio)
         self._notas = QLineEdit(str((fila or {}).get("notes") or ""))
         form.addRow("Notas", self._notas)
         layout.addLayout(form)
@@ -173,6 +202,7 @@ class _FiltroDialog(QDialog):
             id=filter_id,
             name=self._nombre.text().strip(),
             filter_type=self._tipo.currentData(),
+            price_eur=_opt_f(self._precio),
             notes=self._notas.text().strip(),
         )
 
@@ -204,8 +234,10 @@ class FiltersPanel(QFrame):
         titulo.setObjectName("PanelTitle")
         layout.addWidget(titulo)
 
-        self._tabla = QTableWidget(0, 3)
-        self._tabla.setHorizontalHeaderLabels(["Filtro", "Tipo", "Lo lleva este equipo"])
+        self._tabla = QTableWidget(0, 4)
+        self._tabla.setHorizontalHeaderLabels(
+            ["Filtro", "Tipo", "Precio", "Lo lleva este equipo"]
+        )
         self._tabla.verticalHeader().setVisible(False)
         self._tabla.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._tabla.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
@@ -240,6 +272,14 @@ class FiltersPanel(QFrame):
         """Ids de los filtros marcados (los pinta «Guardar equipo»)."""
         return sorted(self._marcados)
 
+    def precios_marcados(self) -> list[float]:
+        """Precio de cada filtro marcado (lo suma la cabecera del equipo)."""
+        return [
+            float(filtro["price_eur"])
+            for filtro in components.list_filters()
+            if filtro["id"] in self._marcados and filtro.get("price_eur")
+        ]
+
     def set_filter_ids(self, ids: list[int]) -> None:
         """Marca los filtros de ``ids`` sin emitir (carga de un equipo)."""
         self._marcados = set(ids)
@@ -258,6 +298,11 @@ class FiltersPanel(QFrame):
             )
             tipo = FILTER_TYPES.get(str(filtro.get("filter_type") or ""), "—")
             self._tabla.setItem(fila_id, 1, QTableWidgetItem(tipo))
+            precio = filtro.get("price_eur")
+            self._tabla.setItem(
+                fila_id, 2,
+                QTableWidgetItem(f"{float(precio):.0f} €" if precio else "—"),
+            )
             # Casilla real (cellWidget): con NoEditTriggers un item no
             # alterna, y aquí sí tiene que alternar.
             casilla = QCheckBox()
@@ -275,18 +320,18 @@ class FiltersPanel(QFrame):
             fila_casilla.setContentsMargins(8, 0, 0, 0)
             fila_casilla.addWidget(casilla)
             fila_casilla.addStretch(1)
-            self._tabla.setCellWidget(fila_id, 2, contenedor)
+            self._tabla.setCellWidget(fila_id, 3, contenedor)
             marcador = QTableWidgetItem()
             marcador.setData(Qt.ItemDataRole.UserRole, filtro["id"])
-            self._tabla.setItem(fila_id, 2, marcador)
+            self._tabla.setItem(fila_id, 3, marcador)
         self._cargando = False
 
     def _pintar_casillas(self) -> None:
-        """Refresca las casillas de la columna 3 según ``_marcados``."""
+        """Refresca las casillas de la columna «Lo lleva este equipo»."""
         self._cargando = True
         for fila in range(self._tabla.rowCount()):
-            contenedor = self._tabla.cellWidget(fila, 2)
-            item = self._tabla.item(fila, 2)
+            contenedor = self._tabla.cellWidget(fila, 3)
+            item = self._tabla.item(fila, 3)
             if contenedor is None or item is None:
                 continue
             casilla = contenedor.findChild(QCheckBox)
@@ -307,9 +352,9 @@ class FiltersPanel(QFrame):
     def _id_seleccionado(self) -> int | None:
         """Id del filtro de la fila seleccionada (None si no hay fila)."""
         fila = self._tabla.currentRow()
-        if fila < 0 or self._tabla.item(fila, 2) is None:
+        if fila < 0 or self._tabla.item(fila, 3) is None:
             return None
-        return self._tabla.item(fila, 2).data(Qt.ItemDataRole.UserRole)
+        return self._tabla.item(fila, 3).data(Qt.ItemDataRole.UserRole)
 
     def _nuevo(self) -> None:
         """Alta inmediata del filtro global (su propio «Guardar»)."""
@@ -587,6 +632,17 @@ class TelescopeForm(QFrame):
         form.addRow("Nombre *", self._nombre)
         layout.addLayout(form)
 
+        # Precio y peso de la pieza en pareja, tras el Nombre y sin
+        # flechas: la cabecera del equipo los suma en vivo.
+        self._precio = spin_precio()
+        self._peso = spin_peso()
+        fila_precio = QHBoxLayout()
+        fila_precio.addWidget(QLabel("Precio"))
+        fila_precio.addWidget(self._precio, 1)
+        fila_precio.addWidget(QLabel("Peso"))
+        fila_precio.addWidget(self._peso, 1)
+        layout.addLayout(fila_precio)
+
         # Apertura y focal en pareja y sin flechas: el usuario teclea el
         # valor de la ficha técnica y la fila queda por debajo del ancho
         # de columna (Principal/Guía), sin scroll horizontal.
@@ -679,6 +735,8 @@ class TelescopeForm(QFrame):
         self._nombre.clear()
         self._apertura.setValue(0.0)
         self._focal.setValue(0.0)
+        self._precio.setValue(0.0)
+        self._peso.setValue(0.0)
         self._reductor.setChecked(False)
         self._factor.setValue(0.8)
         self._tipo.setCurrentIndex(0)
@@ -695,6 +753,8 @@ class TelescopeForm(QFrame):
         self._nombre.setText(str(fila.get("name") or ""))
         self._apertura.setValue(float(fila.get("aperture_mm") or 0.0))
         self._focal.setValue(float(fila.get("focal_mm") or 0.0))
+        self._precio.setValue(float(fila.get("price_eur") or 0.0))
+        self._peso.setValue(float(fila.get("weight_kg") or 0.0))
         self._reductor.setChecked(bool(fila.get("reducer")))
         factor = fila.get("reducer_factor")
         if factor:
@@ -719,6 +779,8 @@ class TelescopeForm(QFrame):
             subtype=self._subtipo.currentText().strip() or None,
             reducer=self._reductor.isChecked(),
             reducer_factor=_opt_f(self._factor) if self._reductor.isChecked() else None,
+            price_eur=_opt_f(self._precio),
+            weight_kg=_opt_f(self._peso),
             notes=self._notas.text().strip(),
             images=self._rutas(),
         )
@@ -776,7 +838,8 @@ class TelescopeForm(QFrame):
 
         for widget in (self._nombre, self._apertura, self._focal, self._notas):
             widget.textChanged.connect(lambda _t: toque())
-        for widget in (self._apertura, self._focal, self._factor):
+        for widget in (self._apertura, self._focal, self._precio, self._peso,
+                       self._factor):
             widget.valueChanged.connect(lambda _v: toque())
         self._reductor.toggled.connect(lambda _c: toque())
         self._tipo.currentIndexChanged.connect(lambda _i: toque())
@@ -803,6 +866,17 @@ class CameraForm(QFrame):
         self._nombre.setPlaceholderText("ASI2600MC…")
         form.addRow("Nombre *", self._nombre)
         layout.addLayout(form)
+
+        # Precio y peso de la pieza en pareja, tras el Nombre (mismo patrón
+        # que el telescopio): la cabecera del equipo los suma en vivo.
+        self._precio = spin_precio()
+        self._peso = spin_peso()
+        fila_precio = QHBoxLayout()
+        fila_precio.addWidget(QLabel("Precio"))
+        fila_precio.addWidget(self._precio, 1)
+        fila_precio.addWidget(QLabel("Peso"))
+        fila_precio.addWidget(self._peso, 1)
+        layout.addLayout(fila_precio)
 
         # Píxel y profundidad en pareja: el usuario pidió «Tam. Píxel (µm)»
         # y «Bits» en la misma fila (los nombres largos no caben a dos
@@ -891,6 +965,8 @@ class CameraForm(QFrame):
         self._id = None
         self._nombre.clear()
         self._pixel.setValue(0.0)
+        self._precio.setValue(0.0)
+        self._peso.setValue(0.0)
         self._bits.setCurrentIndex(0)
         self._ancho.setValue(0)
         self._alto.setValue(0)
@@ -909,6 +985,8 @@ class CameraForm(QFrame):
         self._id = fila.get("id")
         self._nombre.setText(str(fila.get("name") or ""))
         self._pixel.setValue(float(fila.get("pixel_size_um") or 0.0))
+        self._precio.setValue(float(fila.get("price_eur") or 0.0))
+        self._peso.setValue(float(fila.get("weight_kg") or 0.0))
         bits = fila.get("bit_depth")
         indice = self._bits.findData(int(bits)) if bits else -1
         self._bits.setCurrentIndex(max(0, indice))
@@ -933,6 +1011,8 @@ class CameraForm(QFrame):
             height_px=_opt_i(self._alto),
             mono=self._mono.isChecked(),
             ampglow=self._ampglow.isChecked(),
+            price_eur=_opt_f(self._precio),
+            weight_kg=_opt_f(self._peso),
             notes=self._notas.text().strip(),
             images=self._rutas(),
         )
@@ -987,7 +1067,8 @@ class CameraForm(QFrame):
 
         for widget in (self._nombre, self._notas):
             widget.textChanged.connect(lambda _t: toque())
-        for widget in (self._pixel, self._ancho, self._alto):
+        for widget in (self._pixel, self._precio, self._peso, self._ancho,
+                       self._alto):
             widget.valueChanged.connect(lambda _v: toque())
         self._bits.currentIndexChanged.connect(lambda _i: toque())
         for widget in (self._refrigerada, self._mono, self._ampglow):
@@ -1012,6 +1093,18 @@ class MountForm(QFrame):
         self._nombre = QLineEdit()
         self._nombre.setPlaceholderText("AM5, EQ6-R…")
         form.addRow("Nombre *", self._nombre)
+        # Precio y peso de la pieza en pareja, tras el Nombre (la fila
+        # abarca las dos columnas del form y lleva sus propias etiquetas).
+        pareja_precio = QWidget()
+        fila_precio = QHBoxLayout(pareja_precio)
+        fila_precio.setContentsMargins(0, 0, 0, 0)
+        fila_precio.addWidget(QLabel("Precio"))
+        self._precio = spin_precio()
+        fila_precio.addWidget(self._precio, 1)
+        fila_precio.addWidget(QLabel("Peso"))
+        self._peso = spin_peso()
+        fila_precio.addWidget(self._peso, 1)
+        form.addRow(pareja_precio)
         self._tipo = QComboBox()
         _combo_opciones(self._tipo, MOUNT_TYPES)
         form.addRow("Tipo", self._tipo)
@@ -1032,6 +1125,8 @@ class MountForm(QFrame):
         self._nombre.textChanged.connect(lambda _t: self.changed.emit())
         self._tipo.currentIndexChanged.connect(lambda _i: self.changed.emit())
         self._capacidad.valueChanged.connect(lambda _v: self.changed.emit())
+        self._precio.valueChanged.connect(lambda _v: self.changed.emit())
+        self._peso.valueChanged.connect(lambda _v: self.changed.emit())
         self._notas.textChanged.connect(lambda _t: self.changed.emit())
 
     # -- protocolo de formulario ------------------------------------------
@@ -1042,6 +1137,8 @@ class MountForm(QFrame):
         self._nombre.clear()
         self._tipo.setCurrentIndex(0)
         self._capacidad.setValue(0.0)
+        self._precio.setValue(0.0)
+        self._peso.setValue(0.0)
         self._notas.clear()
 
     def cargar(self, fila: dict | None) -> None:
@@ -1054,6 +1151,8 @@ class MountForm(QFrame):
         indice = self._tipo.findData(fila.get("mount_type"))
         self._tipo.setCurrentIndex(max(0, indice) if fila.get("mount_type") else 0)
         self._capacidad.setValue(float(fila.get("payload_kg") or 0.0))
+        self._precio.setValue(float(fila.get("price_eur") or 0.0))
+        self._peso.setValue(float(fila.get("weight_kg") or 0.0))
         self._notas.setText(str(fila.get("notes") or ""))
 
     def a_modelo(self) -> Mount:
@@ -1063,5 +1162,7 @@ class MountForm(QFrame):
             name=self._nombre.text().strip(),
             mount_type=self._tipo.currentData(),
             payload_kg=_opt_f(self._capacidad),
+            price_eur=_opt_f(self._precio),
+            weight_kg=_opt_f(self._peso),
             notes=self._notas.text().strip(),
         )
