@@ -91,6 +91,16 @@ def test_veredicto_muestreo_respeta_los_umbrales_configurados():
     assert veredicto_muestreo(0.85, 1.0, umbral_sob=0.9) == "Sobremuestreado"
 
 
+def test_veredicto_muestreo_en_la_frontera_es_adecuado():
+    """Escala justo en el umbral (comparación estricta) → «Adecuado».
+
+    Los `<`/`>` son estrictos: tocar el umbral superior o el inferior sin
+    pasarlo sigue siendo muestreo adecuado.
+    """
+    assert veredicto_muestreo(1.0, 1.0) == "Adecuado"   # == umbral_sub × res
+    assert veredicto_muestreo(0.5, 1.0) == "Adecuado"   # == umbral_sob × res
+
+
 def test_calculos_del_bloque_completo():
     """El bloque «Cálculos» devuelve las 5 filas de la pareja en pantalla."""
     telescopio = Telescope(
