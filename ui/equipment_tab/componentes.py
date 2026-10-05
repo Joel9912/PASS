@@ -17,6 +17,7 @@ from pathlib import Path
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
+    QAbstractSpinBox,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -42,6 +43,7 @@ from PyQt6.QtWidgets import (
 from equipment import components, manager
 from equipment.images import list_images
 from equipment.models import (
+    BIT_DEPTHS,
     FILTER_TYPES,
     MOUNT_TYPES,
     OPTICAL_TYPES,
@@ -107,6 +109,18 @@ def _opt_i(spin: QSpinBox) -> int | None:
     """Igual que ``_opt_f`` pero para spins de enteros (bits, píxeles)."""
     valor = spin.value()
     return int(valor) if valor > 0 else None
+
+
+def sin_botones(spin: QAbstractSpinBox) -> None:
+    """Quita las flechas de un spin: el usuario teclea el valor tal cual.
+
+    Los valores de estos formularios se copian de la página del producto
+    (apertura, focal, precio…): avanzar a pasos de 0,1 es lento y las
+    flechas ensanchan el campo, empujando las filas pareadas a forzar
+    scroll horizontal. Se aplica a todos los spins de Equipos y
+    Ubicaciones.
+    """
+    spin.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
 
 
 def _etiqueta_archivo(ruta: str) -> tuple[str, str]:
@@ -366,8 +380,10 @@ class PartPicker(QFrame):
     eliminar_solicitado = pyqtSignal()
     seleccion_cambiada = pyqtSignal()  # cambio hecho por el usuario
 
-    def __init__(self, kind: str, parent: QWidget | None = None) -> None:
-        """``kind`` es la clave de ``_PIEZAS`` (telescope/camera/mount)."""
+    def __init__(
+        self, kind: str, titulo: str | None = None, parent: QWidget | None = None
+    ) -> None:
+        """``kind`` es la clave de ``_PIEZAS``; ``titulo`` etiqueta la columna."""
         super().__init__(parent)
         self._pieza = _PIEZAS[kind]
 
@@ -382,7 +398,16 @@ class PartPicker(QFrame):
             QComboBox.SizeAdjustPolicy.AdjustToContents
         )
         self._combo.currentIndexChanged.connect(self._tras_cambio)
-        layout.addWidget(self._combo)
+        # El título de la columna va en la fila del combo (antes fila
+        # propia): ahorra 35 px de alto por editor sin perderlo.
+        fila_combo = QHBoxLayout()
+        fila_combo.setSpacing(6)
+        if titulo:
+            etiqueta = QLabel(titulo)
+            etiqueta.setObjectName("PanelTitle")
+            fila_combo.addWidget(etiqueta)
+        fila_combo.addWidget(self._combo, 1)
+        layout.addLayout(fila_combo)
 
         botones = QHBoxLayout()
         botones.setSpacing(6)
@@ -445,7 +470,7 @@ class PartEditor(QWidget):
     def __init__(
         self, kind: str, form: QWidget, titulo: str, parent: QWidget | None = None
     ) -> None:
-        """Apila el picker de ``kind`` y su formulario bajo un ``titulo``."""
+        """Apila el picker de ``kind`` (con su ``titulo`` de columna) y su formulario."""
         super().__init__(parent)
         self.setObjectName("GroupFrame")
         self._kind = kind
@@ -455,10 +480,7 @@ class PartEditor(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 6, 12, 10)
         layout.setSpacing(8)
-        etiqueta = QLabel(titulo)
-        etiqueta.setObjectName("PanelTitle")
-        layout.addWidget(etiqueta)
-        self.picker = PartPicker(kind)
+        self.picker = PartPicker(kind, titulo)
         layout.addWidget(self.picker)
         layout.addWidget(form)
 
@@ -554,58 +576,58 @@ class TelescopeForm(QFrame):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        # Espaciado 6 (no 8): cada fila de más empuja el contenido a
+        # necesitar scroll vertical a altura maximizada.
+        layout.setSpacing(6)
         form = QFormLayout()
         form.setSpacing(6)
 
         self._nombre = QLineEdit()
         self._nombre.setPlaceholderText("ED80, Newton 200…")
         form.addRow("Nombre *", self._nombre)
+        layout.addLayout(form)
 
-        # Apertura y focal, una por fila: en una sola sumaban 684 px de
-        # mínimo y forzaban scroll horizontal con Principal/Guía lado a lado.
+        # Apertura y focal en pareja y sin flechas: el usuario teclea el
+        # valor de la ficha técnica y la fila queda por debajo del ancho
+        # de columna (Principal/Guía), sin scroll horizontal.
         self._apertura = QDoubleSpinBox()
         self._apertura.setRange(0.0, 600.0)
         self._apertura.setDecimals(1)
         self._apertura.setSuffix(" mm")
         self._apertura.setSpecialValueText("—")
-        fila_apertura = QHBoxLayout()
-        fila_apertura.addWidget(QLabel("Apertura"))
-        fila_apertura.addWidget(self._apertura, 1)
-        layout.addLayout(fila_apertura)
+        sin_botones(self._apertura)
         self._focal = QDoubleSpinBox()
         self._focal.setRange(0.0, 5000.0)
         self._focal.setDecimals(1)
         self._focal.setSuffix(" mm")
         self._focal.setSpecialValueText("—")
-        fila_focal = QHBoxLayout()
-        fila_focal.addWidget(QLabel("Focal"))
-        fila_focal.addWidget(self._focal, 1)
-        layout.addLayout(fila_focal)
+        sin_botones(self._focal)
+        focal = QHBoxLayout()
+        focal.addWidget(QLabel("Apertura"))
+        focal.addWidget(self._apertura, 1)
+        focal.addWidget(QLabel("Focal"))
+        focal.addWidget(self._focal, 1)
+        layout.addLayout(focal)
 
-        lecturas = QHBoxLayout()
-        self._relacion = QLabel("—")
-        self._efectiva = QLabel("—")
-        lecturas.addWidget(QLabel("Relación focal"))
-        lecturas.addWidget(self._relacion, 1)
-        lecturas.addWidget(QLabel("Focal efectiva"))
-        lecturas.addWidget(self._efectiva, 1)
-        layout.addLayout(lecturas)
-
-        # Fila propia el checkbox (398 px de texto) y otra para el factor:
-        # juntos forzaban ~690 px de ancho mínimo por columna y, con las
-        # columnas Principal/Guía, scroll horizontal.
+        # Relación focal y focal efectiva no se duplican aquí: viven en la
+        # barra «Cálculos», siempre visible bajo las pestañas.
+        # Checkbox y factor en la misma fila (sin flechas la pareja no
+        # desborda la columna Principal/Guía).
         self._reductor = QCheckBox("Con aplanador/reductor")
-        layout.addWidget(self._reductor)
-        reductor = QHBoxLayout()
-        reductor.addStretch(1)
-        reductor.addWidget(QLabel("Factor ×"))
         self._factor = QDoubleSpinBox()
         self._factor.setRange(0.01, 1.0)
         self._factor.setDecimals(2)
         self._factor.setSingleStep(0.05)
         self._factor.setValue(0.8)
         self._factor.setEnabled(False)
+        sin_botones(self._factor)
+        reductor = QHBoxLayout()
+        # Espaciado 4: la fila manda el ancho mínimo de la columna
+        # Principal/Guía y con 6 quedaba al filo (2 px de holgura).
+        reductor.setSpacing(4)
+        reductor.addWidget(self._reductor)
+        reductor.addStretch(1)
+        reductor.addWidget(QLabel("Factor ×"))
         reductor.addWidget(self._factor)
         layout.addLayout(reductor)
 
@@ -626,9 +648,9 @@ class TelescopeForm(QFrame):
         layout.addWidget(self._notas)
 
         imagenes = QHBoxLayout()
-        imagenes.addWidget(QLabel("Imágenes (charts)"))
+        imagenes.addWidget(QLabel("Imágenes"))
         self._imagenes = QListWidget()
-        self._imagenes.setMaximumHeight(72)
+        self._imagenes.setMaximumHeight(56)  # 2 filas: el alto sobra menos que el ancho
         imagenes.addWidget(self._imagenes, 1)
         columna = QVBoxLayout()
         boton_anadir = QPushButton("➕ Adjuntar…")
@@ -663,7 +685,6 @@ class TelescopeForm(QFrame):
         self._subtipo.setCurrentIndex(-1)
         self._notas.clear()
         self._imagenes.clear()
-        self._recalcular()
 
     def cargar(self, fila: dict | None) -> None:
         """Vierte una fila de la base (o ``None`` = vacío) en el formulario."""
@@ -748,26 +769,9 @@ class TelescopeForm(QFrame):
         if actual:
             self._subtipo.setCurrentText(actual)
 
-    def _recalcular(self) -> None:
-        """Repinta relación focal y focal efectiva con ``equipment.metrics``."""
-        from equipment.metrics import focal_efectiva, relacion_focal
-
-        focal = focal_efectiva(
-            _opt_f(self._focal), self._reductor.isChecked(), _opt_f(self._factor)
-        )
-        relacion = relacion_focal(focal, _opt_f(self._apertura))
-        self._relacion.setText(f"F/{relacion:.1f}" if relacion else "—")
-        if focal is None:
-            self._efectiva.setText("—")
-        elif self._reductor.isChecked():
-            self._efectiva.setText(f"{focal:.1f} mm (× {_opt_f(self._factor)})")
-        else:
-            self._efectiva.setText(f"{focal:.1f} mm")
-
     def _conectar_cambios(self) -> None:
-        """Cualquier toque al formulario emite ``changed`` y recalcula."""
+        """Cualquier toque al formulario emite ``changed`` (para «Cálculos»)."""
         def toque() -> None:
-            self._recalcular()
             self.changed.emit()
 
         for widget in (self._nombre, self._apertura, self._focal, self._notas):
@@ -793,53 +797,57 @@ class CameraForm(QFrame):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(6)  # como Telescopio: ahorra alto de scroll
         form = QFormLayout()
         self._nombre = QLineEdit()
         self._nombre.setPlaceholderText("ASI2600MC…")
         form.addRow("Nombre *", self._nombre)
         layout.addLayout(form)
 
-        # Píxel y profundidad, una por fila: juntos sumaban 735 px de
-        # mínimo (la fila más ancha de la pestaña Cámara).
+        # Píxel y profundidad en pareja: el usuario pidió «Tam. Píxel (µm)»
+        # y «Bits» en la misma fila (los nombres largos no caben a dos
+        # columnas con la fuente de 13pt); la profundidad se elige del
+        # catálogo BIT_DEPTHS (10/12/14/16): no hay nada que teclear.
         self._pixel = QDoubleSpinBox()
         self._pixel.setRange(0.0, 100.0)
         self._pixel.setDecimals(3)
-        self._pixel.setSuffix(" µm")
         self._pixel.setSpecialValueText("—")
+        self._pixel.setToolTip("Tamaño de píxel del sensor, en micras.")
+        sin_botones(self._pixel)
+        self._bits = QComboBox()
+        self._bits.addItem("—", None)
+        for bits in BIT_DEPTHS:
+            self._bits.addItem(str(bits), bits)
+        self._bits.setToolTip("Profundidad en bits: solo existen 10, 12, 14 y 16.")
         fila_pixel = QHBoxLayout()
-        fila_pixel.addWidget(QLabel("Píxel"))
+        fila_pixel.addWidget(QLabel("Tam. Píxel (µm)"))
         fila_pixel.addWidget(self._pixel, 1)
+        fila_pixel.addWidget(QLabel("Bits"))
+        fila_pixel.addWidget(self._bits, 1)
         layout.addLayout(fila_pixel)
-        self._bits = QSpinBox()
-        self._bits.setRange(0, 64)
-        self._bits.setSpecialValueText("—")
-        self._bits.setSuffix(" bits")
-        fila_bits = QHBoxLayout()
-        fila_bits.addWidget(QLabel("Profundidad"))
-        fila_bits.addWidget(self._bits, 1)
-        layout.addLayout(fila_bits)
 
-        # Sensor en dos filas (Ancho+Alto / Resolución): la de tres campos
-        # sumaba ~735 px y forzaba scroll horizontal en la pestaña Cámara.
-        fila_sensor = QHBoxLayout()
+        # Ancho, alto y la resolución derivada en la misma fila (sin
+        # flechas): ahorra una fila vertical sin desbordar la columna.
         self._ancho = QSpinBox()
         self._ancho.setRange(0, 30000)
         self._ancho.setSpecialValueText("—")
+        sin_botones(self._ancho)
         self._alto = QSpinBox()
         self._alto.setRange(0, 30000)
         self._alto.setSpecialValueText("—")
+        sin_botones(self._alto)
+        fila_sensor = QHBoxLayout()
         fila_sensor.addWidget(QLabel("Ancho"))
         fila_sensor.addWidget(self._ancho, 1)
         fila_sensor.addWidget(QLabel("Alto"))
         fila_sensor.addWidget(self._alto, 1)
-        layout.addLayout(fila_sensor)
-        resolucion = QHBoxLayout()
+        fila_sensor.addWidget(QLabel("Resolución"))
         self._resolucion = QLabel("—")
-        resolucion.addWidget(QLabel("Resolución"))
-        resolucion.addWidget(self._resolucion, 1)
-        layout.addLayout(resolucion)
+        fila_sensor.addWidget(self._resolucion, 1)
+        layout.addLayout(fila_sensor)
 
+        # Casillas en fila propia: juntas con la resolución sumaban 835 px
+        # de mínimo y forzaban scroll horizontal.
         flags = QHBoxLayout()
         self._refrigerada = QCheckBox("Refrigerada")
         flags.addWidget(self._refrigerada)
@@ -855,9 +863,9 @@ class CameraForm(QFrame):
         layout.addWidget(self._notas)
 
         imagenes = QHBoxLayout()
-        imagenes.addWidget(QLabel("Imágenes (ganancia)"))
+        imagenes.addWidget(QLabel("Imágenes"))
         self._imagenes = QListWidget()
-        self._imagenes.setMaximumHeight(72)
+        self._imagenes.setMaximumHeight(56)  # 2 filas: el alto sobra menos que el ancho
         imagenes.addWidget(self._imagenes, 1)
         columna = QVBoxLayout()
         boton_anadir = QPushButton("➕ Adjuntar…")
@@ -883,7 +891,7 @@ class CameraForm(QFrame):
         self._id = None
         self._nombre.clear()
         self._pixel.setValue(0.0)
-        self._bits.setValue(0)
+        self._bits.setCurrentIndex(0)
         self._ancho.setValue(0)
         self._alto.setValue(0)
         self._refrigerada.setChecked(False)
@@ -901,7 +909,9 @@ class CameraForm(QFrame):
         self._id = fila.get("id")
         self._nombre.setText(str(fila.get("name") or ""))
         self._pixel.setValue(float(fila.get("pixel_size_um") or 0.0))
-        self._bits.setValue(int(fila.get("bit_depth") or 0))
+        bits = fila.get("bit_depth")
+        indice = self._bits.findData(int(bits)) if bits else -1
+        self._bits.setCurrentIndex(max(0, indice))
         self._ancho.setValue(int(fila.get("width_px") or 0))
         self._alto.setValue(int(fila.get("height_px") or 0))
         self._refrigerada.setChecked(bool(fila.get("cooled")))
@@ -917,7 +927,7 @@ class CameraForm(QFrame):
             id=self._id,
             name=self._nombre.text().strip(),
             cooled=self._refrigerada.isChecked(),
-            bit_depth=_opt_i(self._bits),
+            bit_depth=self._bits.currentData(),
             pixel_size_um=_opt_f(self._pixel),
             width_px=_opt_i(self._ancho),
             height_px=_opt_i(self._alto),
@@ -977,8 +987,9 @@ class CameraForm(QFrame):
 
         for widget in (self._nombre, self._notas):
             widget.textChanged.connect(lambda _t: toque())
-        for widget in (self._pixel, self._bits, self._ancho, self._alto):
+        for widget in (self._pixel, self._ancho, self._alto):
             widget.valueChanged.connect(lambda _v: toque())
+        self._bits.currentIndexChanged.connect(lambda _i: toque())
         for widget in (self._refrigerada, self._mono, self._ampglow):
             widget.toggled.connect(lambda _c: toque())
         self._recalcular()
@@ -996,7 +1007,7 @@ class MountForm(QFrame):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(6)  # como Telescopio: ahorra alto de scroll
         form = QFormLayout()
         self._nombre = QLineEdit()
         self._nombre.setPlaceholderText("AM5, EQ6-R…")
@@ -1010,6 +1021,7 @@ class MountForm(QFrame):
         self._capacidad.setSuffix(" kg")
         self._capacidad.setSpecialValueText("—")
         self._capacidad.setToolTip("Carga útil máxima que admite la montura.")
+        sin_botones(self._capacidad)
         form.addRow("Capacidad de carga", self._capacidad)
         self._notas = QLineEdit()
         self._notas.setPlaceholderText("Notas (opcional)")

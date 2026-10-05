@@ -374,6 +374,7 @@ _CASOS_INVALIDOS = [
     (Camera(name="X", width_px=-1), validar_camara, "ancho"),
     (Camera(name="X", height_px=-1), validar_camara, "alto"),
     (Camera(name="X", bit_depth=0), validar_camara, "bits"),
+    (Camera(name="X", bit_depth=11), validar_camara, "bits"),  # fuera de BIT_DEPTHS
     # Montura
     (Mount(name=""), validar_montura, "nombre"),
     (Mount(name="X", payload_kg=-1), validar_montura, "capacidad"),

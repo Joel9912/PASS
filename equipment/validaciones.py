@@ -5,6 +5,7 @@ a éstas antes de tocar la base y los tests las ejercitan por entero. La UI
 no valida a medias — si un valor no pasa aquí, no se guarda.
 """
 from .models import (
+    BIT_DEPTHS,
     CATEGORIES,
     DIRECTIONS,
     FILTER_TYPES,
@@ -76,8 +77,11 @@ def validar_camara(camera: Camera) -> None:
         raise ValueError("El ancho del sensor no puede ser negativo.")
     if camera.height_px is not None and camera.height_px < 0:
         raise ValueError("El alto del sensor no puede ser negativo.")
-    if camera.bit_depth is not None and camera.bit_depth <= 0:
-        raise ValueError("La profundidad de bits debe ser mayor que 0.")
+    if camera.bit_depth is not None and camera.bit_depth not in BIT_DEPTHS:
+        raise ValueError(
+            f"Profundidad de bits no admitida: {camera.bit_depth} "
+            f"(admite {', '.join(str(bits) for bits in BIT_DEPTHS)})."
+        )
 
 
 def validar_montura(mount: Mount) -> None:

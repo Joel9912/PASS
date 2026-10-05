@@ -69,6 +69,12 @@ FILTER_TYPES: dict[str, str] = {
     "otro": "Otro",
 }
 
+#: Profundidades de bits de las cámaras (``Camera.bit_depth``): solo existen
+#: estas en sensores. Dueño de la opción (R2) — el combo de la UI y
+#: ``validar_camara`` leen de aquí; si algún día aparece otra, se añade a la
+#: tupla y nada más hay que tocar.
+BIT_DEPTHS: tuple[int, ...] = (10, 12, 14, 16)
+
 #: Tipos de obstáculo del horizonte (``Location.obstacles``) → etiqueta.
 OBSTACLE_TYPES: dict[str, str] = {
     "arboles": "Árboles",

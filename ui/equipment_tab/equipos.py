@@ -2,10 +2,10 @@
 
 Layout: ``QSplitter`` horizontal — a la izquierda la lista de equipos con
 «Nuevo…»/«Eliminar»; a la derecha la cabecera (nombre*, categoría,
-ubicación, precio, peso, notas y «Guardar equipo») **fuera del scroll**
-para que su Guardar esté siempre visible, y en el panel con scroll las
-sub-subpestañas Telescopio / Cámara / Montura / Filtros y el bloque
-«Cálculos».
+ubicación, precio, peso, notas — a dos columnas — y «Guardar equipo»)
+**fuera del scroll** para que su Guardar esté siempre visible, y en el
+panel con scroll las sub-subpestañas Telescopio / Cámara / Montura /
+Filtros y el bloque «Cálculos».
 
 Regla UX global (§9): **nada se persiste hasta «Guardar equipo»**: lo que
 toca las piezas globales lo decide su propio botón «Guardar componente»
@@ -20,8 +20,8 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
-    QFormLayout,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -43,7 +43,14 @@ from equipment.images import list_images
 from equipment.metrics import calculos
 from equipment.models import CATEGORIES, EquipmentSetup
 
-from .componentes import CameraForm, FiltersPanel, MountForm, PartEditor, TelescopeForm
+from .componentes import (
+    CameraForm,
+    FiltersPanel,
+    MountForm,
+    PartEditor,
+    TelescopeForm,
+    sin_botones,
+)
 
 
 def _formato(valor: float | None, unidad: str = "") -> str:
@@ -82,7 +89,9 @@ class EquiposTab(QWidget):
         self._lista = QListWidget()
         self._lista.currentRowChanged.connect(self._al_elegir_fila)
         vlay.addWidget(self._lista, 1)
-        acciones = QHBoxLayout()
+        # Botones apilados: en fila sumaban 268 px de mínimo y estrechaban
+        # las columnas Principal/Guía del formulario (scroll horizontal).
+        acciones = QVBoxLayout()
         boton_nuevo = QPushButton("➕ Nuevo…")
         boton_nuevo.clicked.connect(self._nuevo)
         acciones.addWidget(boton_nuevo)
@@ -105,7 +114,7 @@ class EquiposTab(QWidget):
         scroll.setWidgetResizable(True)
         contenido = QWidget()
         interior = QVBoxLayout(contenido)
-        interior.setContentsMargins(0, 0, 6, 0)
+        interior.setContentsMargins(0, 0, 0, 0)
         interior.setSpacing(10)
         interior.addWidget(self._subpestanas())
         interior.addWidget(self._bloque_calculos())
@@ -129,7 +138,7 @@ class EquiposTab(QWidget):
     # -- construcción ------------------------------------------------------
 
     def _cabecera(self) -> QFrame:
-        """Cabecera del equipo: identidad, precio/peso, notas y su «Guardar»."""
+        """Cabecera del equipo a dos columnas: identidad, precio/peso, notas y su «Guardar»."""
         marco = QFrame()
         marco.setObjectName("GroupFrame")
         lay = QVBoxLayout(marco)
@@ -147,31 +156,43 @@ class EquiposTab(QWidget):
         fila_titulo.addWidget(self._boton_guardar)
         lay.addLayout(fila_titulo)
 
-        form = QFormLayout()
+        # Tres filas de dos campos (el usuario pidió las parejas): la
+        # rejilla alinea las columnas y la cabecera baja de 6 filas a 3.
         self._nombre = QLineEdit()
         self._nombre.setPlaceholderText("Equipo de viaje, montura fija…")
-        form.addRow("Nombre *", self._nombre)
         self._categoria = QComboBox()
         for clave, etiqueta in CATEGORIES.items():
             self._categoria.addItem(etiqueta, clave)
-        form.addRow("Categoría", self._categoria)
         self._ubicacion = QComboBox()
-        form.addRow("Ubicación", self._ubicacion)
         self._precio = QDoubleSpinBox()
         self._precio.setRange(0.0, 100000.0)
         self._precio.setDecimals(0)
         self._precio.setSuffix(" €")
         self._precio.setSpecialValueText("—")
-        form.addRow("Precio", self._precio)
+        sin_botones(self._precio)
         self._peso = QDoubleSpinBox()
         self._peso.setRange(0.0, 300.0)
         self._peso.setDecimals(1)
         self._peso.setSuffix(" kg")
         self._peso.setSpecialValueText("—")
-        form.addRow("Peso", self._peso)
+        sin_botones(self._peso)
         self._notas = QLineEdit()
         self._notas.setPlaceholderText("Notas (opcional)")
-        form.addRow("Notas", self._notas)
+        parejas = (
+            ("Nombre *", self._nombre, "Categoría", self._categoria),
+            ("Ubicación", self._ubicacion, "Precio", self._precio),
+            ("Peso", self._peso, "Notas", self._notas),
+        )
+        form = QGridLayout()
+        form.setHorizontalSpacing(12)
+        form.setVerticalSpacing(6)
+        for fila, (etiqueta_a, campo_a, etiqueta_b, campo_b) in enumerate(parejas):
+            form.addWidget(QLabel(etiqueta_a), fila, 0)
+            form.addWidget(campo_a, fila, 1)
+            form.addWidget(QLabel(etiqueta_b), fila, 2)
+            form.addWidget(campo_b, fila, 3)
+        form.setColumnStretch(1, 1)
+        form.setColumnStretch(3, 1)
         lay.addLayout(form)
         self.reload_locations()
         return marco
@@ -189,6 +210,10 @@ class EquiposTab(QWidget):
         """Dos ``PartEditor`` del mismo tipo: pieza principal y pieza de guía."""
         contenedor = QWidget()
         fila = QHBoxLayout(contenedor)
+        # Márgenes/espaciado propios: el default del contenedor sumaba ~70 px
+        # al ancho mínimo de la página y forzaba scroll horizontal.
+        fila.setContentsMargins(0, 0, 0, 0)
+        fila.setSpacing(6)
         principal = PartEditor(kind, formularios(), "Principal")
         guia = PartEditor(kind, formularios(), "Guía")
         fila.addWidget(principal)
@@ -221,30 +246,45 @@ class EquiposTab(QWidget):
         return contenedor
 
     def _bloque_calculos(self) -> QFrame:
-        """«Cálculos» en solo lectura: escala, Dawes, F/d y veredicto."""
+        """«Cálculos» como barra de una línea: escala, Dawes, F/d, focal efectiva y muestreo.
+
+        Barra (y no cuadrícula) para que el bloque pese ~60 px menos de
+        alto: el formulario entero cabe sin scroll vertical a altura
+        maximizada. Aquí viven también las lecturas del telescopio
+        (relación focal y focal efectiva) para no duplicarlas en su
+        formulario.
+        """
         marco = QFrame()
         marco.setObjectName("GroupFrame")
         lay = QVBoxLayout(marco)
         lay.setContentsMargins(12, 6, 12, 10)
-        lay.setSpacing(8)
+        lay.setSpacing(6)
+        fila = QHBoxLayout()
+        fila.setSpacing(8)
         titulo = QLabel("Cálculos")
         titulo.setObjectName("PanelTitle")
-        lay.addWidget(titulo)
-        form = QFormLayout()
+        fila.addWidget(titulo)
         self._escala = QLabel("—")
         self._dawes = QLabel("—")
         self._relacion = QLabel("—")
+        self._efectiva = QLabel("—")
         self._muestreo = QLabel("—")
-        form.addRow("Escala de imagen", self._escala)
-        form.addRow("Resolución óptica (Dawes)", self._dawes)
-        form.addRow("Relación focal", self._relacion)
-        form.addRow("Muestreo", self._muestreo)
-        lay.addLayout(form)
+        valores = (
+            ("Escala", self._escala),
+            ("Dawes", self._dawes),
+            ("F/d", self._relacion),
+            ("Focal efectiva", self._efectiva),
+            ("Muestreo", self._muestreo),
+        )
+        for etiqueta, valor in valores:
+            fila.addWidget(QLabel(etiqueta))
+            fila.addWidget(valor)
+        fila.addStretch(1)
+        lay.addLayout(fila)
         self._pista_calculos = QLabel(
             "Sobre el telescopio y la cámara principales en pantalla."
         )
         self._pista_calculos.setObjectName("HintLabel")
-        self._pista_calculos.setWordWrap(True)
         lay.addWidget(self._pista_calculos)
         return marco
 
@@ -432,6 +472,7 @@ class EquiposTab(QWidget):
         self._relacion.setText(
             f"F/{filas['relacion_focal']:.1f}" if filas["relacion_focal"] else "—"
         )
+        self._efectiva.setText(_formato(filas["focal_efectiva"], " mm"))
         self._muestreo.setText(filas["muestreo"] or "—")
         faltan = []
         if telescopio.focal_mm is None:

@@ -68,7 +68,8 @@ class UbicacionesTab(QWidget):
         self._lista = QListWidget()
         self._lista.currentRowChanged.connect(self._al_elegir_fila)
         vlay.addWidget(self._lista, 1)
-        acciones = QHBoxLayout()
+        # Botones apilados: en fila estrechaban el panel (mismos que Equipos).
+        acciones = QVBoxLayout()
         boton_nueva = QPushButton("➕ Nueva…")
         boton_nueva.clicked.connect(self._nueva)
         acciones.addWidget(boton_nueva)
