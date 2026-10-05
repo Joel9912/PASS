@@ -281,6 +281,94 @@ def test_ubicaciones_fila_geografia_primero_y_vista_previa_mapa(tmp_path):
     _app.processEvents()
 
 
+def test_ubicaciones_seccion_lista_arriba_sin_splitter(memory_db):
+    """La lista «Ubicaciones guardados» es una sección de la fila superior, sin splitter.
+
+    Regresión de la reestructuración (simétrica a la de Equipos): la
+    barra lateral (QSplitter) desaparece; la sección de la lista va a
+    280 px en la fila superior **a la misma altura** que la ficha de la
+    derecha (barra «Ubicación» + fila Geografía|Cielo), que ahora queda
+    **fuera del scroll**; debajo, el `SitioPanel` corre a todo el ancho.
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import (
+        QApplication,
+        QFrame,
+        QLabel,
+        QListWidget,
+        QPushButton,
+        QScrollArea,
+        QSplitter,
+    )
+
+    from ui.equipment_tab.ubicaciones import UbicacionesTab
+
+    _app = QApplication.instance() or QApplication([])
+    tab = UbicacionesTab()
+    tab.resize(1000, 600)
+    tab.show()
+    _app.processEvents()
+
+    assert tab.findChildren(QSplitter) == [], "no debe quedar ningún QSplitter"
+
+    # La sección: marco de ancho fijo con su título PanelTitle.
+    secciones = [
+        frame
+        for frame in tab.findChildren(QFrame)
+        if frame.objectName() == "GroupFrame" and frame.minimumWidth() == 280
+    ]
+    assert len(secciones) == 1, "debe haber exactamente una sección de lista a 280 px"
+    seccion = secciones[0]
+    titulos = [
+        etiqueta
+        for etiqueta in seccion.findChildren(QLabel)
+        if etiqueta.objectName() == "PanelTitle" and etiqueta.text() == "Ubicaciones guardados"
+    ]
+    assert len(titulos) == 1, "la sección debe titularse «Ubicaciones guardados»"
+
+    # La lista limita su alto: si creciera (sizeHint de 192 px) la fila
+    # superior se hincharía y empujaría el scroll de abajo.
+    listas = seccion.findChildren(QListWidget)
+    assert len(listas) == 1 and 40 <= listas[0].maximumHeight() <= 100
+
+    # Los botones van en fila (misma altura) y «🗑» lleva «Eliminar» en tooltip.
+    bots = seccion.findChildren(QPushButton)
+    assert {boton.text() for boton in bots} == {"➕ Nueva…", "🗑"}
+    assert abs(bots[0].y() - bots[1].y()) <= 2, "los botones deben compartir fila"
+    assert "Eliminar" in (bots[1].toolTip() or "")
+
+    # Fila superior: la sección ocupa la misma banda que la columna
+    # derecha (barra «Ubicación» + Geografía|Cielo): mismo pie abajo y
+    # misma cota arriba que la barra. Y el sizeHint de la sección no
+    # manda: si lo superara, la fila se hincharía y empujaría el scroll.
+    assert abs(
+        (seccion.y() + seccion.height())
+        - (tab._fila_superior.y() + tab._fila_superior.height())
+    ) <= 2, "la sección y la ficha de la derecha deben acabar a la par"
+    assert seccion.sizeHint().height() <= seccion.height(), (
+        "el sizeHint de la sección no debe ser el que dispare la fila superior"
+    )
+
+    # Geografía|Cielo queda FUERA del scroll; dentro solo va el sitio.
+    areas = tab.findChildren(QScrollArea)
+    assert len(areas) == 1
+    area = areas[0]
+    assert not area.isAncestorOf(tab._fila_superior), (
+        "Geografía|Cielo no debe vivir dentro del scroll"
+    )
+    assert area.isAncestorOf(tab._sitio), "el SitioPanel sí va en el scroll"
+    assert area.y() >= seccion.y() + seccion.height(), "el scroll debe ir bajo la fila superior"
+    assert area.width() >= tab.width() - 30, (
+        f"scroll a {area.width()} px de {tab.width()} (debe ir a todo el ancho)"
+    )
+
+    tab.deleteLater()
+    _app.processEvents()
+
+
 def test_ubicacion_altitud_desfase_y_sqm(memory_db):
     """Revisión 2: la altitud sobrevive al guardar, desfase, SQM «—» y seeing.
 

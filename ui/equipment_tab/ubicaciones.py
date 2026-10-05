@@ -1,11 +1,11 @@
-"""Subpestaña **Ubicaciones**: lista + ficha en panel (sin modal).
+"""Subpestaña **Ubicaciones**: sección «Ubicaciones guardados» + ficha.
 
-Layout simétrico al de Equipos: ``QSplitter`` con la lista y los botones
-«Nueva…»/«Eliminar» a la izquierda; a la derecha, la cabecera con
-«Guardar ubicación» (siempre visible) y, en scroll, la ficha completa —
-Geografía y Cielo (Bortle/SQM/Seeing) en fila superior a medio ancho con
-parejas de campos, y debajo el ``SitioPanel`` (rosácea + esquemático +
-mapa de CL).
+Layout simétrico al de Equipos, **sin `QSplitter`**: dos filas — la
+superior es `[sección «Ubicaciones guardados» (ancho fijo 280) | barra
+«Ubicación» + fila Geografía|Cielo]`, con la fila Geografía|Cielo
+**fuera del scroll** para que siempre esté visible (su orden es
+contractual: Geografía primero); en la inferior, un scroll **a todo el
+ancho** con el ``SitioPanel`` (rosácea + esquemático + mapa de CL).
 
 Regla UX global (§9): **nada se persiste hasta «Guardar ubicación»**:
 «Nueva» deja la ficha en blanco en memoria y no se inserta fila hasta el
@@ -29,7 +29,6 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
-    QSplitter,
     QVBoxLayout,
     QWidget,
 )
@@ -54,7 +53,7 @@ class UbicacionesTab(QWidget):
     locations_changed = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        """Monta el splitter lista/ficha y carga la primera ubicación si hay."""
+        """Monta las dos filas (lista + cabecera/fila de ficha / scroll del sitio) y carga la primera ubicación si hay."""
         super().__init__(parent)
         self._ubicacion_id: int | None = None
         self._cargando = False
@@ -62,54 +61,38 @@ class UbicacionesTab(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(10)
-        splitter = QSplitter(Qt.Orientation.Horizontal)
 
-        # Izquierda: lista + acciones.
-        izquierda = QWidget()
-        vlay = QVBoxLayout(izquierda)
-        vlay.setContentsMargins(0, 0, 0, 0)
-        vlay.setSpacing(8)
-        self._lista = QListWidget()
-        self._lista.currentRowChanged.connect(self._al_elegir_fila)
-        vlay.addWidget(self._lista, 1)
-        # Botones apilados: en fila estrechaban el panel (mismos que Equipos).
-        acciones = QVBoxLayout()
-        boton_nueva = QPushButton("➕ Nueva…")
-        boton_nueva.clicked.connect(self._nueva)
-        acciones.addWidget(boton_nueva)
-        self._boton_eliminar = QPushButton("🗑 Eliminar")
-        self._boton_eliminar.clicked.connect(self._eliminar)
-        self._boton_eliminar.setEnabled(False)
-        acciones.addWidget(self._boton_eliminar)
-        vlay.addLayout(acciones)
-        splitter.addWidget(izquierda)
+        # Fila superior: la sección de la lista a la izquierda (ancho
+        # fijo, a la misma altura que la ficha) y, a la derecha, la
+        # barra «Ubicación» con su Guardar y la fila Geografía|Cielo,
+        # **fuera del scroll** para que siempre se vean.
+        fila_sup = QHBoxLayout()
+        fila_sup.setSpacing(10)
+        fila_sup.addWidget(self._seccion_lista())
+        derecha = QVBoxLayout()
+        derecha.setContentsMargins(0, 0, 0, 0)
+        derecha.setSpacing(10)
+        derecha.addWidget(self._cabecera())
+        # Guardada como atributo: el orden Geografía|Cielo es contractual
+        # (lo comprueba el test de regresión de la revisión).
+        self._fila_superior = self._fila_cielo_geografia()
+        derecha.addWidget(self._fila_superior)
+        fila_sup.addLayout(derecha, 1)
+        layout.addLayout(fila_sup)
 
-        # Derecha: cabecera (con su Guardar, siempre visible) + ficha en scroll.
-        derecha = QWidget()
-        dlay = QVBoxLayout(derecha)
-        dlay.setContentsMargins(0, 0, 0, 0)
-        dlay.setSpacing(10)
-        dlay.addWidget(self._cabecera())
+        # Fila inferior: el sitio (rosácea + esquemático + mapa) en un
+        # panel con scroll vertical, **a todo el ancho**.
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         ficha = QWidget()
         flay = QVBoxLayout(ficha)
         flay.setContentsMargins(0, 0, 6, 0)
         flay.setSpacing(10)
-        # Guardada como atributo: el orden Geografía|Cielo es contractual
-        # (lo comprueba el test de regresión de la revisión).
-        self._fila_superior = self._fila_cielo_geografia()
-        flay.addWidget(self._fila_superior)
         self._sitio = SitioPanel()
         flay.addWidget(self._sitio)
         flay.addStretch(1)
         scroll.setWidget(ficha)
-        dlay.addWidget(scroll, 1)
-        splitter.addWidget(derecha)
-        splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 1)
-        splitter.setSizes([240, 780])
-        layout.addWidget(splitter)
+        layout.addWidget(scroll, 1)
 
         # Conectado al final: el esquemático ya existe cuando se carga
         # la primera fila (los spins emiten al rellenarse).
@@ -118,6 +101,53 @@ class UbicacionesTab(QWidget):
         self._recargar_lista(select_id=None)
 
     # -- construcción ------------------------------------------------------
+
+    def _seccion_lista(self) -> QFrame:
+        """Sección «Ubicaciones guardados»: su lista con scroll propio y sus botones.
+
+        Réplica de la de Equipos: ancho fijo (280 px) para quedar a la
+        misma altura que la ficha de la derecha (barra + Geografía|Cielo,
+        ~199 px); el título con word-wrap (`PanelTitle` a 13 pt pediría
+        ~370 px en una línea) y la lista con el alto limitado a 100 px
+        para rellenar la fila sin superar el sizeHint de la ficha (su
+        sizeHint natural es de 192 px y dispararía el scroll de abajo).
+        Los botones van en fila porque en columna no caben a esa
+        altura; «🗑» lleva el «Eliminar» en tooltip (en fila con
+        «➕ Nueva…» no caben los dos textos).
+        """
+        marco = QFrame()
+        marco.setObjectName("GroupFrame")
+        marco.setFixedWidth(280)
+        lay = QVBoxLayout(marco)
+        lay.setContentsMargins(12, 4, 12, 6)
+        lay.setSpacing(6)
+
+        titulo = QLabel("Ubicaciones guardados")
+        titulo.setObjectName("PanelTitle")
+        titulo.setWordWrap(True)
+        lay.addWidget(titulo)
+
+        self._lista = QListWidget()
+        # El sizeHint natural de QListWidget (192 px) dispararía la fila
+        # superior; con tope la sección cabe a la altura de la ficha
+        # (barra + Geografía|Cielo ≈ 199 px) y la lista la rellena.
+        self._lista.setMinimumHeight(40)
+        self._lista.setMaximumHeight(100)
+        self._lista.currentRowChanged.connect(self._al_elegir_fila)
+        lay.addWidget(self._lista, 1)
+
+        acciones = QHBoxLayout()
+        acciones.setSpacing(6)
+        boton_nueva = QPushButton("➕ Nueva…")
+        boton_nueva.clicked.connect(self._nueva)
+        acciones.addWidget(boton_nueva, 1)
+        self._boton_eliminar = QPushButton("🗑")
+        self._boton_eliminar.setToolTip("Eliminar la ubicación seleccionada")
+        self._boton_eliminar.clicked.connect(self._eliminar)
+        self._boton_eliminar.setEnabled(False)
+        acciones.addWidget(self._boton_eliminar)
+        lay.addLayout(acciones)
+        return marco
 
     def _cabecera(self) -> QFrame:
         """Cabecera de la ficha: título + «Guardar ubicación» (siempre visible)."""
