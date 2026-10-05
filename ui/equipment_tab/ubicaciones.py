@@ -3,8 +3,9 @@
 Layout simétrico al de Equipos: ``QSplitter`` con la lista y los botones
 «Nueva…»/«Eliminar» a la izquierda; a la derecha, la cabecera con
 «Guardar ubicación» (siempre visible) y, en scroll, la ficha completa —
-Geografía, Horizonte (``HorizonWidget``) y Contaminación Lumínica
-(``LightPollutionWidget``).
+Cielo (Bortle/SQM) y Geografía en fila superior a medio ancho con
+parejas de campos, y debajo el ``SitioPanel`` (rosácea + esquemático +
+mapa de CL).
 
 Regla UX global (§9): **nada se persiste hasta «Guardar ubicación»**:
 «Nueva» deja la ficha en blanco en memoria y no se inserta fila hasta el
@@ -16,9 +17,10 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDoubleSpinBox,
-    QFormLayout,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -36,7 +38,8 @@ from equipment import localizations, manager
 from equipment.images import list_images
 from equipment.models import Location
 
-from .sitio import HorizonWidget, LightPollutionWidget
+from .componentes import sin_botones
+from .sitio import SitioPanel
 
 
 class UbicacionesTab(QWidget):
@@ -92,11 +95,9 @@ class UbicacionesTab(QWidget):
         flay = QVBoxLayout(ficha)
         flay.setContentsMargins(0, 0, 6, 0)
         flay.setSpacing(10)
-        flay.addWidget(self._geografia())
-        self._horizonte = HorizonWidget()
-        flay.addWidget(self._horizonte)
-        self._cl = LightPollutionWidget()
-        flay.addWidget(self._cl)
+        flay.addWidget(self._fila_cielo_geografia())
+        self._sitio = SitioPanel()
+        flay.addWidget(self._sitio)
         flay.addStretch(1)
         scroll.setWidget(ficha)
         dlay.addWidget(scroll, 1)
@@ -106,6 +107,10 @@ class UbicacionesTab(QWidget):
         splitter.setSizes([240, 780])
         layout.addWidget(splitter)
 
+        # Conectado al final: el esquemático ya existe cuando se carga
+        # la primera fila (los spins emiten al rellenarse).
+        self._bortle.currentIndexChanged.connect(self._refrescar_cielo)
+        self._sqm.valueChanged.connect(self._refrescar_cielo)
         self._recargar_lista(select_id=None)
 
     # -- construcción ------------------------------------------------------
@@ -126,35 +131,103 @@ class UbicacionesTab(QWidget):
         lay.addWidget(boton)
         return marco
 
-    def _geografia(self) -> QFrame:
-        """Coordenadas, altitud y huso horario (Auto = hora solar local)."""
+    def _fila_cielo_geografia(self) -> QFrame:
+        """Fila superior: Cielo (Bortle/SQM) a la izquierda y Geografía a medio ancho."""
         marco = QFrame()
         marco.setObjectName("GroupFrame")
-        lay = QVBoxLayout(marco)
+        lay = QHBoxLayout(marco)
         lay.setContentsMargins(12, 6, 12, 10)
+        lay.setSpacing(12)
+        lay.addWidget(self._cielo(), 1)
+        lay.addWidget(self._geografia(), 1)
+        return marco
+
+    def _cielo(self) -> QWidget:
+        """Bortle (obligatorio) y SQM cenital en pareja, con su pista."""
+        caja = QWidget()
+        lay = QVBoxLayout(caja)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(6)
+        titulo = QLabel("Cielo")
+        titulo.setObjectName("PanelTitle")
+        lay.addWidget(titulo)
+
+        rejilla = QGridLayout()
+        rejilla.setHorizontalSpacing(8)
+        rejilla.setVerticalSpacing(6)
+        rejilla.addWidget(QLabel("Bortle *"), 0, 0)
+        self._bortle = QComboBox()
+        self._bortle.addItem("Elige un nivel…", None)
+        for nivel in range(1, 10):
+            self._bortle.addItem(str(nivel), nivel)
+        self._bortle.setToolTip("1 = cielo pristineo · 9 = centro urbano iluminado.")
+        rejilla.addWidget(self._bortle, 0, 1)
+        rejilla.addWidget(QLabel("SQM cenital"), 0, 2)
+        self._sqm = QDoubleSpinBox()
+        self._sqm.setRange(0.0, 30.0)
+        self._sqm.setDecimals(2)
+        self._sqm.setSpecialValueText("—")
+        self._sqm.setSuffix(" mag/arcsec²")
+        self._sqm.setToolTip(
+            "Magnitud por segundo de arco cuadrado en el cenit (opcional)."
+        )
+        sin_botones(self._sqm)
+        rejilla.addWidget(self._sqm, 0, 3)
+        rejilla.setColumnStretch(1, 1)
+        rejilla.setColumnStretch(3, 1)
+        lay.addLayout(rejilla)
+
+        pista = QLabel(
+            "Bortle obligatorio: la CL alimenta las decisiones de captura. "
+            "Si no conoces el SQM, déjalo en «—»."
+        )
+        pista.setObjectName("HintLabel")
+        pista.setWordWrap(True)
+        lay.addWidget(pista)
+        return caja
+
+    def _geografia(self) -> QWidget:
+        """Coordenadas y huso en parejas (Nombre|Altitud, Latitud|Longitud)."""
+        caja = QWidget()
+        lay = QVBoxLayout(caja)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(6)
         titulo = QLabel("Geografía")
         titulo.setObjectName("PanelTitle")
         lay.addWidget(titulo)
-        form = QFormLayout()
+
+        form = QGridLayout()
+        form.setHorizontalSpacing(8)
+        form.setVerticalSpacing(6)
         self._nombre = QLineEdit()
         self._nombre.setPlaceholderText("Casa, mirador del puerto…")
-        form.addRow("Nombre *", self._nombre)
-        self._latitud = QDoubleSpinBox()
-        self._latitud.setRange(-90.0, 90.0)
-        self._latitud.setDecimals(3)
-        self._latitud.setSuffix("°")
-        form.addRow("Latitud *", self._latitud)
-        self._longitud = QDoubleSpinBox()
-        self._longitud.setRange(-180.0, 180.0)
-        self._longitud.setDecimals(3)
-        self._longitud.setSuffix("°")
-        form.addRow("Longitud *", self._longitud)
+        form.addWidget(QLabel("Nombre *"), 0, 0)
+        form.addWidget(self._nombre, 0, 1)
         self._altitud = QDoubleSpinBox()
         self._altitud.setRange(0.0, 9000.0)
         self._altitud.setDecimals(0)
         self._altitud.setSuffix(" m")
         self._altitud.setSpecialValueText("—")
-        form.addRow("Altitud", self._altitud)
+        sin_botones(self._altitud)
+        form.addWidget(QLabel("Altitud"), 0, 2)
+        form.addWidget(self._altitud, 0, 3)
+        self._latitud = QDoubleSpinBox()
+        self._latitud.setRange(-90.0, 90.0)
+        self._latitud.setDecimals(3)
+        self._latitud.setSuffix("°")
+        sin_botones(self._latitud)
+        form.addWidget(QLabel("Latitud *"), 1, 0)
+        form.addWidget(self._latitud, 1, 1)
+        self._longitud = QDoubleSpinBox()
+        self._longitud.setRange(-180.0, 180.0)
+        self._longitud.setDecimals(3)
+        self._longitud.setSuffix("°")
+        sin_botones(self._longitud)
+        form.addWidget(QLabel("Longitud *"), 1, 2)
+        form.addWidget(self._longitud, 1, 3)
+        form.setColumnStretch(1, 1)
+        form.setColumnStretch(3, 1)
+        lay.addLayout(form)
 
         huso = QHBoxLayout()
         self._auto = QCheckBox("Huso automático (hora solar local)")
@@ -169,14 +242,13 @@ class UbicacionesTab(QWidget):
         self._huso = QDoubleSpinBox()
         self._huso.setRange(-12.0, 14.0)
         self._huso.setDecimals(1)
-        self._huso.setSingleStep(0.5)
         self._huso.setSuffix(" h")
         self._huso.setEnabled(False)
+        sin_botones(self._huso)
         huso.addWidget(self._huso)
-        lay.addLayout(huso)
         self._auto.toggled.connect(lambda marcado: self._huso.setEnabled(not marcado))
-        lay.addLayout(form)
-        return marco
+        lay.addLayout(huso)
+        return caja
 
     # -- lista y carga -----------------------------------------------------
 
@@ -224,8 +296,9 @@ class UbicacionesTab(QWidget):
                 self._longitud.setValue(0.0)
                 self._altitud.setValue(0.0)
                 self._auto.setChecked(True)
-                self._horizonte.set_obstacles({})
-                self._cl.set_values({}, None, None, None, True)
+                self._bortle.setCurrentIndex(0)
+                self._sqm.setValue(0.0)
+                self._sitio.set_valores({}, {}, None, True)
             else:
                 self._ubicacion_id = fila["id"]
                 self._nombre.setText(str(fila.get("name") or ""))
@@ -236,18 +309,29 @@ class UbicacionesTab(QWidget):
                 self._auto.setChecked(desfase is None)
                 if desfase is not None:
                     self._huso.setValue(float(desfase))
-                self._horizonte.set_obstacles(fila.get("obstacles") or {})
+                self._bortle.setCurrentIndex(
+                    max(0, self._bortle.findData(fila.get("bortle")))
+                )
+                self._sqm.setValue(float(fila.get("sqm") or 0.0))
                 imagenes = list_images("location", fila["id"])
-                self._cl.set_values(
+                self._sitio.set_valores(
+                    fila.get("obstacles") or {},
                     fila.get("lp") or {},
-                    fila.get("bortle"),
-                    fila.get("sqm"),
                     imagenes[0]["path"] if imagenes else None,
                     bool(fila.get("consider_lp", True)),
                 )
         finally:
             self._cargando = False
+        self._refrescar_cielo()
         self._boton_eliminar.setEnabled(self._ubicacion_id is not None)
+
+    def _refrescar_cielo(self) -> None:
+        """Bortle/SQM cambiados (o ficha cargada) → esquemático al día."""
+        self._sitio.set_cielo(self._bortle.currentData(), self._sqm_actual())
+
+    def _sqm_actual(self) -> float | None:
+        """SQM informado (``None`` si está en «—», que es 0)."""
+        return self._sqm.value() if self._sqm.value() > 0 else None
 
     # -- acciones ----------------------------------------------------------
 
@@ -261,7 +345,7 @@ class UbicacionesTab(QWidget):
 
     def _guardar(self) -> None:
         """Persiste la ubicación: create si es nueva, update si venía de la base."""
-        lp, bortle, sqm, mapa, considerar = self._cl.values()
+        obstaculos, fuentes, mapa, considerar = self._sitio.valores()
         ubicacion = Location(
             id=self._ubicacion_id,
             name=self._nombre.text().strip(),
@@ -269,10 +353,10 @@ class UbicacionesTab(QWidget):
             longitude=self._longitud.value(),
             altitude_m=(self._altitud.value() or None),
             utc_offset_hours=(None if self._auto.isChecked() else self._huso.value()),
-            obstacles=self._horizonte.obstacles(),
-            lp=lp,
-            bortle=bortle,
-            sqm=sqm,
+            obstacles=obstaculos,
+            lp=fuentes,
+            bortle=self._bortle.currentData(),
+            sqm=self._sqm_actual(),
             consider_lp=considerar,
             lp_map=mapa,
         )

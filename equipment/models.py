@@ -75,20 +75,27 @@ FILTER_TYPES: dict[str, str] = {
 #: tupla y nada más hay que tocar.
 BIT_DEPTHS: tuple[int, ...] = (10, 12, 14, 16)
 
-#: Tipos de obstáculo del horizonte (``Location.obstacles``) → etiqueta.
-OBSTACLE_TYPES: dict[str, str] = {
-    "arboles": "Árboles",
-    "edificios": "Edificios",
-    "colinas": "Colinas",
-    "otro": "Otro",
+#: Alturas de obstrucción del horizonte (`Location.obstacles`) → etiqueta:
+#: a cuántos grados de elevación llega lo que obstruye cada dirección.
+#: Dueño del dato (R2): el disco de entrada de la rosácea y
+#: ``validar_ubicacion`` leen de aquí.
+OBSTRUCTION_ALTITUDES: dict[int, str] = {
+    0: "Ninguna (0°)",
+    15: "Pequeña (15°)",
+    30: "Media (30°)",
+    45: "Grande (45°)",
+    60: "Total (60°)",
 }
 
-#: Niveles de contaminación lumínica por dirección (``Location.lp``) → etiqueta.
-LP_LEVELS: dict[int, str] = {
-    0: "Despejado",
-    1: "Leve",
-    2: "Moderada",
-    3: "Intensa",
+#: Fuentes de contaminación lumínica (`Location.lp`) → etiqueta; cada
+#: dirección lleva como mucho una, con su distancia en km. Dueño del dato
+#: (R2): los tooltips que describen cada fuente son texto de la UI y viven
+#: en ``ui/equipment_tab/rosaceas.py``, junto al panel que los muestra.
+LP_SOURCES: dict[str, str] = {
+    "pueblo": "Pueblo",
+    "pueblo_grande": "Pueblo Grande",
+    "ciudad": "Ciudad",
+    "gran_ciudad": "Gran Ciudad",
 }
 
 #: 8 direcciones del horizonte en español (O = oeste), en orden de rosación.
@@ -103,9 +110,12 @@ class Location:
     (p. ej. España en verano = +2). Si es ``None`` se usa la longitud como
     hora solar local, que es una aproximación.
 
-    El bloque de sitio describe el horizonte por direcciones: ``obstacles``
-    (tipos de obstáculo por dirección) y ``lp`` (nivel de CL 0-3 por
-    dirección), siempre con las 8 claves de ``DIRECTIONS``. ``bortle`` es
+    El bloque de sitio describe el horizonte por direcciones, siempre con
+    las 8 claves de ``DIRECTIONS``: ``obstacles`` guarda a cuántos grados
+    obstruye cada una (claves de ``OBSTRUCTION_ALTITUDES``: 0/15/30/45/60)
+    y ``lp`` la fuente de CL de cada una como
+    ``{"fuente": clave de LP_SOURCES | None, "km": distancia}`` — una sola
+    fuente por dirección, con km > 0 solo si hay fuente. ``bortle`` es
     obligatorio en el formulario (1-9), ``sqm`` opcional, y
     ``consider_lp`` decide si la CL entra en las decisiones de captura de
     esta ubicación — de momento solo se guarda (paso 6 lo cablea).
@@ -119,8 +129,8 @@ class Location:
     longitude: float = 0.0
     altitude_m: float | None = None
     utc_offset_hours: float | None = None
-    obstacles: dict[str, list[str]] = field(default_factory=dict)
-    lp: dict[str, int] = field(default_factory=dict)
+    obstacles: dict[str, int] = field(default_factory=dict)
+    lp: dict[str, dict[str, str | float | None]] = field(default_factory=dict)
     bortle: int | None = None
     sqm: float | None = None
     consider_lp: bool = True

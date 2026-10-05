@@ -331,8 +331,8 @@ def _ubicacion(**kwargs) -> Location:
         latitude=40.4,
         longitude=-3.7,
         bortle=3,
-        obstacles={d: [] for d in DIRECTIONS},
-        lp={d: 0 for d in DIRECTIONS},
+        obstacles={d: 0 for d in DIRECTIONS},
+        lp={d: {"fuente": None, "km": 0.0} for d in DIRECTIONS},
     )
     datos.update(kwargs)
     return Location(**datos)
@@ -352,15 +352,35 @@ _CASOS_INVALIDOS = [
     (_ubicacion(sqm=-1), validar_ubicacion, "SQM"),
     (_ubicacion(obstacles={}), validar_ubicacion, "8 direcciones"),
     (
-        _ubicacion(obstacles={d: (["alien"] if d == "N" else []) for d in DIRECTIONS}),
+        _ubicacion(obstacles={d: (99 if d == "N" else 0) for d in DIRECTIONS}),
         validar_ubicacion,
-        "Obstáculo",
+        "obstáculo",
+    ),
+    (
+        _ubicacion(obstacles={d: (["alien"] if d == "N" else 0) for d in DIRECTIONS}),
+        validar_ubicacion,
+        "obstáculo",
     ),
     (_ubicacion(lp={}), validar_ubicacion, "contaminación"),
     (
-        _ubicacion(lp={d: (5 if d == "N" else 0) for d in DIRECTIONS}),
+        _ubicacion(lp={d: (5 if d == "N" else {"fuente": None, "km": 0.0})
+                   for d in DIRECTIONS}),
         validar_ubicacion,
-        "0-3",
+        "mal formada",
+    ),
+    (
+        _ubicacion(lp={d: ({"fuente": "alien", "km": 5.0} if d == "N"
+                       else {"fuente": None, "km": 0.0})
+                   for d in DIRECTIONS}),
+        validar_ubicacion,
+        "Fuente",
+    ),
+    (
+        _ubicacion(lp={d: ({"fuente": "pueblo", "km": 0} if d == "N"
+                       else {"fuente": None, "km": 0.0})
+                   for d in DIRECTIONS}),
+        validar_ubicacion,
+        "mayores que 0",
     ),
     # Telescopio
     (Telescope(name=""), validar_telescopio, "nombre"),
@@ -620,12 +640,12 @@ def test_ubicaciones_roundtrip_del_sitio(memory_db):
     """El sitio viaja a JSON con las 8 direcciones y vuelve parseado."""
     from equipment import localizations
 
-    obstaculos = {d: [] for d in DIRECTIONS}
-    obstaculos["N"] = ["arboles"]
-    obstaculos["E"] = ["edificios", "colinas"]
-    niveles = {d: 0 for d in DIRECTIONS}
-    niveles["S"] = 3
-    niveles["NE"] = 1
+    obstaculos = {d: 0 for d in DIRECTIONS}
+    obstaculos["N"] = 45
+    obstaculos["E"] = 15
+    fuentes = {d: {"fuente": None, "km": 0.0} for d in DIRECTIONS}
+    fuentes["S"] = {"fuente": "gran_ciudad", "km": 25.0}
+    fuentes["NE"] = {"fuente": "pueblo", "km": 5.0}
 
     ubicacion = _ubicacion(
         altitude_m=650,
@@ -634,13 +654,13 @@ def test_ubicaciones_roundtrip_del_sitio(memory_db):
         sqm=21.2,
         consider_lp=False,
         obstacles=obstaculos,
-        lp=niveles,
+        lp=fuentes,
     )
     pk = localizations.create(ubicacion)
 
     fila = localizations.list_locations()[0]
     assert fila["obstacles"] == obstaculos
-    assert fila["lp"] == niveles
+    assert fila["lp"] == fuentes
     assert fila["bortle"] == 4
     assert fila["sqm"] == pytest.approx(21.2)
     assert fila["consider_lp"] == 0  # crudo 0/1, como en el resto de dicts
@@ -657,7 +677,17 @@ def test_ubicaciones_roundtrip_del_sitio(memory_db):
     )
     memory_db.commit()
     fila = localizations.list_locations()[0]
-    assert fila["obstacles"] == {d: [] for d in DIRECTIONS}
+    assert fila["obstacles"] == {d: 0 for d in DIRECTIONS}
+
+    # Formato viejo (tipos de obstáculo y niveles 0-3) → defectos, sin error
+    memory_db.execute(
+        "UPDATE locations SET obstacles = ?, lp = ? WHERE id = ?",
+        ('{"N": ["arboles"], "E": ["edificios"]}', '{"S": 3, "NE": 1}', pk),
+    )
+    memory_db.commit()
+    fila = localizations.list_locations()[0]
+    assert fila["obstacles"] == {d: 0 for d in DIRECTIONS}
+    assert fila["lp"] == {d: {"fuente": None, "km": 0.0} for d in DIRECTIONS}
 
 
 def test_imagenes_por_entidad_sync_y_purge(memory_db, monkeypatch, tmp_path):

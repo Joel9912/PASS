@@ -9,9 +9,9 @@ from .models import (
     CATEGORIES,
     DIRECTIONS,
     FILTER_TYPES,
-    LP_LEVELS,
+    LP_SOURCES,
     MOUNT_TYPES,
-    OBSTACLE_TYPES,
+    OBSTRUCTION_ALTITUDES,
     OPTICAL_TYPES,
     Camera,
     EquipmentSetup,
@@ -44,15 +44,21 @@ def validar_ubicacion(location: Location) -> None:
     # El sitio se guarda SIEMPRE con las 8 direcciones (roundtrip completo).
     if set(location.obstacles) != set(DIRECTIONS):
         raise ValueError("El horizonte debe describir las 8 direcciones (N, NE, E, SE, S, SO, O, NO).")
-    for direccion, tipos in location.obstacles.items():
-        for tipo in tipos:
-            if tipo not in OBSTACLE_TYPES:
-                raise ValueError(f"Obstáculo desconocido {tipo!r} en {direccion}.")
+    for direccion, grados in location.obstacles.items():
+        if not isinstance(grados, int) or grados not in OBSTRUCTION_ALTITUDES:
+            raise ValueError(f"Altura de obstáculo desconocida {grados!r} en {direccion}.")
     if set(location.lp) != set(DIRECTIONS):
         raise ValueError("La contaminación lumínica debe describir las 8 direcciones.")
-    for direccion, nivel in location.lp.items():
-        if nivel not in LP_LEVELS:
-            raise ValueError(f"Nivel de CL fuera de 0-3 en {direccion}: {nivel!r}.")
+    for direccion, cl in location.lp.items():
+        if not isinstance(cl, dict) or "fuente" not in cl:
+            raise ValueError(f"CL mal formada en {direccion} (falta «fuente»).")
+        fuente = cl.get("fuente")
+        if fuente is not None and fuente not in LP_SOURCES:
+            raise ValueError(f"Fuente de CL desconocida {fuente!r} en {direccion}.")
+        if fuente is not None:
+            km = cl.get("km")
+            if not isinstance(km, (int, float)) or km <= 0:
+                raise ValueError(f"Los km de CL en {direccion} deben ser mayores que 0.")
 
 
 def validar_telescopio(telescope: Telescope) -> None:

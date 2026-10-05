@@ -11,9 +11,9 @@ CREATE TABLE IF NOT EXISTS locations (
     -- hora solar local (aproximación) hasta que el usuario lo indique.
     utc_offset_hours REAL,
     -- Bloque de sitio: JSON con SIEMPRE las 8 direcciones (N, NE, E, SE, S,
-    -- SO, O, NO). obstacles = {dir: ['arboles', 'edificios', ...]}.
+    -- SO, O, NO). obstacles = {dir: grados 0/15/30/45/60}.
     obstacles   TEXT,
-    lp          TEXT,               -- {dir: 0-3} contaminación lumínica por dirección
+    lp          TEXT,               -- {dir: {fuente, km}} CL por dirección
     bortle      INTEGER,            -- 1-9 (obligatorio en el formulario, no en la columna)
     sqm         REAL,               -- SQM cenital en mag/arcsec² (opcional)
     -- «Tener en cuenta la CL en las capturas de esta ubicación»: de momento

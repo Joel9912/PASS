@@ -177,6 +177,77 @@ def test_equipment_page_construye_con_sus_dos_subpestanas():
     pagina.deleteLater()
 
 
+def test_rosaceas_construyen_pintan_y_hacen_roundtrip():
+    """Paso 2: los discos de la rosácea construyen, pintan y roundtrip.
+
+    Cubre `rosaceas.py` sin motor de nada más: la rosa y los dos discos
+    de entrada pintan su círculo (``grab()`` dispara ``paintEvent``) y el
+    estado de obstrucciones/CL sobrevive a set→get con las 8 direcciones;
+    el esquemático acepta datos y repinta.
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import QApplication
+
+    from equipment.models import DIRECTIONS
+    from ui.equipment_tab.rosaceas import (
+        DiscoEsquematico,
+        DiscoLumen,
+        DiscoObstrucciones,
+        RosaDirecciones,
+    )
+
+    _app = QApplication.instance() or QApplication([])
+    rosa = RosaDirecciones()
+    obstaculos = DiscoObstrucciones()
+    lumen = DiscoLumen()
+    salida = DiscoEsquematico()
+
+    # Construyen y pintan sin lanzar (grab fuerza el repintado).
+    salida.resize(420, 340)
+    for widget in (rosa, obstaculos, lumen, salida):
+        if widget is not salida:
+            widget.resize(200, 200)
+        foto = widget.grab()
+        assert not foto.isNull(), f"{type(widget).__name__} no pinta"
+
+    # Roundtrip de los discos de entrada con valores guardados.
+    grados = {d: 0 for d in DIRECTIONS}
+    grados["N"] = 45
+    grados["NO"] = 15
+    obstaculos.set_obstacles(grados)
+    assert obstaculos.obstacles() == grados
+
+    fuentes = {d: {"fuente": None, "km": 0.0} for d in DIRECTIONS}
+    fuentes["SE"] = {"fuente": "ciudad", "km": 12.5}
+    fuentes["E"] = {"fuente": "gran_ciudad", "km": 40.0}
+    lumen.set_lp(fuentes)
+    assert lumen.lp() == fuentes
+
+    # Salida: con datos pinta el campo y las obstrucciones sin error.
+    salida.set_datos(4, 21.4, grados, fuentes)
+    assert not salida.grab().isNull()
+
+    # Regresión: el campo de color debe llegar al centro del disco. Con el
+    # brush negro heredado del disco, cada anillo de la rejilla se rellenaba
+    # como un círculo negro y tapaba el campo entero (centro siempre negro).
+    pixmap = salida.grab()
+    imagen = pixmap.toImage()
+    dpr = pixmap.devicePixelRatio()
+    cx = 420 / 2 - 92 / 2  # centro del disco: hay barra (base informada)
+    centro = imagen.pixelColor(round(cx * dpr), round(340 / 2 * dpr))
+    assert (centro.red(), centro.green(), centro.blue()) != (0, 0, 0)
+
+    # y sin datos vuelve al disco negro de fábrica (sin campo cacheado).
+    salida.set_datos(None, None, {}, {})
+    assert not salida.grab().isNull()
+
+    for widget in (rosa, obstaculos, lumen, salida):
+        widget.deleteLater()
+
+
 def test_equipo_cableado_en_la_ventana(monkeypatch):
     """Paso 3: Equipo ya no es placeholder y sus señales llegan al Planificador.
 

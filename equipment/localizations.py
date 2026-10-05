@@ -4,15 +4,16 @@ import json
 from db.connection import get_connection
 
 from . import images
-from .models import DIRECTIONS, LP_LEVELS, OBSTACLE_TYPES, Location
+from .models import DIRECTIONS, LP_SOURCES, OBSTRUCTION_ALTITUDES, Location
 from .validaciones import validar_ubicacion
 
 
-def _obstacles_desde(valor: str | None) -> dict[str, list[str]]:
-    """Horizonte con las 8 direcciones; JSON roto o claves ausentes → vacío.
+def _obstacles_desde(valor: str | None) -> dict[str, int]:
+    """Horizonte con las 8 direcciones en grados del catálogo; raro → 0°.
 
-    Carga defensiva: una fila corrupta (o con tipos fuera de catálogo) nunca
-    lanza excepción al pintar la lista — se queda en el defecto y la
+    Carga defensiva: JSON roto, formato viejo (tipos de obstáculo en
+    listas) o grados fuera de ``OBSTRUCTION_ALTITUDES`` nunca lanzan
+    excepción al pintar la lista — se queda en 0° («Ninguna») y la
     validación de guardado ya impedió escribirla así.
     """
     try:
@@ -21,31 +22,49 @@ def _obstacles_desde(valor: str | None) -> dict[str, list[str]]:
         crudo = {}
     if not isinstance(crudo, dict):
         crudo = {}
-    horizonte: dict[str, list[str]] = {}
+    grados: dict[str, int] = {}
     for direccion in DIRECTIONS:
-        tipos = crudo.get(direccion, [])
-        if not isinstance(tipos, list):
-            tipos = []
-        horizonte[direccion] = [t for t in tipos if t in OBSTACLE_TYPES]
-    return horizonte
+        bruto = crudo.get(direccion, 0)
+        if not isinstance(bruto, int) or bruto not in OBSTRUCTION_ALTITUDES:
+            grados[direccion] = 0
+        else:
+            grados[direccion] = bruto
+    return grados
 
 
-def _lp_desde(valor: str | None) -> dict[str, int]:
-    """CL por dirección con las 8 claves y niveles 0-3; lo raro → 0."""
+def _lp_desde(valor: str | None) -> dict[str, dict[str, str | float | None]]:
+    """CL por dirección como ``{"fuente": clave|None, "km": float}``.
+
+    Carga defensiva: JSON roto, formato viejo (nivel 0-3) o fuente sin
+    km válidos → sin fuente (``{"fuente": None, "km": ...}``), siempre
+    con las 8 direcciones y tipos que pasa la validación.
+    """
     try:
         crudo = json.loads(valor) if valor else {}
     except (json.JSONDecodeError, TypeError):
         crudo = {}
     if not isinstance(crudo, dict):
         crudo = {}
-    niveles: dict[str, int] = {}
+    fuentes: dict[str, dict[str, str | float | None]] = {}
     for direccion in DIRECTIONS:
+        bruto = crudo.get(direccion)
+        if not isinstance(bruto, dict):
+            fuentes[direccion] = {"fuente": None, "km": 0.0}
+            continue
+        fuente = bruto.get("fuente")
+        if not isinstance(fuente, str) or fuente not in LP_SOURCES:
+            fuente = None
         try:
-            nivel = int(crudo.get(direccion, 0))
+            km = float(bruto.get("km") or 0.0)
         except (TypeError, ValueError):
-            nivel = 0
-        niveles[direccion] = nivel if nivel in LP_LEVELS else 0
-    return niveles
+            km = 0.0
+        if fuente is not None and km > 0:
+            fuentes[direccion] = {"fuente": fuente, "km": km}
+        else:
+            # Sin distancia no hay fuente que valga (regla de validación):
+            # se descarta la fuente y se conserva el km legible.
+            fuentes[direccion] = {"fuente": None, "km": km if km > 0 else 0.0}
+    return fuentes
 
 
 def _sitio(location: Location) -> tuple[str, str]:

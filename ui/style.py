@@ -180,6 +180,25 @@ QComboBox QAbstractItemView {
     selection-background-color: $accentSoftStrong;
 }
 
+/* =============== Casillas y radios =============== */
+/* El indicador de radio marcado del tema base se rellena con el color de
+   fondo (invisible en este tema oscuro), así que aquí se dibuja: anillo
+   gris como el no marcado y punto de acento al marcarlo. */
+QRadioButton::indicator {
+    width: 14px;
+    height: 14px;
+    border-radius: 7px;
+    border: 1px solid $textDim;
+    background: $bg;
+}
+QRadioButton::indicator:checked {
+    background: $accent;
+    border-color: $accentLight;
+}
+QRadioButton::indicator:hover {
+    border-color: $accentLight;
+}
+
 /* ================== Tablas ================== */
 QTableView, QTableWidget {
     background-color: $bg;
