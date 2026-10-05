@@ -18,6 +18,7 @@ from equipment.metrics import (
     escala_imagen,
     focal_efectiva,
     limite_dawes,
+    limites_muestreo,
     rango_muestreo,
     relacion_focal,
     veredicto_muestreo,
@@ -72,7 +73,7 @@ def test_relacion_focal():
     "escala, resolucion, esperado",
     [
         (1.0, 0.58, "Submuestreado"),    # píxel más grueso que la óptica resuelve
-        (0.75, 1.0, "Adecuado"),         # dentro de [0.5×, 1×] la resolución
+        (0.75, 1.0, "Muestreo Correcto"),  # dentro de [0.5×, 1×] la resolución
         (0.3, 1.0, "Sobremuestreado"),   # píxeles más finos de lo aprovechable
         (None, 1.0, None),               # sin escala no hay veredicto
         (1.0, None, None),               # sin resolución (sin apertura) tampoco
@@ -88,18 +89,63 @@ def test_veredicto_muestreo_respeta_los_umbrales_configurados():
     """Los umbrales son parámetros: la comparativa no impone la verdad."""
     # Con sub=0.5 una escala de 0.75 sobre resolución 1.0 ya es «submuestreado».
     assert veredicto_muestreo(0.75, 1.0, umbral_sub=0.5) == "Submuestreado"
-    # Con sob=0.9 la misma escala queda por debajo → «sobremuestreado».
-    assert veredicto_muestreo(0.85, 1.0, umbral_sob=0.9) == "Sobremuestreado"
+    # Con sob=0.9 la misma escala queda justo por debajo → «Ligero»...
+    assert veredicto_muestreo(0.85, 1.0, umbral_sob=0.9) == "Sobremuestreado Ligero"
+    # ...y más allá del margen «Ligero» (0,9 / 1,4), el nivel completo.
+    assert veredicto_muestreo(0.5, 1.0, umbral_sob=0.9) == "Sobremuestreado"
 
 
-def test_veredicto_muestreo_en_la_frontera_es_adecuado():
-    """Escala justo en el umbral (comparación estricta) → «Adecuado».
+def test_veredicto_muestreo_en_la_frontera_es_correcto():
+    """Escala justo en el borde del rango (comparación estricta) → correcto.
 
-    Los `<`/`>` son estrictos: tocar el umbral superior o el inferior sin
-    pasarlo sigue siendo muestreo adecuado.
+    Los `<`/`>` son estrictos: tocar el alto o el bajo del rango sin
+    pasarlo sigue siendo «Muestreo Correcto».
     """
-    assert veredicto_muestreo(1.0, 1.0) == "Adecuado"   # == umbral_sub × res
-    assert veredicto_muestreo(0.5, 1.0) == "Adecuado"   # == umbral_sob × res
+    assert veredicto_muestreo(1.0, 1.0) == "Muestreo Correcto"  # == umbral_sub × res
+    assert veredicto_muestreo(0.5, 1.0) == "Muestreo Correcto"  # == umbral_sob × res
+
+
+def test_veredicto_cinco_niveles_con_factor_ligero():
+    """Los 5 niveles alrededor del rango (factor «Ligero» por parámetro).
+
+    Con resolución 1.0 el rango es (0.5, 1.0) y el factor por defecto
+    1.4 abre los bordes a (0,357…, 0.5, 1.0, 1.4).
+    """
+    assert veredicto_muestreo(1.5, 1.0) == "Submuestreado"
+    assert veredicto_muestreo(1.2, 1.0) == "Submuestreado Ligero"
+    assert veredicto_muestreo(1.0, 1.0) == "Muestreo Correcto"
+    assert veredicto_muestreo(0.6, 1.0) == "Muestreo Correcto"
+    assert veredicto_muestreo(0.4, 1.0) == "Sobremuestreado Ligero"
+    assert veredicto_muestreo(0.3, 1.0) == "Sobremuestreado"
+
+    # Fronteras: dentro de los bordes «Ligero»; ya en el rango, correcto.
+    assert veredicto_muestreo(1.4, 1.0) == "Submuestreado Ligero"
+    assert veredicto_muestreo(1.41, 1.0) == "Submuestreado"
+    assert veredicto_muestreo(0.5, 1.0) == "Muestreo Correcto"
+
+    # El margen es parámetro (Configuración lo expone): 2× = zona ancha.
+    assert veredicto_muestreo(1.3, 1.0, factor_ligero=2.0) == "Submuestreado Ligero"
+    # Factor 1 = sin niveles intermedios: vuelve a ser de 3 etiquetas.
+    assert veredicto_muestreo(1.3, 1.0, factor_ligero=1.0) == "Submuestreado"
+    assert veredicto_muestreo(0.4, 1.0, factor_ligero=1.0) == "Sobremuestreado"
+
+
+def test_limites_muestreo_abren_el_rango_por_el_factor():
+    """Los 4 bordes = rango ampliado (bajo ÷ factor, alto × factor)."""
+    assert limites_muestreo(1.0) == pytest.approx((0.5 / 1.4, 0.5, 1.0, 1.4))
+    assert limites_muestreo(1.0, factor_ligero=2.0) == pytest.approx(
+        (0.25, 0.5, 1.0, 2.0)
+    )
+    # Factor < 1 se trata como 1 (sin margen) en vez de invertir zonas.
+    assert limites_muestreo(1.0, factor_ligero=0.5) == pytest.approx(
+        (0.5, 0.5, 1.0, 1.0)
+    )
+    # Con seeing el rango base va recortado y el factor abre sobre ese rango.
+    assert limites_muestreo(1.45, seeing=1.0) == pytest.approx(
+        (0.25 / 1.4, 0.25, 0.5, 0.7)
+    )
+    assert limites_muestreo(None) is None
+    assert limites_muestreo(0.0) is None
 
 
 def test_rango_de_muestreo_con_y_sin_seeing():
@@ -127,28 +173,30 @@ def test_rango_de_muestreo_con_y_sin_seeing():
 
 
 def test_veredicto_y_calculos_usan_el_seeing():
-    """El seeing de la ubicación recorta el veredicto y añade `muestreo_rango`.
+    """El seeing de la ubicación recorta el veredicto y `muestreo_limites`.
 
-    El mismo equipo pasa de «Adecuado» (solo Dawes) a «Submuestreado» al
-    elegir una ubicación con seeing de 1 ″. La llamada sin ``seeing`` —
-    la de antes de este cambio — sigue funcionando igual.
+    El mismo equipo pasa de «Muestreo Correcto» (solo Dawes) a
+    «Submuestreado» al elegir una ubicación con seeing de 1 ″. La llamada
+    sin ``seeing`` — la de antes de este cambio — sigue funcionando igual.
     """
     telescopio = Telescope(name="ED80", aperture_mm=80.0, focal_mm=400.0)
     camara = Camera(name="Cooled", pixel_size_um=2.4)
     escala = escala_imagen(400.0, 2.4)  # ≈ 1,24 ″/px
 
-    # Solo Dawes (1,45 ″): 1,24 está en (0,725 · 1,45) → adecuado.
-    assert veredicto_muestreo(escala, 1.45) == "Adecuado"
+    # Solo Dawes (1,45 ″): 1,24 está en (0,725 · 1,45) → correcto.
+    assert veredicto_muestreo(escala, 1.45) == "Muestreo Correcto"
     # Con seeing 1 ″ la banda es (0,25 · 0,5): la misma escala es gruesa.
     assert veredicto_muestreo(escala, 1.45, seeing=1.0) == "Submuestreado"
 
     filas = calculos(telescopio, camara, seeing=1.0)
-    assert filas["muestreo_rango"] == pytest.approx((0.25, 0.5))
+    assert filas["muestreo_limites"] == pytest.approx((0.25 / 1.4, 0.25, 0.5, 0.7))
     assert filas["muestreo"] == "Submuestreado"
 
     filas_sin = calculos(telescopio, camara)  # firma antigua, sin seeing
-    assert filas_sin["muestreo_rango"] == pytest.approx((0.725, 1.45))
-    assert filas_sin["muestreo"] == "Adecuado"
+    assert filas_sin["muestreo_limites"] == pytest.approx(
+        (0.725 / 1.4, 0.725, 1.45, 1.45 * 1.4)
+    )
+    assert filas_sin["muestreo"] == "Muestreo Correcto"
     assert set(filas_sin) == set(filas)
 
 
@@ -169,11 +217,11 @@ def test_calculos_del_bloque_completo():
     assert filas["escala"] == pytest.approx(_ESCALA_500_376 / 1.6, abs=1e-6)
     assert filas["dawes"] == pytest.approx(0.58)
     assert filas["relacion_focal"] == pytest.approx(4.0)
-    assert filas["muestreo"] == "Submuestreado"  # 0.969 ″/px > Dawes 0.58
+    assert filas["muestreo"] == "Submuestreado"  # 0.969 ″/px > 1,4 × Dawes
 
-    # Umbrales ampliados por Configuración → mismo equipo, «Adecuado»
+    # Umbrales ampliados por Configuración → mismo equipo, «Correcto»
     amable = calculos(telescopio, camara, umbral_sub=2.0)
-    assert amable["muestreo"] == "Adecuado"
+    assert amable["muestreo"] == "Muestreo Correcto"
 
 
 def test_calculos_sin_datos_pintan_none():
@@ -186,24 +234,32 @@ def test_calculos_sin_datos_pintan_none():
         "dawes",
         "relacion_focal",
         "muestreo",
-        "muestreo_rango",
+        "muestreo_limites",
     }
     assert all(valor is None for valor in filas.values())
 
 
 def test_umbrales_de_muestreo_se_leen_de_settings(memory_settings):
-    """Las claves de Configuración (`sampling_*_ratio`) con defaults defensivos.
+    """Las claves de Configuración (`sampling_*`) con defaults defensivos.
 
-    Ausente → default del plan (1.0 / 0.5); texto raro → default; numérico →
-    se usa. El bloque «Cálculos» las recaba en cada recálculo (sin señal).
+    Ausente → default del plan (1.0 / 0.5 / margen 1.4); texto raro →
+    default; numérico → se usa. El bloque «Cálculos» las recaba en cada
+    recálculo (sin señal).
     """
     from db import settings
 
     assert settings.get_float("sampling_under_ratio", 1.0) == 1.0
     assert settings.get_float("sampling_over_ratio", 0.5) == 0.5
+    assert settings.get_float("sampling_light_factor", 1.4) == 1.4
 
     settings.set_setting("sampling_under_ratio", "2.0")
     assert settings.get_float("sampling_under_ratio", 1.0) == pytest.approx(2.0)
 
     settings.set_setting("sampling_over_ratio", "basura")
     assert settings.get_float("sampling_over_ratio", 0.5) == 0.5
+
+    settings.set_setting("sampling_light_factor", "1.75")
+    assert settings.get_float("sampling_light_factor", 1.4) == pytest.approx(1.75)
+
+    settings.set_setting("sampling_light_factor", "basura")
+    assert settings.get_float("sampling_light_factor", 1.4) == 1.4

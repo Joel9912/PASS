@@ -6,12 +6,13 @@ de la ficha del equipo las reutilizan (R2 — una sola regla).
 
 El veredicto de muestreo no impone verdad: usa dos **umbrales
 configurables** (claves de ``settings``: ``sampling_under_ratio`` y
-``sampling_over_ratio`` sobre el límite de Dawes, defaults 1.0 y 0.5). Se
-leen con ``db.settings.get_float`` y llegan aquí como parámetros: las
-métricas las define el usuario. Si la ubicación informa su **seeing**,
-`rango_muestreo` recorta el intervalo adecuado con él y el veredicto
-pasa por el mismo filtro (sin veredicto ni rango si no hay dato: nada se
-inventa).
+``sampling_over_ratio`` sobre el límite de Dawes, defaults 1.0 y 0.5) y
+un **margen «Ligero»** (`sampling_light_factor`, default 1.4) que abre
+los dos niveles intermedios. Se leen con ``db.settings.get_float`` y
+llegan aquí como parámetros: las métricas las define el usuario. Si la
+ubicación informa su **seeing**, `rango_muestreo` recorta el intervalo
+adecuado con él y el veredicto pasa por el mismo filtro (sin veredicto
+ni límites si no hay dato: nada se inventa).
 """
 from .models import Camera, Telescope
 
@@ -106,36 +107,68 @@ def rango_muestreo(
     return (bajo, alto)
 
 
+def limites_muestreo(
+    resolucion: float | None,
+    umbral_sub: float = 1.0,
+    umbral_sob: float = 0.5,
+    seeing: float | None = None,
+    factor_ligero: float = 1.4,
+) -> tuple[float, float, float, float] | None:
+    """Los 4 bordes de los 5 niveles de muestreo (None sin resolución).
+
+    Sobre `rango_muestreo` — ``(bajo, alto)`` es «Muestreo Correcto» —
+    se abren los márgenes «Ligero» multiplicando por ``factor_ligero``
+    (de Configuración: ``sampling_light_factor``). Devuelve
+    ``(bajo_ligero, bajo, alto, alto_ligero)``: entre ``bajo_ligero`` y
+    ``bajo`` manda «Sobremuestreado Ligero» y entre ``alto`` y
+    ``alto_ligero`` «Submuestreado Ligero». Factor < 1 → se trata como
+    1 (sin margen) para no invertir las zonas.
+    """
+    rango = rango_muestreo(resolucion, umbral_sub, umbral_sob, seeing)
+    if rango is None:
+        return None
+    factor = max(1.0, factor_ligero)
+    bajo, alto = rango
+    return (bajo / factor, bajo, alto, alto * factor)
+
+
 def veredicto_muestreo(
     escala: float | None,
     resolucion: float | None,
     umbral_sub: float = 1.0,
     umbral_sob: float = 0.5,
     seeing: float | None = None,
+    factor_ligero: float = 1.4,
 ) -> str | None:
-    """«Submuestreado» / «Adecuado» / «Sobremuestreado» según los umbrales.
+    """Los 5 niveles de muestreo según la posición de ``escala``.
 
-    El veredicto es la posición de ``escala`` dentro de `rango_muestreo`
-    (con los mismos umbrales y, si se pasa, el seeing de la ubicación):
+    De píxel grueso a fino, contra `limites_muestreo` (los mismos
+    umbrales, el seeing de la ubicación si se pasa y el margen
+    «Ligero»):
 
-    - por encima del alto → «Submuestreado»: el píxel es tan grueso que
-      no resuelve lo que se ve.
-    - por debajo del bajo → «Sobremuestreado»: píxeles más finos de lo
-      que la óptica permite aprovechar.
-    - dentro, **fronteras incluidas** → «Adecuado».
+    - «Submuestreado» / «Submuestreado Ligero»: por encima del alto del
+      rango (más allá del margen «Ligero» o dentro de él).
+    - «Muestreo Correcto»: dentro del rango, **fronteras incluidas**.
+    - «Sobremuestreado Ligero» / «Sobremuestreado»: por debajo del bajo.
 
     Sin escala o sin resolución no hay veredicto: ``None`` (la UI pinta
     «—»).
     """
-    rango = rango_muestreo(resolucion, umbral_sub, umbral_sob, seeing)
-    if escala is None or rango is None:
+    limites = limites_muestreo(
+        resolucion, umbral_sub, umbral_sob, seeing, factor_ligero
+    )
+    if escala is None or limites is None:
         return None
-    bajo, alto = rango
-    if escala > alto:
+    bajo_ligero, bajo, alto, alto_ligero = limites
+    if escala > alto_ligero:
         return "Submuestreado"
-    if escala < bajo:
+    if escala > alto:
+        return "Submuestreado Ligero"
+    if escala < bajo_ligero:
         return "Sobremuestreado"
-    return "Adecuado"
+    if escala < bajo:
+        return "Sobremuestreado Ligero"
+    return "Muestreo Correcto"
 
 
 def calculos(
@@ -144,16 +177,18 @@ def calculos(
     umbral_sub: float = 1.0,
     umbral_sob: float = 0.5,
     seeing: float | None = None,
-) -> dict[str, float | str | tuple[float, float] | None]:
+    factor_ligero: float = 1.4,
+) -> dict[str, float | str | tuple[float, float, float, float] | None]:
     """Todas las filas del bloque «Cálculos» para la pareja en pantalla.
 
     Toma el telescopio y la cámara **principales tal como están en los
     formularios** (con la entrada del reductor dentro del telescopio) y
-    devuelve ``focal_efectiva``, ``escala``, ``dawes``, ``relacion_focal``,
-    ``muestreo`` y ``muestreo_rango`` (el intervalo adecuado ″/px que
-    pintan la pista y la barra, recortado por el ``seeing`` de la
-    ubicación si la hay); cada clave vale ``None`` cuando falta un dato
-    (la UI pinta «—» y explica qué falta).
+    devuelve ``focal_efectiva``, ``escala``, ``dawes``,
+    ``relacion_focal``, ``muestreo`` (veredicto de 5 niveles) y
+    ``muestreo_limites`` (los 4 bordes que pinta la barra, sobre la
+    banda recortada por el ``seeing`` de la ubicación si la hay); cada
+    clave vale ``None`` cuando falta un dato (la UI pinta «—» y explica
+    qué falta).
     """
     focal = focal_efectiva(
         telescopio.focal_mm, telescopio.reducer, telescopio.reducer_factor
@@ -165,6 +200,10 @@ def calculos(
         "escala": escala,
         "dawes": dawes,
         "relacion_focal": relacion_focal(focal, telescopio.aperture_mm),
-        "muestreo": veredicto_muestreo(escala, dawes, umbral_sub, umbral_sob, seeing),
-        "muestreo_rango": rango_muestreo(dawes, umbral_sub, umbral_sob, seeing),
+        "muestreo": veredicto_muestreo(
+            escala, dawes, umbral_sub, umbral_sob, seeing, factor_ligero
+        ),
+        "muestreo_limites": limites_muestreo(
+            dawes, umbral_sub, umbral_sob, seeing, factor_ligero
+        ),
     }

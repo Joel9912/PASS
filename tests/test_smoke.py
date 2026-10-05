@@ -581,11 +581,12 @@ def test_subtipo_es_solo_seleccionable_conserva_al_cargar_y_cambia_con_el_tipo(
 def test_calculos_con_seeing_rango_y_barra(memory_db):
     """Cálculos: el seeing recorta el rango, colorea el veredicto y pinta la barra.
 
-    Regresiones del muestreo por rangos: la pista añade «Rango adecuado:
-    X–Y ″/px», la etiqueta de Muestreo se tiñe según el veredicto
-    (naranja/verde/violeta), la barra de 3 zonas pinta, y elegir una
+    Regresiones: la pista añade «Rango adecuado: X–Y ″/px», la etiqueta
+    de Muestreo se tiñe según el veredicto (arcoíris de 5 niveles:
+    violeta/azul/verde/amarillo/naranja), la barra pinta, elegir una
     ubicación con seeing cambia rango y veredicto (sin ubicación o sin
-    dato manda solo Dawes con los umbrales de Configuración).
+    dato manda solo Dawes con los umbrales de Configuración) y los dos
+    niveles «Ligero» aparecen en amarillo y azul.
     """
     import os
 
@@ -606,11 +607,20 @@ def test_calculos_con_seeing_rango_y_barra(memory_db):
     cam = tab._cam_principal.form
     cam._pixel.setValue(2.4)  # ≈ 1,24 ″/px
 
-    # Sin ubicación: solo Dawes (0,725–1,45) → «Adecuado» en verde.
+    # Sin ubicación: solo Dawes (0,725–1,45) → correcto en verde.
     assert "Rango adecuado:" in tab._pista_calculos.text()
-    assert tab._muestreo.text() == "Adecuado"
+    assert tab._muestreo.text() == "Muestreo Correcto"
     assert "#2ECC71" in tab._muestreo.styleSheet()
     assert not tab._barra.grab().isNull()
+
+    # Niveles «Ligero» sin seeing: banda de Dawes con el margen ×1,4.
+    cam._pixel.setValue(3.9)  # ≈ 2,01 ″/px: sobre el rango, dentro del margen
+    assert tab._muestreo.text() == "Submuestreado Ligero"
+    assert "#F4D03F" in tab._muestreo.styleSheet()
+    cam._pixel.setValue(1.2)  # ≈ 0,62 ″/px: bajo el rango, sobre el margen
+    assert tab._muestreo.text() == "Sobremuestreado Ligero"
+    assert "#5DADE2" in tab._muestreo.styleSheet()
+    cam._pixel.setValue(2.4)
 
     # Ubicación con seeing de 1 ″ → banda (0,25–0,5): la misma escala es
     # submuestreada (naranja) y la pista enseña el rango recortado.

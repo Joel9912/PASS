@@ -17,7 +17,7 @@ base.
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QPainter, QPainterPath
+from PyQt6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath
 from PyQt6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -59,24 +59,37 @@ def _formato(valor: float | None, unidad: str = "") -> str:
     return "—" if valor is None else f"{valor:.2f}{unidad}"
 
 
-#: Colores del veredicto de muestreo (etiqueta y barra de zonas), decididos
-#: por el usuario: naranja = submuestreado, verde = adecuado y violeta =
-#: sobremuestreado. Legibles sobre el fondo oscuro del tema.
+#: Los 5 niveles de muestreo y sus colores (etiqueta y barra), decididos
+#: por el usuario como un arcoíris: de la escala fina a la gruesa —
+#: violeta, azul, verde, amarillo, naranja. Legibles sobre el tema oscuro.
 _VEREDICTO_COLOR = {
-    "Submuestreado": "#F39C12",
-    "Adecuado": "#2ECC71",
-    "Sobremuestreado": "#A78BFA",
+    "Submuestreado": "#F39C12",           # naranja
+    "Submuestreado Ligero": "#F4D03F",    # amarillo
+    "Muestreo Correcto": "#2ECC71",       # verde
+    "Sobremuestreado Ligero": "#5DADE2",  # azul
+    "Sobremuestreado": "#A78BFA",         # violeta
 }
+
+#: Orden del arcoíris en la barra (de más fina a más gruesa).
+_ARCOIRIS = (
+    "Sobremuestreado",
+    "Sobremuestreado Ligero",
+    "Muestreo Correcto",
+    "Submuestreado Ligero",
+    "Submuestreado",
+)
 
 
 class BarraMuestreo(QWidget):
-    """Mini barra de 3 zonas con el marcador de la escala actual.
+    """Mini barra arcoíris de 5 zonas con el marcador de la escala actual.
 
-    Zonas según el rango adecuado de `equipment.metrics.rango_muestreo`:
-    violeta (escala fina, sobremuestreado), verde (adecuado) y naranja
-    (escala gruesa, submuestreado). El dominio va de 0 a
-    ``máx(escala, alto del rango) × 1,15`` para que el marcador nunca se
-    salga; sin rango (no hay apertura) se pinta una barra gris lisa de
+    Las zonas salen de `equipment.metrics.limites_muestreo` — violeta
+    (sobremuestreado), azul (ligero), verde (correcto), amarillo (ligero)
+    y naranja (submuestreado) — pintadas con `QLinearGradient`: cada
+    zona enseña su color en el núcleo y **se funde con la vecina en los
+    bordes** (arcoíris con transición). El dominio va de 0 a
+    ``máx(escala, alto_ligero) × 1,15`` para que el marcador nunca se
+    salga; sin límites (no hay apertura) se pinta la barra gris de
     «sin datos».
     """
 
@@ -84,53 +97,75 @@ class BarraMuestreo(QWidget):
         """Barra apilable de alto fijo; los datos llegan con `pintar`."""
         super().__init__(parent)
         self._escala: float | None = None
-        self._rango: tuple[float, float] | None = None
+        self._limites: tuple[float, float, float, float] | None = None
         self.setFixedHeight(16)
         self.setMinimumWidth(160)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setToolTip(
-            "Zonas del rango adecuado: violeta sobremuestreado · "
-            "verde adecuado · naranja submuestreado (la línea marca la escala)."
+            "Arcoíris de los 5 niveles: violeta sobremuestreado · azul "
+            "sobremuestreado ligero · verde correcto · amarillo "
+            "submuestreado ligero · naranja submuestreado (la línea "
+            "marca la escala)."
         )
 
     def pintar(
-        self, escala: float | None, rango: tuple[float, float] | None
+        self,
+        escala: float | None,
+        limites: tuple[float, float, float, float] | None,
     ) -> None:
-        """Actualiza escala y rango y repinta (``None`` = sin dato)."""
+        """Actualiza escala y los 4 bordes y repinta (``None`` = sin dato)."""
         self._escala = escala if escala and escala > 0 else None
-        self._rango = rango
+        self._limites = limites
         self.update()
 
     def paintEvent(self, evento) -> None:
-        """Pinta las tres zonas redondeadas y el marcador de la escala."""
+        """Pinta el arcoíris de 5 zonas con fundidos y el marcador."""
         del evento  # el repintado es completo: no hace falta usar el rect
         pintor = QPainter(self)
         pintor.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         ancho, alto = self.width(), self.height()
+        if ancho <= 0 or alto <= 0:
+            return
         ruta = QPainterPath()
         ruta.addRoundedRect(0.0, 0.0, float(ancho), float(alto), 4.0, 4.0)
         pintor.setClipPath(ruta)
 
-        if self._rango is None:
+        if self._limites is None:
             pintor.fillRect(0, 0, ancho, alto, QColor("#4A5058"))
-        else:
-            bajo, alto_rango = self._rango
-            fin = max(self._escala or 0.0, alto_rango) * 1.15 or 1.0
-            x_bajo = max(0, min(ancho, int(bajo / fin * ancho)))
-            x_alto = max(x_bajo, min(ancho, int(alto_rango / fin * ancho)))
-            pintor.fillRect(
-                0, 0, x_bajo, alto, QColor(_VEREDICTO_COLOR["Sobremuestreado"])
+            return
+        fin = max(self._escala or 0.0, self._limites[3]) * 1.15 or 1.0
+        bordes = [
+            max(0, min(ancho, int(valor / fin * ancho)))
+            for valor in self._limites
+        ]
+        degradado = QLinearGradient(0, 0, ancho, 0)
+        paradas: list[tuple[int, QColor]] = [
+            (0, QColor(_VEREDICTO_COLOR[_ARCOIRIS[0]]))
+        ]
+        for i, x in enumerate(bordes):
+            izquierda = x - (0 if i == 0 else bordes[i - 1])
+            derecha = (ancho if i == len(bordes) - 1 else bordes[i + 1]) - x
+            # Ancho del fundido: ¼ del hueco menor, para que cada zona
+            # conserve su núcleo sólido (mínimo 1 px).
+            t = max(1, min(8, izquierda // 4, derecha // 4))
+            paradas.append((max(x - t, 0), QColor(_VEREDICTO_COLOR[_ARCOIRIS[i]])))
+            paradas.append(
+                (min(x + t, ancho), QColor(_VEREDICTO_COLOR[_ARCOIRIS[i + 1]]))
             )
-            pintor.fillRect(
-                x_bajo, 0, x_alto - x_bajo, alto,
-                QColor(_VEREDICTO_COLOR["Adecuado"]),
-            )
-            pintor.fillRect(
-                x_alto, 0, ancho - x_alto, alto,
-                QColor(_VEREDICTO_COLOR["Submuestreado"]),
-            )
-        if self._escala is not None and self._rango is not None:
-            fin = max(self._escala, self._rango[1]) * 1.15
+        paradas.append((ancho, QColor(_VEREDICTO_COLOR[_ARCOIRIS[4]])))
+        # Offset no decreciente (el caso límite puede empatar, nunca
+        # invertir) y de 0 a 1 en fracción del ancho.
+        ultimo = 0
+        limpias: list[tuple[float, QColor]] = []
+        for posicion, color in paradas:
+            posicion = max(posicion, ultimo)
+            ultimo = posicion
+            limpias.append((posicion / ancho, color))
+        degradado.setStops(limpias)
+        pintor.fillRect(0, 0, ancho, alto, degradado)
+
+        # Marcador: línea oscura con el núcleo claro encima.
+        if self._escala is not None:
             x = max(2, min(ancho - 2, int(self._escala / fin * ancho)))
             pintor.fillRect(x - 2, 0, 5, alto, QColor("#0d1117"))
             pintor.fillRect(x - 1, 0, 3, alto, QColor("#e6edf3"))
@@ -591,8 +626,9 @@ class EquiposTab(QWidget):
         """Repinta «Cálculos» con la pareja principal en pantalla (en vivo).
 
         El seeing de la ubicación elegida en la cabecera recorta el rango
-        adecuado (y con él el veredicto); sin ubicación o sin dato manda
-        solo Dawes con los umbrales de Configuración.
+        adecuado y Configuración aporta los dos umbrales y el margen
+        «Ligero» de los 5 niveles; sin ubicación o sin dato manda solo
+        Dawes.
         """
         telescopio = self._tel_principal.form.a_modelo()
         camara = self._cam_principal.form.a_modelo()
@@ -602,6 +638,7 @@ class EquiposTab(QWidget):
             get_float("sampling_under_ratio", 1.0),
             get_float("sampling_over_ratio", 0.5),
             self._seeing_ubicacion(),
+            get_float("sampling_light_factor", 1.4),
         )
         self._escala.setText(_formato(filas["escala"], " ″/px"))
         self._dawes.setText(_formato(filas["dawes"], " ″"))
@@ -620,14 +657,14 @@ class EquiposTab(QWidget):
             faltan.append("píxel de la cámara")
         if telescopio.aperture_mm is None:
             faltan.append("apertura")
-        rango = filas["muestreo_rango"]
+        limites = filas["muestreo_limites"]
         piezas = ["Sobre el telescopio y la cámara principales en pantalla."]
-        if rango:
-            piezas.append(f"Rango adecuado: {rango[0]:.2f}–{rango[1]:.2f} ″/px.")
+        if limites:
+            piezas.append(f"Rango adecuado: {limites[1]:.2f}–{limites[2]:.2f} ″/px.")
         if faltan:
             piezas.append(f"Falta: {' · '.join(faltan)}.")
         self._pista_calculos.setText(" ".join(piezas))
-        self._barra.pintar(filas["escala"], rango)
+        self._barra.pintar(filas["escala"], limites)
         self._repinta_totales()
 
     def _repinta_totales(self) -> None:

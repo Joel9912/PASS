@@ -2,10 +2,10 @@
 
 Se abre con el botón ⚙ de la barra lateral. Tres secciones en el nav:
 «General» (motor SirIL y carpeta base de proyectos), «Clima» (API keys
-de Clear Outside y Meteoblue) y «Equipo» (umbrales de muestreo del
-bloque Cálculos). «Guardar» escribe todo de una vez en la tabla
-``settings`` (nunca en código ni en el repositorio); «Cerrar» o ✕
-descarta los cambios.
+de Clear Outside y Meteoblue) y «Equipo» (umbrales y margen «Ligero»
+del muestreo del bloque Cálculos). «Guardar» escribe todo de una vez en
+la tabla ``settings`` (nunca en código ni en el repositorio); «Cerrar» o
+✕ descarta los cambios.
 
 La comprobación de SirIL corre en un hilo aparte: el diálogo abre al
 instante aunque arrancar ``siril-cli`` tarde (el antivirus puede
@@ -256,13 +256,14 @@ class ConfigDialog(QDialog):
         return page
 
     def _build_equipo_page(self) -> QWidget:
-        """Página «Equipo»: los dos umbrales del bloque Cálculos (muestreo).
+        """Página «Equipo»: los umbrales y el margen «Ligero» del muestreo.
 
         Las métricas las define el usuario (decisión suya): estos números
-        deciden cuándo un equipo se pinta «Submuestreado» o «Sobremuestreado»
-        (``equipment.metrics.veredicto_muestreo``). Se guardan con el mismo
-        «Guardar» del diálogo y el bloque «Cálculos» los relee en cada
-        recálculo, así que no hay que cablear la señal ``saved``.
+        deciden las 5 etiquetas del bloque «Cálculos» — de «Submuestreado»
+        a «Sobremuestreado» pasando por los dos «Ligero»
+        (``equipment.metrics.veredicto_muestreo``). Se guardan con el
+        mismo «Guardar» del diálogo y el bloque «Cálculos» los relee en
+        cada recálculo, así que no hay que cablear la señal ``saved``.
         """
         page = QWidget()
         layout = QVBoxLayout(page)
@@ -279,8 +280,9 @@ class ConfigDialog(QDialog):
         self._sampling_under.setSingleStep(0.05)
         self._sampling_under.setSuffix(" ×")
         self._sampling_under.setToolTip(
-            "Si la escala ″/px supera este múltiplo de la resolución de "
-            "Dawes, el equipo se pinta «Submuestreado»."
+            "Marca el alto del rango adecuado (× la resolución de Dawes): "
+            "por encima empieza «Submuestreado Ligero» y más allá del "
+            "margen «Ligero», «Submuestreado»."
         )
         form.addRow("Umbral de submuestreo (× Dawes):", self._sampling_under)
 
@@ -290,16 +292,30 @@ class ConfigDialog(QDialog):
         self._sampling_over.setSingleStep(0.05)
         self._sampling_over.setSuffix(" ×")
         self._sampling_over.setToolTip(
-            "Por debajo de este múltiplo de Dawes, el equipo se pinta "
-            "«Sobremuestreado»."
+            "Marca el bajo del rango adecuado (× Dawes): por debajo "
+            "empieza «Sobremuestreado Ligero» y más allá del margen "
+            "«Ligero», «Sobremuestreado»."
         )
         form.addRow("Umbral de sobremuestreo (× Dawes):", self._sampling_over)
+
+        self._sampling_light = QDoubleSpinBox()
+        self._sampling_light.setRange(1.0, 5.0)
+        self._sampling_light.setDecimals(2)
+        self._sampling_light.setSingleStep(0.05)
+        self._sampling_light.setSuffix(" ×")
+        self._sampling_light.setToolTip(
+            "Margen «Ligero»: hasta este múltiplo del borde del rango "
+            "adecuado la etiqueta lleva «Ligero»; más allá, el nivel "
+            "completo. 1,0 = sin niveles intermedios."
+        )
+        form.addRow("Margen «Ligero» (× el borde del rango):", self._sampling_light)
 
         frame_layout.addLayout(form)
         hint = QLabel(
             "Los decide el usuario: la escala ″/px se compara con estos "
-            "múltiplos de la resolución de Dawes. El bloque «Cálculos» de "
-            "la pestaña Equipo los relee en cada cálculo."
+            "múltiplos de la resolución de Dawes y con el margen «Ligero» "
+            "sobre el borde del rango. El bloque «Cálculos» de la pestaña "
+            "Equipo los relee en cada cálculo."
         )
         hint.setObjectName("HintLabel")
         hint.setWordWrap(True)
@@ -323,6 +339,7 @@ class ConfigDialog(QDialog):
         self._meteoblue_key.setText(load_api_key("meteoblue_api_key") or "")
         self._sampling_under.setValue(get_float("sampling_under_ratio", 1.0))
         self._sampling_over.setValue(get_float("sampling_over_ratio", 0.5))
+        self._sampling_light.setValue(get_float("sampling_light_factor", 1.4))
         self._check_siril(path)
 
     def _check_siril(self, path: str) -> None:
@@ -405,6 +422,7 @@ class ConfigDialog(QDialog):
         save_api_key("meteoblue_api_key", self._meteoblue_key.text().strip())
         set_setting("sampling_under_ratio", str(self._sampling_under.value()))
         set_setting("sampling_over_ratio", str(self._sampling_over.value()))
+        set_setting("sampling_light_factor", str(self._sampling_light.value()))
         self._check_siril(self._siril_path.text().strip())
         QMessageBox.information(self, "Configuración", "Configuración guardada.")
         self.saved.emit()
