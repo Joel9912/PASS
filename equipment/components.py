@@ -59,7 +59,8 @@ def create_telescope(telescope: Telescope) -> int:
     conn = get_connection()
     cur = conn.execute(
         "INSERT INTO telescopes (name, aperture_mm, focal_mm, optical_type,"
-        " subtype, reducer, reducer_factor, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        " subtype, reducer, reducer_factor, price_eur, weight_kg, notes)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             telescope.name,
             telescope.aperture_mm,
@@ -68,6 +69,8 @@ def create_telescope(telescope: Telescope) -> int:
             telescope.subtype,
             int(telescope.reducer),
             telescope.reducer_factor,
+            telescope.price_eur,
+            telescope.weight_kg,
             telescope.notes,
         ),
     )
@@ -85,8 +88,8 @@ def update_telescope(telescope: Telescope) -> None:
     conn = get_connection()
     conn.execute(
         "UPDATE telescopes SET name = ?, aperture_mm = ?, focal_mm = ?,"
-        " optical_type = ?, subtype = ?, reducer = ?, reducer_factor = ?, notes = ?"
-        " WHERE id = ?",
+        " optical_type = ?, subtype = ?, reducer = ?, reducer_factor = ?,"
+        " price_eur = ?, weight_kg = ?, notes = ? WHERE id = ?",
         (
             telescope.name,
             telescope.aperture_mm,
@@ -95,6 +98,8 @@ def update_telescope(telescope: Telescope) -> None:
             telescope.subtype,
             int(telescope.reducer),
             telescope.reducer_factor,
+            telescope.price_eur,
+            telescope.weight_kg,
             telescope.notes,
             telescope.id,
         ),
@@ -138,7 +143,8 @@ def create_camera(camera: Camera) -> int:
     conn = get_connection()
     cur = conn.execute(
         "INSERT INTO cameras (name, cooled, pixel_size_um, width_px, height_px,"
-        " bit_depth, mono, ampglow, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " bit_depth, mono, ampglow, price_eur, weight_kg, notes)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             camera.name,
             int(camera.cooled),
@@ -148,6 +154,8 @@ def create_camera(camera: Camera) -> int:
             camera.bit_depth,
             int(camera.mono),
             int(camera.ampglow),
+            camera.price_eur,
+            camera.weight_kg,
             camera.notes,
         ),
     )
@@ -165,7 +173,8 @@ def update_camera(camera: Camera) -> None:
     conn = get_connection()
     conn.execute(
         "UPDATE cameras SET name = ?, cooled = ?, pixel_size_um = ?, width_px = ?,"
-        " height_px = ?, bit_depth = ?, mono = ?, ampglow = ?, notes = ? WHERE id = ?",
+        " height_px = ?, bit_depth = ?, mono = ?, ampglow = ?, price_eur = ?,"
+        " weight_kg = ?, notes = ? WHERE id = ?",
         (
             camera.name,
             int(camera.cooled),
@@ -175,6 +184,8 @@ def update_camera(camera: Camera) -> None:
             camera.bit_depth,
             int(camera.mono),
             int(camera.ampglow),
+            camera.price_eur,
+            camera.weight_kg,
             camera.notes,
             camera.id,
         ),
@@ -213,9 +224,16 @@ def create_mount(mount: Mount) -> int:
     validar_montura(mount)
     conn = get_connection()
     cur = conn.execute(
-        "INSERT INTO mounts (name, mount_type, payload_kg, notes)"
-        " VALUES (?, ?, ?, ?)",
-        (mount.name, mount.mount_type, mount.payload_kg, mount.notes),
+        "INSERT INTO mounts (name, mount_type, payload_kg, price_eur, weight_kg,"
+        " notes) VALUES (?, ?, ?, ?, ?, ?)",
+        (
+            mount.name,
+            mount.mount_type,
+            mount.payload_kg,
+            mount.price_eur,
+            mount.weight_kg,
+            mount.notes,
+        ),
     )
     conn.commit()
     mount.id = cur.lastrowid
@@ -229,9 +247,17 @@ def update_mount(mount: Mount) -> None:
     validar_montura(mount)
     conn = get_connection()
     conn.execute(
-        "UPDATE mounts SET name = ?, mount_type = ?, payload_kg = ?, notes = ?"
-        " WHERE id = ?",
-        (mount.name, mount.mount_type, mount.payload_kg, mount.notes, mount.id),
+        "UPDATE mounts SET name = ?, mount_type = ?, payload_kg = ?, price_eur = ?,"
+        " weight_kg = ?, notes = ? WHERE id = ?",
+        (
+            mount.name,
+            mount.mount_type,
+            mount.payload_kg,
+            mount.price_eur,
+            mount.weight_kg,
+            mount.notes,
+            mount.id,
+        ),
     )
     conn.commit()
 
@@ -265,8 +291,9 @@ def create_filter(filt: Filter) -> int:
     validar_filtro(filt)
     conn = get_connection()
     cur = conn.execute(
-        "INSERT INTO filters (name, filter_type, notes) VALUES (?, ?, ?)",
-        (filt.name, filt.filter_type, filt.notes),
+        "INSERT INTO filters (name, filter_type, price_eur, notes)"
+        " VALUES (?, ?, ?, ?)",
+        (filt.name, filt.filter_type, filt.price_eur, filt.notes),
     )
     conn.commit()
     filt.id = cur.lastrowid
@@ -280,8 +307,9 @@ def update_filter(filt: Filter) -> None:
     validar_filtro(filt)
     conn = get_connection()
     conn.execute(
-        "UPDATE filters SET name = ?, filter_type = ?, notes = ? WHERE id = ?",
-        (filt.name, filt.filter_type, filt.notes, filt.id),
+        "UPDATE filters SET name = ?, filter_type = ?, price_eur = ?, notes = ?"
+        " WHERE id = ?",
+        (filt.name, filt.filter_type, filt.price_eur, filt.notes, filt.id),
     )
     conn.commit()
 

@@ -28,6 +28,17 @@ def _nombre(nombre: str, entidad: str) -> None:
         raise ValueError(f"{entidad}: el nombre no puede estar vacío.")
 
 
+def _precio_peso(price_eur: float | None, weight_kg: float | None = None) -> None:
+    """Precio y peso de la pieza ≥ 0 (``None`` = no informado, no valida).
+
+    El filtro solo tiene precio: se le pasa el peso como ``None``.
+    """
+    if price_eur is not None and price_eur < 0:
+        raise ValueError("El precio no puede ser negativo.")
+    if weight_kg is not None and weight_kg < 0:
+        raise ValueError("El peso no puede ser negativo.")
+
+
 def validar_ubicacion(location: Location) -> None:
     """Rangos geográficos, bloque de sitio y Bortle obligatorio (1-9)."""
     _nombre(location.name, "Ubicación")
@@ -70,6 +81,7 @@ def validar_telescopio(telescope: Telescope) -> None:
         raise ValueError("La distancia focal no puede ser negativa.")
     if telescope.reducer_factor is not None and telescope.reducer_factor <= 0:
         raise ValueError("El factor del reductor debe ser mayor que 0.")
+    _precio_peso(telescope.price_eur, telescope.weight_kg)
     if telescope.optical_type is not None and telescope.optical_type not in OPTICAL_TYPES:
         raise ValueError(f"Tipo de óptica desconocido: {telescope.optical_type!r}.")
 
@@ -88,6 +100,7 @@ def validar_camara(camera: Camera) -> None:
             f"Profundidad de bits no admitida: {camera.bit_depth} "
             f"(admite {', '.join(str(bits) for bits in BIT_DEPTHS)})."
         )
+    _precio_peso(camera.price_eur, camera.weight_kg)
 
 
 def validar_montura(mount: Mount) -> None:
@@ -95,13 +108,15 @@ def validar_montura(mount: Mount) -> None:
     _nombre(mount.name, "Montura")
     if mount.payload_kg is not None and mount.payload_kg < 0:
         raise ValueError("La capacidad de carga no puede ser negativa.")
+    _precio_peso(mount.price_eur, mount.weight_kg)
     if mount.mount_type is not None and mount.mount_type not in MOUNT_TYPES:
         raise ValueError(f"Tipo de montura desconocido: {mount.mount_type!r}.")
 
 
 def validar_filtro(filt: Filter) -> None:
-    """Filtro: nombre y tipo del catálogo."""
+    """Filtro: nombre, precio no negativo y tipo del catálogo."""
     _nombre(filt.name, "Filtro")
+    _precio_peso(filt.price_eur)
     if filt.filter_type is not None and filt.filter_type not in FILTER_TYPES:
         raise ValueError(f"Tipo de filtro desconocido: {filt.filter_type!r}.")
 

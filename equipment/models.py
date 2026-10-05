@@ -157,6 +157,8 @@ class Telescope:
     subtype: str | None = None         # texto libre (SUBTYPE_SUGGESTIONS)
     reducer: bool = False
     reducer_factor: float | None = None  # p. ej. 0.8 (None = desconocido)
+    price_eur: float | None = None    # precio de esta pieza (None = no informado)
+    weight_kg: float | None = None    # peso real (sin el aplanador: +0,5 kg se añade al sumar el equipo)
     notes: str = ""
     images: list[str] = field(default_factory=list)
 
@@ -180,6 +182,8 @@ class Camera:
     height_px: int | None = None
     mono: bool = False                 # monocromática vs color
     ampglow: bool = False
+    price_eur: float | None = None     # precio de esta pieza (None = no informado)
+    weight_kg: float | None = None     # peso real (None = no informado)
     notes: str = ""
     images: list[str] = field(default_factory=list)  # gráficas de ganancia
 
@@ -192,6 +196,8 @@ class Mount:
     name: str = ""
     mount_type: str | None = None      # ver MOUNT_TYPES
     payload_kg: float | None = None    # capacidad / carga útil
+    price_eur: float | None = None     # precio de esta pieza (None = no informado)
+    weight_kg: float | None = None     # peso real (None = no informado)
     notes: str = ""
 
 
@@ -202,6 +208,7 @@ class Filter:
     id: int | None = None
     name: str = ""
     filter_type: str | None = None     # ver FILTER_TYPES
+    price_eur: float | None = None     # precio del filtro (None = no informado)
     notes: str = ""
 
 

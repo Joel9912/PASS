@@ -61,6 +61,24 @@ _MIGRATIONS: dict[str, tuple[str, ...]] = {
         "tiles_y INTEGER",
         "notes TEXT",
     ),
+    # Precio/peso por pieza (la cabecera del equipo los suma en vivo y los
+    # persiste en `equipment_setups` al guardar — D-3).
+    "telescopes": (
+        "price_eur REAL",
+        "weight_kg REAL",
+    ),
+    "cameras": (
+        "price_eur REAL",
+        "weight_kg REAL",
+    ),
+    "mounts": (
+        "price_eur REAL",
+        "weight_kg REAL",
+    ),
+    "filters": (
+        # Solo precio: el peso de los filtros se ignora en los totales.
+        "price_eur REAL",
+    ),
 }
 
 

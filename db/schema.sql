@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS telescopes (
     subtype        TEXT,             -- texto libre con sugerencias (doblete, triplete apocromático…)
     reducer        INTEGER NOT NULL DEFAULT 0,   -- ¿lleva aplanador/reductor?
     reducer_factor REAL,             -- p. ej. 0.8 (NULL = desconocido)
+    price_eur      REAL,             -- precio de la pieza (NULL = no informado)
+    weight_kg      REAL,             -- peso de la pieza sin el aplanador (+0,5 kg al sumar el equipo)
     notes          TEXT,
     created_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -47,6 +49,8 @@ CREATE TABLE IF NOT EXISTS cameras (
     bit_depth     INTEGER,
     mono          INTEGER NOT NULL DEFAULT 0,   -- monocromática vs color
     ampglow       INTEGER NOT NULL DEFAULT 0,
+    price_eur     REAL,              -- precio de la pieza (NULL = no informado)
+    weight_kg     REAL,              -- peso de la pieza (NULL = no informado)
     notes         TEXT,
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -58,6 +62,8 @@ CREATE TABLE IF NOT EXISTS mounts (
     name       TEXT NOT NULL,
     mount_type TEXT,                 -- ver equipment.models.MOUNT_TYPES
     payload_kg REAL,                 -- capacidad / carga útil
+    price_eur  REAL,                 -- precio de la pieza (NULL = no informado)
+    weight_kg  REAL,                 -- peso de la pieza (NULL = no informado)
     notes      TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -66,6 +72,7 @@ CREATE TABLE IF NOT EXISTS filters (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT NOT NULL,
     filter_type TEXT,                -- ver equipment.models.FILTER_TYPES
+    price_eur   REAL,                -- precio del filtro (sin peso: 0 kg en los totales)
     notes       TEXT,
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );

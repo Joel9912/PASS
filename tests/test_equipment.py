@@ -156,6 +156,36 @@ def test_migra_precio_y_peso_del_equipo(memory_db):
     conn.close()
 
 
+def test_migra_precio_y_peso_de_las_piezas(memory_db):
+    """Las 4 tablas de piezas reciben precio/peso al abrir una base antigua.
+
+    La cabecera del equipo suma esos campos en vivo; si solo estuvieran en
+    ``schema.sql``, una base fresca los tendría y una creada antes, no
+    (por eso la entrada en ``_MIGRATIONS`` es obligatoria). Los filtros
+    llevan solo precio: su peso no suma en los totales.
+    """
+    from db import connection as db_conn
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    for tabla in ("telescopes", "cameras", "mounts", "filters"):
+        conn.execute(
+            f"CREATE TABLE {tabla} ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " name TEXT NOT NULL)"
+        )
+
+    db_conn.init_db(conn)  # schema (IF NOT EXISTS → no toca las tablas) + migración
+
+    for tabla in ("telescopes", "cameras", "mounts", "filters"):
+        columnas = {row[1] for row in conn.execute(f"PRAGMA table_info({tabla})")}
+        frescas = {row[1] for row in memory_db.execute(f"PRAGMA table_info({tabla})")}
+        assert "price_eur" in columnas and "price_eur" in frescas
+        if tabla != "filters":
+            assert "weight_kg" in columnas and "weight_kg" in frescas
+    conn.close()
+
+
 def test_migra_las_referencias_y_quita_las_columnas_de_la_v1(memory_db):
     """Equipo v2: una base antigua gana las FK de componentes y pierde lo embebido.
 
@@ -388,6 +418,8 @@ _CASOS_INVALIDOS = [
     (Telescope(name="X", focal_mm=-1), validar_telescopio, "focal"),
     (Telescope(name="X", reducer=True, reducer_factor=0), validar_telescopio, "reductor"),
     (Telescope(name="X", optical_type="aberración"), validar_telescopio, "óptica"),
+    (Telescope(name="X", price_eur=-1), validar_telescopio, "precio"),
+    (Telescope(name="X", weight_kg=-1), validar_telescopio, "peso"),
     # Cámara
     (Camera(name=""), validar_camara, "nombre"),
     (Camera(name="X", pixel_size_um=-1), validar_camara, "píxel"),
@@ -395,13 +427,18 @@ _CASOS_INVALIDOS = [
     (Camera(name="X", height_px=-1), validar_camara, "alto"),
     (Camera(name="X", bit_depth=0), validar_camara, "bits"),
     (Camera(name="X", bit_depth=11), validar_camara, "bits"),  # fuera de BIT_DEPTHS
+    (Camera(name="X", price_eur=-1), validar_camara, "precio"),
+    (Camera(name="X", weight_kg=-1), validar_camara, "peso"),
     # Montura
     (Mount(name=""), validar_montura, "nombre"),
     (Mount(name="X", payload_kg=-1), validar_montura, "capacidad"),
     (Mount(name="X", mount_type="voladora"), validar_montura, "montura"),
+    (Mount(name="X", price_eur=-1), validar_montura, "precio"),
+    (Mount(name="X", weight_kg=-1), validar_montura, "peso"),
     # Filtro
     (Filter(name=""), validar_filtro, "nombre"),
     (Filter(name="X", filter_type="magenta"), validar_filtro, "filtro"),
+    (Filter(name="X", price_eur=-1), validar_filtro, "precio"),
     # Setup
     (EquipmentSetup(name=""), validar_setup, "nombre"),
     (EquipmentSetup(name="X", category="nebulosas"), validar_setup, "Categoría"),
@@ -443,14 +480,20 @@ def test_crud_de_las_cuatro_piezas(memory_db):
         focal_mm=420,
         optical_type="refractor",
         subtype="Doblete",
+        price_eur=650,
+        weight_kg=2.7,
     )
     tid = components.create_telescope(telescopio)
     assert telescopio.id == tid
     assert components.get_telescope(tid)["focal_mm"] == pytest.approx(420)
+    assert components.get_telescope(tid)["price_eur"] == pytest.approx(650)
+    assert components.get_telescope(tid)["weight_kg"] == pytest.approx(2.7)
 
     telescopio.focal_mm = 490
+    telescopio.price_eur = 599
     components.update_telescope(telescopio)
     assert components.get_telescope(tid)["focal_mm"] == pytest.approx(490)
+    assert components.get_telescope(tid)["price_eur"] == pytest.approx(599)
     assert isinstance(components.list_telescopes()[0], dict)  # contrato C-2
 
     camara = Camera(
@@ -460,17 +503,27 @@ def test_crud_de_las_cuatro_piezas(memory_db):
         width_px=6248,
         height_px=4176,
         bit_depth=16,
+        price_eur=1550,
+        weight_kg=0.7,
     )
     cid = components.create_camera(camara)
     assert components.get_camera(cid)["cooled"] == 1  # bool → 0/1 en la fila
+    assert components.get_camera(cid)["price_eur"] == pytest.approx(1550)
+    assert components.get_camera(cid)["weight_kg"] == pytest.approx(0.7)
 
-    montura = Mount(name="AM5", mount_type="armonica", payload_kg=20)
+    montura = Mount(
+        name="AM5", mount_type="armonica", payload_kg=20, price_eur=2100, weight_kg=5.5
+    )
     mid = components.create_mount(montura)
     assert components.get_mount(mid)["payload_kg"] == pytest.approx(20)
+    assert components.get_mount(mid)["price_eur"] == pytest.approx(2100)
+    assert components.get_mount(mid)["weight_kg"] == pytest.approx(5.5)
 
-    filtro = Filter(name="UHC", filter_type="uhc")
+    filtro = Filter(name="UHC", filter_type="uhc", price_eur=45)
     fid = components.create_filter(filtro)
     assert components.get_filter(fid)["filter_type"] == "uhc"
+    assert components.get_filter(fid)["price_eur"] == pytest.approx(45)
+    assert "weight_kg" not in components.get_filter(fid)  # los filtros no pesan
 
     components.delete_filter(fid)
     components.delete_mount(mid)
