@@ -4,7 +4,9 @@ Arriba, la rosácea con los 3 discos de `rosaceas.py` (orientación,
 obstrucciones y CL por dirección) a ancho completo; abajo, dos cuadros a
 mitades: la representación esquemática del sitio (``DiscoEsquematico``,
 con la casilla ``consider_lp`` «Usar Contaminación Lumínica al
-Planificar» dentro) y el mapa de CL adjunto con su vista previa
+Planificar» en su fila superior, a la cota de la fila de nombre/botones
+del mapa, para que los dos discos arranquen iguales) y el mapa de CL
+adjunto con su vista previa
 (``_VistaMapa``). Se sustituye a la antigua malla 3×3
 (``HorizonWidget``/``LightPollutionWidget``).
 
@@ -100,7 +102,7 @@ class SitioPanel(QWidget):
         self._sqm: float | None = None
         self._lp_map: str | None = None
 
-        # La casilla vive dentro del cuadro del esquemático.
+        # La casilla vive en la fila superior del cuadro del esquemático.
         self._considerar = QCheckBox("Usar Contaminación Lumínica al Planificar")
         self._considerar.setChecked(True)
 
@@ -116,6 +118,18 @@ class SitioPanel(QWidget):
         abajo.addWidget(self._esquematico(), 1)
         abajo.addWidget(self._mapa(), 1)
         layout.addLayout(abajo)
+
+        # La fila superior del esquemático (la casilla) mide lo mismo que
+        # la de nombre/botones del mapa: así los dos discos arrancan a la
+        # misma cota y se comparan de un vistazo.
+        self._considerar.setFixedHeight(
+            max(
+                self._mapa_lbl.sizeHint().height(),
+                self._boton_anadir.sizeHint().height(),
+                self._boton_quitar.sizeHint().height(),
+                self._considerar.sizeHint().height(),
+            )
+        )
 
         self._obstrucciones.changed.connect(self._repintar_salida)
         self._lumen.changed.connect(self._repintar_salida)
@@ -156,7 +170,7 @@ class SitioPanel(QWidget):
         return marco
 
     def _esquematico(self) -> QFrame:
-        """Cuadro de la representación del sitio, con la casilla de CL."""
+        """Cuadro de la representación del sitio, con la casilla de CL arriba."""
         marco = QFrame()
         marco.setObjectName("GroupFrame")
         caja = QVBoxLayout(marco)
@@ -165,10 +179,12 @@ class SitioPanel(QWidget):
         titulo = QLabel("Representación esquemática")
         titulo.setObjectName("PanelTitle")
         caja.addWidget(titulo)
+        # La casilla arriba, a la misma cota que la fila de nombre/botones
+        # del mapa: así los dos discos empiezan a la misma altura y se
+        # comparan de un vistazo.
+        caja.addWidget(self._considerar)
         self._salida = DiscoEsquematico()
         caja.addWidget(self._salida, 1)
-        # La casilla de CL la «asume» el esquemático (lo pidió el usuario).
-        caja.addWidget(self._considerar)
         return marco
 
     def _mapa(self) -> QFrame:

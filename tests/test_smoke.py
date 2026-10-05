@@ -189,8 +189,9 @@ def test_ubicaciones_fila_geografia_primero_y_vista_previa_mapa(tmp_path):
 
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+    from PyQt6.QtCore import QPoint
     from PyQt6.QtGui import QImage
-    from PyQt6.QtWidgets import QApplication, QLabel
+    from PyQt6.QtWidgets import QApplication, QLabel, QTabWidget
 
     from ui.equipment_tab import EquipmentPage
 
@@ -224,21 +225,45 @@ def test_ubicaciones_fila_geografia_primero_y_vista_previa_mapa(tmp_path):
     assert vista._original.isNull()
     assert "No se pudo" in vista.text()
 
-    # Revisión 2 del layout: títulos, casilla dentro del esquemático y
-    # discos/esquemático con HFW (ancho completo, sin hueco a los lados).
+    # Revisión 2 del layout: títulos, casilla en la fila superior del
+    # esquemático y discos/esquemático con HFW (ancho completo, sin hueco).
     sitio = tab._sitio
     textos = [rotulo.text() for rotulo in sitio.findChildren(QLabel)]
     assert "Mapa de Contaminación Lumínica" in textos
     assert "Referencia: el programa no la analiza." not in textos
     assert sitio._considerar.text() == "Usar Contaminación Lumínica al Planificar"
     assert sitio._considerar.parentWidget() is sitio._salida.parentWidget()
+    caja = sitio._salida.parentWidget().layout()
+    assert caja.indexOf(sitio._considerar) < caja.indexOf(sitio._salida)
     for disco in (sitio._rosa, sitio._obstrucciones, sitio._lumen):
         assert disco.hasHeightForWidth()
         assert disco.heightForWidth(300) == 300
     assert sitio._salida.hasHeightForWidth()
     assert sitio._salida.heightForWidth(500) == 440
 
+    # Los dos discos arrancan a la misma cota: la casilla mide lo mismo
+    # que la fila de nombre/botones del mapa (comparables de un vistazo).
+    # La pestaña debe estar visible: si no, la página no se maqueta y
+    # todas las cotas serían 0 (la aserción no probaría nada).
+    pagina.findChild(QTabWidget).setCurrentIndex(1)  # pestaña Ubicaciones
+    pagina.resize(1400, 900)
+    pagina.show()
+    _app.processEvents()
+    cota_esquematico = sitio._salida.mapTo(sitio, QPoint(0, 0)).y()
+    cota_mapa = sitio._vista.mapTo(sitio, QPoint(0, 0)).y()
+    assert cota_esquematico == cota_mapa
+    # La casilla tiene altura fija y vale lo que mide la fila del mapa.
+    fila_mapa = max(
+        sitio._mapa_lbl.sizeHint().height(),
+        sitio._boton_anadir.sizeHint().height(),
+        sitio._boton_quitar.sizeHint().height(),
+        sitio._considerar.sizeHint().height(),
+    )
+    assert sitio._considerar.minimumHeight() == fila_mapa
+    assert sitio._considerar.maximumHeight() == fila_mapa
+
     pagina.deleteLater()
+    _app.processEvents()
 
 
 def test_ubicacion_altitud_desfase_y_sqm(memory_db):
