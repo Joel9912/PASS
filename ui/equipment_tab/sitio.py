@@ -3,10 +3,10 @@
 Arriba, la rosácea con los 3 discos de `rosaceas.py` (orientación,
 obstrucciones y CL por dirección) a ancho completo; abajo, dos cuadros a
 mitades: la representación esquemática del sitio (``DiscoEsquematico``,
-con la casilla ``consider_lp`` «Usar CL y Obstáculos al Planificar» en
-su fila superior, a la cota de la fila de nombre/botones del mapa para
-que los dos discos arranquen iguales, y el interruptor solo visual
-«Mostrar obstáculos» bajo la gráfica) y el mapa de CL
+con las casillas «Usar CL y Obstáculos al Planificar» (``consider_lp``)
+y «Mostrar obstáculos» —esta, solo visual— juntas en la fila superior,
+a la cota de la fila de nombre/botones del mapa para que los dos discos
+arranquen iguales) y el mapa de CL
 adjunto con su vista previa
 (``_VistaMapa``). Se sustituye a la antigua malla 3×3
 (``HorizonWidget``/``LightPollutionWidget``).
@@ -103,7 +103,8 @@ class SitioPanel(QWidget):
         self._sqm: float | None = None
         self._lp_map: str | None = None
 
-        # La casilla vive en la fila superior del cuadro del esquemático.
+        # Las dos casillas viven en la fila superior del cuadro del
+        # esquemático (la de obstáculos se crea en _esquematico).
         self._considerar = QCheckBox("Usar CL y Obstáculos al Planificar")
         self._considerar.setChecked(True)
 
@@ -120,17 +121,18 @@ class SitioPanel(QWidget):
         abajo.addWidget(self._mapa(), 1)
         layout.addLayout(abajo)
 
-        # La fila superior del esquemático (la casilla) mide lo mismo que
-        # la de nombre/botones del mapa: así los dos discos arrancan a la
-        # misma cota y se comparan de un vistazo.
-        self._considerar.setFixedHeight(
-            max(
-                self._mapa_lbl.sizeHint().height(),
-                self._boton_anadir.sizeHint().height(),
-                self._boton_quitar.sizeHint().height(),
-                self._considerar.sizeHint().height(),
-            )
+        # La fila superior del esquemático (las 2 casillas) mide lo mismo
+        # que la de nombre/botones del mapa: así los dos discos arrancan a
+        # la misma cota y se comparan de un vistazo.
+        fila_mapa = max(
+            self._mapa_lbl.sizeHint().height(),
+            self._boton_anadir.sizeHint().height(),
+            self._boton_quitar.sizeHint().height(),
+            self._considerar.sizeHint().height(),
+            self._mostrar_obst.sizeHint().height(),
         )
+        self._considerar.setFixedHeight(fila_mapa)
+        self._mostrar_obst.setFixedHeight(fila_mapa)
 
         self._obstrucciones.changed.connect(self._repintar_salida)
         self._lumen.changed.connect(self._repintar_salida)
@@ -171,7 +173,7 @@ class SitioPanel(QWidget):
         return marco
 
     def _esquematico(self) -> QFrame:
-        """El cuadro: casilla de planificación arriba, obstáculos abajo."""
+        """El cuadro: las dos casillas en la fila superior, gráfica debajo."""
         marco = QFrame()
         marco.setObjectName("GroupFrame")
         caja = QVBoxLayout(marco)
@@ -180,15 +182,9 @@ class SitioPanel(QWidget):
         titulo = QLabel("Representación esquemática")
         titulo.setObjectName("PanelTitle")
         caja.addWidget(titulo)
-        # La casilla arriba, a la misma cota que la fila de nombre/botones
-        # del mapa: así los dos discos empiezan a la misma altura y se
-        # comparan de un vistazo.
-        caja.addWidget(self._considerar)
         self._salida = DiscoEsquematico()
-        caja.addWidget(self._salida, 1)
-        # Interruptor de pantalla bajo la gráfica: oculta las cuñas rojas
-        # sin tocar lo guardado ni el planificador — no entra en
-        # ``valores()`` ni en la BD.
+        # Interruptor de pantalla: oculta las cuñas rojas sin tocar lo
+        # guardado ni el planificador — no entra en ``valores()``.
         self._mostrar_obst = QCheckBox("Mostrar obstáculos")
         self._mostrar_obst.setChecked(True)
         self._mostrar_obst.setToolTip(
@@ -196,7 +192,16 @@ class SitioPanel(QWidget):
             "obstáculos se guardan y se usan al planificar igual."
         )
         self._mostrar_obst.toggled.connect(self._salida.set_mostrar_obstaculos)
-        caja.addWidget(self._mostrar_obst)
+        # Las dos casillas juntas arriba, a la misma cota que la fila de
+        # nombre/botones del mapa: los discos arrancan a la misma altura y
+        # la gráfica no pierde alto (si el interruptor va debajo, roba
+        # espacio al disco).
+        fila_checks = QHBoxLayout()
+        fila_checks.setSpacing(16)
+        fila_checks.addWidget(self._considerar)
+        fila_checks.addWidget(self._mostrar_obst)
+        caja.addLayout(fila_checks)
+        caja.addWidget(self._salida, 1)
         return marco
 
     def _mapa(self) -> QFrame:

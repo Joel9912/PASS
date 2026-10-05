@@ -225,34 +225,36 @@ def test_ubicaciones_fila_geografia_primero_y_vista_previa_mapa(tmp_path):
     assert vista._original.isNull()
     assert "No se pudo" in vista.text()
 
-    # Revisión 2 del layout: títulos, casilla en la fila superior del
-    # esquemático y discos/esquemático con HFW (ancho completo, sin hueco).
+    # Revisión 2 del layout: títulos, las 2 casillas en la fila superior
+    # del esquemático y discos/esquemático con HFW (ancho completo, sin
+    # hueco).
     sitio = tab._sitio
     textos = [rotulo.text() for rotulo in sitio.findChildren(QLabel)]
     assert "Mapa de Contaminación Lumínica" in textos
     assert "Referencia: el programa no la analiza." not in textos
     assert sitio._considerar.text() == "Usar CL y Obstáculos al Planificar"
+    # Las dos casillas juntas en la fila superior, antes de la gráfica
+    # (si el interruptor va debajo, roba alto al disco): misma fila, y
+    # «Mostrar obstáculos» es solo pantalla — mueve el flag sin tocar
+    # lo guardado.
     assert sitio._considerar.parentWidget() is sitio._salida.parentWidget()
     caja = sitio._salida.parentWidget().layout()
     assert caja.indexOf(sitio._considerar) < caja.indexOf(sitio._salida)
+    assert caja.indexOf(sitio._mostrar_obst) == caja.indexOf(sitio._considerar)
+    assert sitio._mostrar_obst.isChecked()
+    antes = sitio.valores()
+    sitio._mostrar_obst.setChecked(False)
+    assert not sitio._salida._mostrar_obstaculos
+    assert sitio.valores() == antes
+    sitio._mostrar_obst.setChecked(True)
     for disco in (sitio._rosa, sitio._obstrucciones, sitio._lumen):
         assert disco.hasHeightForWidth()
         assert disco.heightForWidth(300) == 300
     assert sitio._salida.hasHeightForWidth()
     assert sitio._salida.heightForWidth(500) == 440
 
-    # «Mostrar obstáculos»: debajo de la gráfica, arranca encendido y es
-    # solo pantalla — mueve el flag del disco sin tocar lo guardado.
-    assert sitio._mostrar_obst.isChecked()
-    assert caja.indexOf(sitio._mostrar_obst) > caja.indexOf(sitio._salida)
-    antes = sitio.valores()
-    sitio._mostrar_obst.setChecked(False)
-    assert not sitio._salida._mostrar_obstaculos
-    assert sitio.valores() == antes
-    sitio._mostrar_obst.setChecked(True)
-
-    # Los dos discos arrancan a la misma cota: la casilla mide lo mismo
-    # que la fila de nombre/botones del mapa (comparables de un vistazo).
+    # Los dos discos arrancan a la misma cota: la fila de las casillas
+    # mide lo mismo que la de nombre/botones del mapa (comparables).
     # La pestaña debe estar visible: si no, la página no se maqueta y
     # todas las cotas serían 0 (la aserción no probaría nada).
     pagina.findChild(QTabWidget).setCurrentIndex(1)  # pestaña Ubicaciones
@@ -262,15 +264,18 @@ def test_ubicaciones_fila_geografia_primero_y_vista_previa_mapa(tmp_path):
     cota_esquematico = sitio._salida.mapTo(sitio, QPoint(0, 0)).y()
     cota_mapa = sitio._vista.mapTo(sitio, QPoint(0, 0)).y()
     assert cota_esquematico == cota_mapa
-    # La casilla tiene altura fija y vale lo que mide la fila del mapa.
+    # Las casillas tienen altura fija y valen lo que mide la fila del mapa.
     fila_mapa = max(
         sitio._mapa_lbl.sizeHint().height(),
         sitio._boton_anadir.sizeHint().height(),
         sitio._boton_quitar.sizeHint().height(),
         sitio._considerar.sizeHint().height(),
+        sitio._mostrar_obst.sizeHint().height(),
     )
     assert sitio._considerar.minimumHeight() == fila_mapa
     assert sitio._considerar.maximumHeight() == fila_mapa
+    assert sitio._mostrar_obst.minimumHeight() == fila_mapa
+    assert sitio._mostrar_obst.maximumHeight() == fila_mapa
 
     pagina.deleteLater()
     _app.processEvents()
