@@ -610,7 +610,15 @@ class PartEditor(QWidget):
 
 
 class TelescopeForm(QFrame):
-    """Formulario de una óptica: datos comparables, reductor e imágenes (charts)."""
+    """Formulario de una óptica: dos filas de datos, reductor e imágenes.
+
+    Los datos comparables van en **dos filas de tres campos** —Precio ·
+    Peso · Apertura / Focal · Aplanador · Factor—: la fila que se gana
+    respecto a las tres de antes se cede al bloque «Cálculos». Cada spin
+    lleva ancho máximo (su texto más largo) porque, con el ancho que
+    pide el `sizeHint`, la fila 1 tiraría de la columna Principal/Guía
+    y forzaría scroll horizontal en la ficha.
+    """
 
     changed = pyqtSignal()
 
@@ -632,44 +640,50 @@ class TelescopeForm(QFrame):
         form.addRow("Nombre", self._nombre)
         layout.addLayout(form)
 
-        # Precio y peso de la pieza en pareja, tras el Nombre y sin
-        # flechas: la cabecera del equipo los suma en vivo.
+        # Precio, peso y apertura en la misma fila, los tres sin flechas
+        # y con ancho máximo: la fila que se gana se cede a «Cálculos».
+        # Los máximos son el texto más largo de cada campo (medido con
+        # la fuente real): el sizeHint pedía ~560 px y la columna
+        # Principal/Guía en la ventana mínima solo tiene ~390.
         self._precio = spin_precio()
         self._peso = spin_peso()
-        fila_precio = QHBoxLayout()
-        fila_precio.addWidget(QLabel("Precio"))
-        fila_precio.addWidget(self._precio, 1)
-        fila_precio.addWidget(QLabel("Peso"))
-        fila_precio.addWidget(self._peso, 1)
-        layout.addLayout(fila_precio)
-
-        # Apertura y focal en pareja y sin flechas: el usuario teclea el
-        # valor de la ficha técnica y la fila queda por debajo del ancho
-        # de columna (Principal/Guía), sin scroll horizontal.
+        self._precio.setMaximumWidth(80)
+        self._peso.setMaximumWidth(85)
         self._apertura = QDoubleSpinBox()
         self._apertura.setRange(0.0, 600.0)
         self._apertura.setDecimals(1)
         self._apertura.setSuffix(" mm")
         self._apertura.setSpecialValueText("—")
         sin_botones(self._apertura)
+        self._apertura.setMaximumWidth(95)
+        fila_precio = QHBoxLayout()
+        fila_precio.addWidget(QLabel("Precio"))
+        fila_precio.addWidget(self._precio, 1)
+        fila_precio.addWidget(QLabel("Peso"))
+        fila_precio.addWidget(self._peso, 1)
+        fila_precio.addWidget(QLabel("Apertura"))
+        fila_precio.addWidget(self._apertura, 1)
+        layout.addLayout(fila_precio)
+
+        # Relación focal y focal efectiva no se duplican aquí: viven en
+        # la barra «Cálculos», siempre visible bajo las pestañas.
+        # Focal, casilla y factor en la misma fila. La casilla se llamó
+        # «Con aplanador/reductor» y ahora es «Aplanador»: su texto manda
+        # el ancho mínimo de la fila (261 px el largo → umbral de scroll
+        # horizontal ~1500 px de ventana; 110 px el corto → ~1265) y el
+        # detalle —aplanador, reductor o coma corrector— va en el tooltip.
         self._focal = QDoubleSpinBox()
         self._focal.setRange(0.0, 5000.0)
         self._focal.setDecimals(1)
         self._focal.setSuffix(" mm")
         self._focal.setSpecialValueText("—")
         sin_botones(self._focal)
-        focal = QHBoxLayout()
-        focal.addWidget(QLabel("Apertura"))
-        focal.addWidget(self._apertura, 1)
-        focal.addWidget(QLabel("Focal"))
-        focal.addWidget(self._focal, 1)
-        layout.addLayout(focal)
-
-        # Relación focal y focal efectiva no se duplican aquí: viven en la
-        # barra «Cálculos», siempre visible bajo las pestañas.
-        # Checkbox y factor en la misma fila (sin flechas la pareja no
-        # desborda la columna Principal/Guía).
-        self._reductor = QCheckBox("Con aplanador/reductor")
+        self._focal.setMaximumWidth(104)
+        self._reductor = QCheckBox("Aplanador")
+        self._reductor.setToolTip(
+            "Focal efectiva = focal × factor: vale para aplanador, "
+            "reductor o coma corrector."
+        )
         self._factor = QDoubleSpinBox()
         self._factor.setRange(0.01, 1.0)
         self._factor.setDecimals(2)
@@ -677,10 +691,13 @@ class TelescopeForm(QFrame):
         self._factor.setValue(0.8)
         self._factor.setEnabled(False)
         sin_botones(self._factor)
+        self._factor.setMaximumWidth(60)
         reductor = QHBoxLayout()
         # Espaciado 4: la fila manda el ancho mínimo de la columna
         # Principal/Guía y con 6 quedaba al filo (2 px de holgura).
         reductor.setSpacing(4)
+        reductor.addWidget(QLabel("Focal"))
+        reductor.addWidget(self._focal, 1)
         reductor.addWidget(self._reductor)
         reductor.addStretch(1)
         reductor.addWidget(QLabel("Factor ×"))

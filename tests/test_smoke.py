@@ -537,7 +537,7 @@ def test_cabecera_suma_precio_peso_y_lo_persiste(memory_db):
 
     Regresiones del rediseño: los dos campos de la cabecera ya no se
     teclean (son calculados); los 5 formularios y cada filtro marcado
-    suman precio, cada telescopio con «Con aplanador/reductor» añade
+    suman precio, cada telescopio con la casilla «Aplanador» añade
     0,5 kg de peso y sin datos se pinta «—» (0). Al «Guardar equipo» la
     suma queda en ``price_eur``/``weight_kg`` del setup (D-3) — sustituye
     al valor manual— y sobrevive a la recarga.
@@ -662,6 +662,82 @@ def test_subtipo_es_solo_seleccionable_conserva_al_cargar_y_cambia_con_el_tipo(
         "Ritchey-Chrétien (RC)",
     ]
     assert form._subtipo.currentText() == "Newtoniano"
+
+    form.deleteLater()
+
+
+def test_telescopio_filas_de_tres_campos():
+    """Telescopio: dos filas de tres campos, casilla corta y spins estrechos.
+
+    Regresiones del reagrupado —antes eran 3 filas: `Precio|Peso`,
+    `Apertura|Focal` y `casilla|Factor`—: la fila 1 es
+    `Precio·Peso·Apertura` y la 2 `Focal·Aplanador·Factor` (la fila que
+    se gana se cede al bloque «Cálculos»); la casilla, cuyo texto mandaba
+    el ancho mínimo de la columna, pasa de «Con aplanador/reductor» a
+    «Aplanador» con el detalle en el tooltip; y cada spin lleva ancho
+    máximo (80/85/95/104/60 px, medidos con la fuente real) porque con
+    el `sizeHint` la fila 1 pedía ~560 px y forzaba scroll horizontal en
+    la columna Principal/Guía.
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import QApplication
+
+    from ui.equipment_tab.componentes import TelescopeForm
+
+    _app = QApplication.instance() or QApplication([])
+    form = TelescopeForm()
+
+    def fila_de(widget) -> int:
+        """Índice de la fila del layout vertical que contiene `widget`."""
+        vertical = form.layout()
+        for i in range(vertical.count()):
+            fila = vertical.itemAt(i).layout()
+            if fila is None:
+                continue
+            for j in range(fila.count()):
+                if fila.itemAt(j).widget() is widget:
+                    return i
+        return -1
+
+    def widgets_de(indice: int):
+        fila = form.layout().itemAt(indice).layout()
+        return [fila.itemAt(j).widget() for j in range(fila.count()) if fila.itemAt(j).widget()]
+
+    fila_precio = fila_de(form._precio)
+    fila_focal = fila_de(form._focal)
+
+    # Una fila para Precio·Peso·Apertura, otra para Focal·Aplanador·Factor.
+    assert (fila_de(form._peso), fila_de(form._apertura)) == (fila_precio, fila_precio)
+    assert (fila_de(form._reductor), fila_de(form._factor)) == (fila_focal, fila_focal)
+    assert fila_precio != fila_focal, "los 6 campos deben ir en dos filas, no en una"
+
+    # Y en ese orden (rótulo delante de su campo).
+    primera = widgets_de(fila_precio)
+    assert [primera.index(w) for w in (form._precio, form._peso, form._apertura)] == [1, 3, 5]
+    assert [etiqueta.text() for etiqueta in (primera[0], primera[2], primera[4])] == [
+        "Precio",
+        "Peso",
+        "Apertura",
+    ]
+    segunda = widgets_de(fila_focal)
+    assert [segunda.index(w) for w in (form._focal, form._reductor, form._factor)] == [1, 2, 4]
+    assert segunda[0].text() == "Focal" and segunda[3].text() == "Factor ×"
+
+    # Casilla corta (su texto es lo que más pesa en el ancho mínimo).
+    assert form._reductor.text() == "Aplanador"
+    assert "aplanador, reductor o coma corrector" in form._reductor.toolTip()
+
+    # Ancho máximo de cada spin = su texto más largo.
+    assert {
+        "precio": form._precio.maximumWidth(),
+        "peso": form._peso.maximumWidth(),
+        "apertura": form._apertura.maximumWidth(),
+        "focal": form._focal.maximumWidth(),
+        "factor": form._factor.maximumWidth(),
+    } == {"precio": 80, "peso": 85, "apertura": 95, "focal": 104, "factor": 60}
 
     form.deleteLater()
 

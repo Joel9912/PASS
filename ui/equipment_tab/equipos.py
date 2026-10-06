@@ -419,7 +419,8 @@ class EquiposTab(QWidget):
         self._peso.setReadOnly(True)
         self._peso.setToolTip(
             "Suma del peso de las piezas en pantalla: +0,5 kg por cada "
-            "telescopio con «Con aplanador/reductor»."
+            "telescopio con la casilla «Aplanador» (aplanador, reductor "
+            "o coma corrector)."
         )
         self._notas = QLineEdit()
         self._notas.setPlaceholderText("Notas (opcional)")
@@ -802,9 +803,10 @@ class EquiposTab(QWidget):
         """Cabecera: precio/peso = suma en vivo de las piezas en pantalla.
 
         Precio: los 5 formularios + el de cada filtro marcado. Peso: los 5
-        formularios + 0,5 kg por cada telescopio con «Con aplanador/
-        reductor» (el accesorio pesa aunque la óptica no informe su peso);
-        los filtros no pesan. 0 = nada informado → el spin pinta «—».
+        formularios + 0,5 kg por cada telescopio con «Aplanador» (su
+        tooltip recuerda que cubre aplanador, reductor o coma corrector:
+        el accesorio pesa aunque la óptica no informe su peso); los
+        filtros no pesan. 0 = nada informado → el spin pinta «—».
         «Guardar equipo» persiste estos totales (D-3).
         """
         modelos = [
