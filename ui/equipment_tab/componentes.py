@@ -872,7 +872,20 @@ class TelescopeForm(QFrame):
 
 
 class CameraForm(QFrame):
-    """Formulario de una cámara: píxel/resolución/bits e imágenes de ganancia."""
+    """Formulario de una cámara: rejilla de 4 columnas, sensor e imágenes.
+
+    Misma rejilla que `TelescopeForm` y que la cabecera de Equipo —etiquetas
+    en las columnas 0 y 2, campos en la 1 y la 3, ambas con stretch— para
+    que todas las cajas arrancen en la misma `x` y midan lo mismo (~218 px
+    en columna de 628, como las ~235 de las filas sueltas que había antes).
+
+    «Resolución» va en **su propia fila** justo debajo de Ancho·Alto: meter
+    las tres parejas del sensor en una sola fila obligaría a la rejilla a
+    tener 6 columnas (Ancho·Alto·Resolución), las columnas de más le
+    roban ancho a todas las filas y las cajas bajaban a 161 px. El
+    espaciado vertical va a 4 px y la lista de Imágenes baja de 56 a 44 px
+    como en Telescopio (el alto sobra menos que el ancho).
+    """
 
     changed = pyqtSignal()
 
@@ -883,23 +896,25 @@ class CameraForm(QFrame):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)  # como Telescopio: ahorra alto de scroll
-        form = QFormLayout()
+        layout.setSpacing(6)
+
+        rejilla = QGridLayout()
+        rejilla.setHorizontalSpacing(12)  # como la cabecera de Equipo
+        rejilla.setVerticalSpacing(4)
+
         self._nombre = QLineEdit()
         self._nombre.setPlaceholderText("ASI2600MC…")
-        form.addRow("Nombre", self._nombre)
-        layout.addLayout(form)
+        rejilla.addWidget(QLabel("Nombre"), 0, 0)
+        rejilla.addWidget(self._nombre, 0, 1, 1, 3)
 
         # Precio y peso de la pieza en pareja, tras el Nombre (mismo patrón
         # que el telescopio): la cabecera del equipo los suma en vivo.
         self._precio = spin_precio()
         self._peso = spin_peso()
-        fila_precio = QHBoxLayout()
-        fila_precio.addWidget(QLabel("Precio"))
-        fila_precio.addWidget(self._precio, 1)
-        fila_precio.addWidget(QLabel("Peso"))
-        fila_precio.addWidget(self._peso, 1)
-        layout.addLayout(fila_precio)
+        rejilla.addWidget(QLabel("Precio"), 1, 0)
+        rejilla.addWidget(self._precio, 1, 1)
+        rejilla.addWidget(QLabel("Peso"), 1, 2)
+        rejilla.addWidget(self._peso, 1, 3)
 
         # Píxel y profundidad en pareja: el usuario pidió «Tam. Píxel (µm)»
         # y «Bits» en la misma fila (los nombres largos no caben a dos
@@ -916,15 +931,12 @@ class CameraForm(QFrame):
         for bits in BIT_DEPTHS:
             self._bits.addItem(str(bits), bits)
         self._bits.setToolTip("Profundidad en bits: solo existen 10, 12, 14 y 16.")
-        fila_pixel = QHBoxLayout()
-        fila_pixel.addWidget(QLabel("Tam. Píxel (µm)"))
-        fila_pixel.addWidget(self._pixel, 1)
-        fila_pixel.addWidget(QLabel("Bits"))
-        fila_pixel.addWidget(self._bits, 1)
-        layout.addLayout(fila_pixel)
+        rejilla.addWidget(QLabel("Tam. Píxel (µm)"), 2, 0)
+        rejilla.addWidget(self._pixel, 2, 1)
+        rejilla.addWidget(QLabel("Bits"), 2, 2)
+        rejilla.addWidget(self._bits, 2, 3)
 
-        # Ancho, alto y la resolución derivada en la misma fila (sin
-        # flechas): ahorra una fila vertical sin desbordar la columna.
+        # Ancho y alto sin flechas, en pareja…
         self._ancho = QSpinBox()
         self._ancho.setRange(0, 30000)
         self._ancho.setSpecialValueText("—")
@@ -933,46 +945,55 @@ class CameraForm(QFrame):
         self._alto.setRange(0, 30000)
         self._alto.setSpecialValueText("—")
         sin_botones(self._alto)
-        fila_sensor = QHBoxLayout()
-        fila_sensor.addWidget(QLabel("Ancho"))
-        fila_sensor.addWidget(self._ancho, 1)
-        fila_sensor.addWidget(QLabel("Alto"))
-        fila_sensor.addWidget(self._alto, 1)
-        fila_sensor.addWidget(QLabel("Resolución"))
-        self._resolucion = QLabel("—")
-        fila_sensor.addWidget(self._resolucion, 1)
-        layout.addLayout(fila_sensor)
+        rejilla.addWidget(QLabel("Ancho"), 3, 0)
+        rejilla.addWidget(self._ancho, 3, 1)
+        rejilla.addWidget(QLabel("Alto"), 3, 2)
+        rejilla.addWidget(self._alto, 3, 3)
 
-        # Casillas en fila propia: juntas con la resolución sumaban 835 px
-        # de mínimo y forzaban scroll horizontal.
-        flags = QHBoxLayout()
+        # …y la resolución derivada de los dos, en la fila de abajo
+        # (regresión: en pareja con ellos forzaba 6 columnas y estrechaba
+        # todas las cajas de la rejilla).
+        rejilla.addWidget(QLabel("Resolución"), 4, 0)
+        self._resolucion = QLabel("—")
+        rejilla.addWidget(self._resolucion, 4, 1)
+
+        # Casillas en fila propia (abarcando las 4 columnas): juntas con
+        # la resolución sumaban 835 px de mínimo y forzaban scroll
+        # horizontal.
+        casillas = QHBoxLayout()
+        casillas.setSpacing(12)
         self._refrigerada = QCheckBox("Refrigerada")
-        flags.addWidget(self._refrigerada)
+        casillas.addWidget(self._refrigerada)
         self._mono = QCheckBox("Monocromática")
-        flags.addWidget(self._mono)
+        casillas.addWidget(self._mono)
         self._ampglow = QCheckBox("Amp glow")
-        flags.addWidget(self._ampglow)
-        flags.addStretch(1)
-        layout.addLayout(flags)
+        casillas.addWidget(self._ampglow)
+        casillas.addStretch(1)
+        rejilla.addLayout(casillas, 5, 0, 1, 4)
 
         self._notas = QLineEdit()
         self._notas.setPlaceholderText("Notas (opcional)")
-        layout.addWidget(self._notas)
+        rejilla.addWidget(self._notas, 6, 0, 1, 4)
 
-        imagenes = QHBoxLayout()
-        imagenes.addWidget(QLabel("Imágenes"))
+        # Imágenes: la lista en la columna de campos 1 y los dos botones
+        # en paralelo en la 2-3 (apilados sumaban 56 px de fila).
+        rejilla.addWidget(QLabel("Imágenes"), 7, 0)
         self._imagenes = QListWidget()
-        self._imagenes.setMaximumHeight(56)  # 2 filas: el alto sobra menos que el ancho
-        imagenes.addWidget(self._imagenes, 1)
-        columna = QVBoxLayout()
+        self._imagenes.setMaximumHeight(44)  # 1,5 filas: el alto sobra menos que el ancho
+        rejilla.addWidget(self._imagenes, 7, 1)
+        botones = QHBoxLayout()
+        botones.setSpacing(6)
         boton_anadir = QPushButton("➕ Adjuntar…")
         boton_anadir.clicked.connect(self._anadir_imagenes)
-        columna.addWidget(boton_anadir)
+        botones.addWidget(boton_anadir)
         boton_quitar = QPushButton("Quitar")
         boton_quitar.clicked.connect(self._quitar_imagenes)
-        columna.addWidget(boton_quitar)
-        imagenes.addLayout(columna)
-        layout.addLayout(imagenes)
+        botones.addWidget(boton_quitar)
+        rejilla.addLayout(botones, 7, 2, 1, 2)
+
+        rejilla.setColumnStretch(1, 1)
+        rejilla.setColumnStretch(3, 1)
+        layout.addLayout(rejilla)
         layout.addStretch(1)
 
         self._conectar_cambios()
@@ -1096,7 +1117,14 @@ class CameraForm(QFrame):
 
 
 class MountForm(QFrame):
-    """Formulario de una montura: tipo y capacidad de carga."""
+    """Formulario de una montura: rejilla de 4 columnas (tipo y capacidad).
+
+    Misma rejilla que `TelescopeForm` y que la cabecera de Equipo —etiquetas
+    en las columnas 0 y 2, campos en la 1 y la 3 con stretch—: Precio·Peso
+    y Tipo·Capacidad de carga van de dos en dos, así las cajas arrancan en
+    la misma `x` y miden lo mismo. «Capacidad de carga» es la etiqueta más
+    larga de la 2, así que ahí manda su ancho (como «Notas» en la cabecera).
+    """
 
     changed = pyqtSignal()
 
@@ -1107,26 +1135,28 @@ class MountForm(QFrame):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)  # como Telescopio: ahorra alto de scroll
-        form = QFormLayout()
+        layout.setSpacing(6)
+
+        rejilla = QGridLayout()
+        rejilla.setHorizontalSpacing(12)  # como la cabecera de Equipo
+        rejilla.setVerticalSpacing(4)
+
         self._nombre = QLineEdit()
         self._nombre.setPlaceholderText("AM5, EQ6-R…")
-        form.addRow("Nombre", self._nombre)
-        # Precio y peso de la pieza en pareja, tras el Nombre (la fila
-        # abarca las dos columnas del form y lleva sus propias etiquetas).
-        pareja_precio = QWidget()
-        fila_precio = QHBoxLayout(pareja_precio)
-        fila_precio.setContentsMargins(0, 0, 0, 0)
-        fila_precio.addWidget(QLabel("Precio"))
+        rejilla.addWidget(QLabel("Nombre"), 0, 0)
+        rejilla.addWidget(self._nombre, 0, 1, 1, 3)
+
+        # Precio y peso de la pieza en pareja, tras el Nombre (mismo patrón
+        # que el telescopio): la cabecera del equipo los suma en vivo.
         self._precio = spin_precio()
-        fila_precio.addWidget(self._precio, 1)
-        fila_precio.addWidget(QLabel("Peso"))
         self._peso = spin_peso()
-        fila_precio.addWidget(self._peso, 1)
-        form.addRow(pareja_precio)
+        rejilla.addWidget(QLabel("Precio"), 1, 0)
+        rejilla.addWidget(self._precio, 1, 1)
+        rejilla.addWidget(QLabel("Peso"), 1, 2)
+        rejilla.addWidget(self._peso, 1, 3)
+
         self._tipo = QComboBox()
         _combo_opciones(self._tipo, MOUNT_TYPES)
-        form.addRow("Tipo", self._tipo)
         self._capacidad = QDoubleSpinBox()
         self._capacidad.setRange(0.0, 200.0)
         self._capacidad.setDecimals(1)
@@ -1134,11 +1164,18 @@ class MountForm(QFrame):
         self._capacidad.setSpecialValueText("—")
         self._capacidad.setToolTip("Carga útil máxima que admite la montura.")
         sin_botones(self._capacidad)
-        form.addRow("Capacidad de carga", self._capacidad)
+        rejilla.addWidget(QLabel("Tipo"), 2, 0)
+        rejilla.addWidget(self._tipo, 2, 1)
+        rejilla.addWidget(QLabel("Capacidad de carga"), 2, 2)
+        rejilla.addWidget(self._capacidad, 2, 3)
+
         self._notas = QLineEdit()
         self._notas.setPlaceholderText("Notas (opcional)")
-        form.addRow("Notas", self._notas)
-        layout.addLayout(form)
+        rejilla.addWidget(self._notas, 3, 0, 1, 4)
+
+        rejilla.setColumnStretch(1, 1)
+        rejilla.setColumnStretch(3, 1)
+        layout.addLayout(rejilla)
         layout.addStretch(1)
 
         self._nombre.textChanged.connect(lambda _t: self.changed.emit())

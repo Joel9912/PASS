@@ -793,6 +793,132 @@ def test_telescopio_rejilla_de_cuatro_columnas():
     contenedor.deleteLater()
 
 
+def test_camara_y_montura_rejilla_de_cuatro_columnas():
+    """Cámara y Montura: la misma rejilla de 4 columnas que Telescopio.
+
+    Regresión del rediseño (antes, `QFormLayout` + filas sueltas de
+    `QHBoxLayout`, cada pareja con su propio reparto): las cajas de una
+    misma columna arrancan en la misma `x` y miden lo mismo —Cámara a
+    628 px, Precio·Píxel·Ancho en la 1 y Peso·Bits·Alto en la 3— y las
+    dos columnas de campos se reparten el sobrante (a 900 px, Tipo y
+    Capacidad de carga miden lo mismo en Montura). «Resolución», la
+    lectura derivada de Ancho×Alto, va en su propia fila justo debajo
+    del sensor: meter las tres parejas del sensor en una fila obligaría
+    a la rejilla a tener 6 columnas y esas columnas de más estrechaban
+    las cajas de 218 a 161 px. Montura deja además de 5 filas a 4
+    (Tipo·Capacidad emparejados) y Cámara gana el espaciado a 4 px y la
+    lista de Imágenes a 44 px de Telescopio, así ninguno de los dos
+    formularios es más alto que con las filas sueltas.
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import QApplication, QGridLayout, QLabel, QVBoxLayout, QWidget
+
+    from ui.equipment_tab.componentes import CameraForm, MountForm
+
+    _app = QApplication.instance() or QApplication([])
+
+    def montar(form, ancho: int):
+        """Monta `form` en un contenedor de `ancho` px: (form, contenedor, rejilla)."""
+        contenedor = QWidget()
+        caja = QVBoxLayout(contenedor)
+        caja.setContentsMargins(0, 0, 0, 0)
+        caja.addWidget(form)
+        contenedor.setFixedWidth(ancho)
+        contenedor.show()
+        _app.processEvents()
+        assert form.layout().count() == 2, "una única rejilla y su stretch"
+        rejilla = form.layout().itemAt(0).layout()
+        assert isinstance(rejilla, QGridLayout), form
+        assert rejilla.columnCount() == 4
+        assert [rejilla.columnStretch(c) for c in range(4)] == [0, 1, 0, 1]
+        return form, contenedor, rejilla
+
+    def celda(rejilla, widget) -> tuple[int, int, int, int]:
+        """(fila, columna, filas, columnas) de `widget` en la rejilla."""
+        indice = rejilla.indexOf(widget)
+        assert indice >= 0, widget
+        return rejilla.getItemPosition(indice)
+
+    def rotulo(rejilla, fila: int, columna: int) -> str:
+        """Texto de la etiqueta de la celda (fila, columna)."""
+        item = rejilla.itemAtPosition(fila, columna)
+        assert item is not None, (fila, columna)
+        assert isinstance(item.widget(), QLabel), (fila, columna)
+        return item.widget().text()
+
+    def misma_columna(*widgets) -> None:
+        """Que todos los widgets midan y arrancen en el mismo sitio."""
+        assert len({w.x() for w in widgets}) == 1, [w.x() for w in widgets]
+        assert len({w.width() for w in widgets}) == 1, [w.width() for w in widgets]
+
+    # -- Cámara ------------------------------------------------------------
+    camara, cont_cam, g_cam = montar(CameraForm(), 628)
+    assert celda(g_cam, camara._nombre) == (0, 1, 1, 3)
+    assert celda(g_cam, camara._precio) == (1, 1, 1, 1)
+    assert celda(g_cam, camara._peso) == (1, 3, 1, 1)
+    assert celda(g_cam, camara._pixel) == (2, 1, 1, 1)
+    assert celda(g_cam, camara._bits) == (2, 3, 1, 1)
+    assert celda(g_cam, camara._ancho) == (3, 1, 1, 1)
+    assert celda(g_cam, camara._alto) == (3, 3, 1, 1)
+    assert celda(g_cam, camara._resolucion) == (4, 1, 1, 1)
+    assert celda(g_cam, camara._notas) == (6, 0, 1, 4)
+    assert celda(g_cam, camara._imagenes) == (7, 1, 1, 1)
+    assert [rotulo(g_cam, *c) for c in ((0, 0), (1, 0), (1, 2), (2, 0), (2, 2), (3, 0), (3, 2), (4, 0), (7, 0))] == [
+        "Nombre",
+        "Precio",
+        "Peso",
+        "Tam. Píxel (µm)",
+        "Bits",
+        "Ancho",
+        "Alto",
+        "Resolución",
+        "Imágenes",
+    ]
+
+    misma_columna(camara._precio, camara._pixel, camara._ancho)
+    misma_columna(camara._peso, camara._bits, camara._alto)
+    # Las dos columnas de campos se reparten el sobrante por igual.
+    assert abs(camara._precio.width() - camara._peso.width()) <= 2
+
+    # La resolución sigue siendo la lectura viva de Ancho × Alto.
+    camara._ancho.setValue(6248)
+    camara._alto.setValue(4176)
+    assert camara._resolucion.text() == "6248×4176"
+
+    # Cámara no es más alta que con las filas sueltas (222 px).
+    assert camara.sizeHint().height() < 222
+
+    # -- Montura -----------------------------------------------------------
+    montura, cont_mon, g_mon = montar(MountForm(), 900)
+    assert celda(g_mon, montura._nombre) == (0, 1, 1, 3)
+    assert celda(g_mon, montura._precio) == (1, 1, 1, 1)
+    assert celda(g_mon, montura._peso) == (1, 3, 1, 1)
+    assert celda(g_mon, montura._tipo) == (2, 1, 1, 1)
+    assert celda(g_mon, montura._capacidad) == (2, 3, 1, 1)
+    assert celda(g_mon, montura._notas) == (3, 0, 1, 4)
+    assert [rotulo(g_mon, *c) for c in ((0, 0), (1, 0), (1, 2), (2, 0), (2, 2))] == [
+        "Nombre",
+        "Precio",
+        "Peso",
+        "Tipo",
+        "Capacidad de carga",
+    ]
+
+    misma_columna(montura._precio, montura._tipo)
+    misma_columna(montura._peso, montura._capacidad)
+    assert abs(montura._precio.width() - montura._peso.width()) <= 2
+
+    # Montura no es más alto que con las filas sueltas (136 px).
+    assert montura.sizeHint().height() < 136
+
+    for contenedor in (cont_cam, cont_mon):
+        contenedor.deleteLater()
+    _app.processEvents()
+
+
 def test_calculos_orden_y_rotulos(memory_db):
     """Cálculos: las 5 lecturas en el orden decidido y con dos puntos.
 
