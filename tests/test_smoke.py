@@ -177,13 +177,16 @@ def test_equipment_page_construye_con_sus_dos_subpestanas():
     pagina.deleteLater()
 
 
-def test_ubicaciones_fila_geografia_primero_y_vista_previa_mapa(tmp_path):
-    """Paso 2b: fila Geografía|Cielo y vista previa del mapa de CL.
+def test_ubicaciones_seccion_unica_y_vista_previa_mapa(tmp_path):
+    """Sección «Ubicación» única en 2 filas + vista previa del mapa de CL.
 
-    Regresiones de la revisión: la fila superior va **Geografía primero**
-    (no al revés) y la imagen cargada aparece en el cuadro de la derecha
-    para modelar con la referencia a la vista — vacío sin mapa y aviso si
-    la ruta no se puede cargar.
+    Regresiones de la fusión (pedido del usuario): la ficha es **un solo
+    marco** —título con «Guardar ubicación» y dos filas de campos— con
+    el orden que fijó él: Nombre · Altitud · Latitud · Longitud y
+    Bortle · SQM · Seeing · ☑ Huso automático · Desfase; ya no quedan
+    los rótulos «Geografía»/«Cielo». Y la imagen cargada aparece en el
+    cuadro de la derecha para modelar con la referencia a la vista —
+    vacío sin mapa y aviso si la ruta no se puede cargar.
     """
     import os
 
@@ -191,7 +194,16 @@ def test_ubicaciones_fila_geografia_primero_y_vista_previa_mapa(tmp_path):
 
     from PyQt6.QtCore import QPoint
     from PyQt6.QtGui import QImage
-    from PyQt6.QtWidgets import QApplication, QLabel, QTabWidget
+    from PyQt6.QtWidgets import (
+        QApplication,
+        QCheckBox,
+        QComboBox,
+        QDoubleSpinBox,
+        QLabel,
+        QLineEdit,
+        QPushButton,
+        QTabWidget,
+    )
 
     from ui.equipment_tab import EquipmentPage
 
@@ -199,11 +211,67 @@ def test_ubicaciones_fila_geografia_primero_y_vista_previa_mapa(tmp_path):
     pagina = EquipmentPage()
     tab = pagina.ubicaciones
 
-    # La fila superior: el primer hueco es la caja de Geografía (contiene
-    # el Nombre) y el segundo la de Cielo.
-    fila = tab._fila_superior.layout()
-    primera = fila.itemAt(0).widget()
-    assert primera is not None and primera.isAncestorOf(tab._nombre)
+    # Un solo marco: título + fila 1 + fila 2.
+    assert tab._ficha.objectName() == "GroupFrame"
+    lay = tab._ficha.layout()
+    assert lay.count() == 3, "la ficha debe ser título y dos filas de campos"
+    cabecera = lay.itemAt(0).layout()
+    assert cabecera.itemAt(0).widget().text() == "Ubicación"
+    botones = [
+        cabecera.itemAt(i).widget()
+        for i in range(cabecera.count())
+        if isinstance(cabecera.itemAt(i).widget(), QPushButton)
+    ]
+    assert [b.text() for b in botones] == ["Guardar ubicación"]
+
+    # Fila 1: parejas etiqueta|campo en el orden pedido.
+    fila1 = lay.itemAt(1).layout()
+    widgets1 = [fila1.itemAt(i).widget() for i in range(fila1.count())]
+    assert [w.text() for w in widgets1 if isinstance(w, QLabel)] == [
+        "Nombre",
+        "Altitud",
+        "Latitud",
+        "Longitud",
+    ]
+    assert [w for w in widgets1 if not isinstance(w, QLabel)] == [
+        tab._nombre,
+        tab._altitud,
+        tab._latitud,
+        tab._longitud,
+    ]
+    assert isinstance(tab._nombre, QLineEdit)
+
+    # Fila 2: Bortle, SQM, Seeing, el check y Desfase, en ese orden.
+    fila2 = lay.itemAt(2).layout()
+    widgets2 = [fila2.itemAt(i).widget() for i in range(fila2.count())]
+    assert [type(w).__name__ for w in widgets2] == [
+        "QLabel",
+        "QComboBox",
+        "QLabel",
+        "QDoubleSpinBox",
+        "QLabel",
+        "QDoubleSpinBox",
+        "QCheckBox",
+        "QLabel",
+        "QDoubleSpinBox",
+    ]
+    assert [w.text() for w in widgets2 if isinstance(w, QLabel)] == [
+        "Bortle",
+        "SQM",
+        "Seeing",
+        "Desfase",
+    ]
+    assert isinstance(tab._bortle, QComboBox)
+    assert isinstance(tab._sqm, QDoubleSpinBox)
+    assert isinstance(tab._seeing, QDoubleSpinBox)
+    assert isinstance(tab._auto, QCheckBox)
+    assert tab._auto.text() == "Huso automático"
+    assert tab._auto.isChecked()
+
+    # Los rótulos de las dos cajas antiguas ya no existen.
+    textos = [r.text() for r in tab.findChildren(QLabel)]
+    assert "Geografía" not in textos
+    assert "Cielo" not in textos
 
     # Vista previa: sin mapa → vacía; con imagen → cargada a tamaño real.
     vista = tab._sitio._vista
@@ -287,7 +355,7 @@ def test_ubicaciones_seccion_lista_arriba_sin_splitter(memory_db):
     Regresión de la reestructuración (simétrica a la de Equipos): la
     barra lateral (QSplitter) desaparece; la sección de la lista va a
     280 px en la fila superior **a la misma altura** que la ficha de la
-    derecha (barra «Ubicación» + fila Geografía|Cielo), que ahora queda
+    derecha (sección «Ubicación» fusionada), que ahora queda
     **fuera del scroll**; debajo, el `SitioPanel` corre a todo el ancho.
     """
     import os
@@ -340,24 +408,24 @@ def test_ubicaciones_seccion_lista_arriba_sin_splitter(memory_db):
     assert abs(bots[0].y() - bots[1].y()) <= 2, "los botones deben compartir fila"
     assert "Eliminar" in (bots[1].toolTip() or "")
 
-    # Fila superior: la sección ocupa la misma banda que la columna
-    # derecha (barra «Ubicación» + Geografía|Cielo): mismo pie abajo y
-    # misma cota arriba que la barra. Y el sizeHint de la sección no
-    # manda: si lo superara, la fila se hincharía y empujaría el scroll.
+    # Fila superior: la sección ocupa la misma banda que la ficha
+    # derecha (sección «Ubicación»): mismo pie abajo. Y el sizeHint de
+    # la sección no manda: si lo superara, la fila se hincharía y
+    # empujaría el scroll.
     assert abs(
         (seccion.y() + seccion.height())
-        - (tab._fila_superior.y() + tab._fila_superior.height())
+        - (tab._ficha.y() + tab._ficha.height())
     ) <= 2, "la sección y la ficha de la derecha deben acabar a la par"
     assert seccion.sizeHint().height() <= seccion.height(), (
         "el sizeHint de la sección no debe ser el que dispare la fila superior"
     )
 
-    # Geografía|Cielo queda FUERA del scroll; dentro solo va el sitio.
+    # La ficha queda FUERA del scroll; dentro solo va el sitio.
     areas = tab.findChildren(QScrollArea)
     assert len(areas) == 1
     area = areas[0]
-    assert not area.isAncestorOf(tab._fila_superior), (
-        "Geografía|Cielo no debe vivir dentro del scroll"
+    assert not area.isAncestorOf(tab._ficha), (
+        "la ficha no debe vivir dentro del scroll"
     )
     assert area.isAncestorOf(tab._sitio), "el SitioPanel sí va en el scroll"
     assert area.y() >= seccion.y() + seccion.height(), "el scroll debe ir bajo la fila superior"
@@ -377,9 +445,9 @@ def test_ubicacion_altitud_desfase_y_sqm(memory_db):
     recargar); con «Huso automático» el Desfase muestra ``round(lon/15)``
     —la misma regla que el planificador— y queda fijo, y sin el check se
     edita; y el SQM vuelve a vacío («-» al salir del campo → «—», en vez
-    de revertir al valor anterior). El Seeing típico del bloque Cielo
-    guarda y recarga, y la pista antigua de Bortle/SQM ya no existe: su
-    texto vive en los tooltips de los dos campos.
+    de revertir al valor anterior). El Seeing guarda y recarga, y la
+    pista antigua de Bortle/SQM ya no existe: su texto vive en los
+    tooltips de los campos.
     """
     import os
 
@@ -1449,7 +1517,7 @@ def test_equipo_sin_asteriscos_en_los_rotulos(memory_db):
     Regresión: «Nombre *», «Latitud *», «Bortle *»… no comunicaban nada
     —la validación real se ve en el «Falta: …» inline y en los tooltips—
     y solo estorbaban; el usuario pidió quitarlos. Cubre las cuatro
-    piezas de componentes, la cabecera de Equipos y Geografía|Cielo.
+    piezas de componentes, la cabecera de Equipos y la sección «Ubicación».
     """
     import os
 

@@ -1,11 +1,16 @@
 """Subpestaña **Ubicaciones**: sección «Ubicaciones guardados» + ficha.
 
 Layout simétrico al de Equipos, **sin `QSplitter`**: dos filas — la
-superior es `[sección «Ubicaciones guardados» (ancho fijo 280) | barra
-«Ubicación» + fila Geografía|Cielo]`, con la fila Geografía|Cielo
-**fuera del scroll** para que siempre esté visible (su orden es
-contractual: Geografía primero); en la inferior, un scroll **a todo el
-ancho** con el ``SitioPanel`` (rosácea + esquemático + mapa de CL).
+superior es `[sección «Ubicaciones guardados» (ancho fijo 280) | sección
+«Ubicación»]`, con la ficha **fuera del scroll** para que siempre esté
+visible; en la inferior, un scroll **a todo el ancho** con el
+``SitioPanel`` (rosácea + esquemático + mapa de CL).
+
+La sección «Ubicación» es **una sola** (pedido del usuario, al estilo de
+la cabecera de Equipo): su título con «Guardar ubicación» y dos filas de
+campos en el orden que fijó él — Nombre · Altitud · Latitud · Longitud /
+Bortle · SQM · Seeing · ☑ Huso automático · Desfase — con rótulos
+cortos, para que la ficha quepa en 2 filas junto a la lista.
 
 Regla UX global (§9): **nada se persiste hasta «Guardar ubicación»**:
 «Nueva» deja la ficha en blanco en memoria y no se inserta fila hasta el
@@ -20,7 +25,6 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -64,34 +68,29 @@ class UbicacionesTab(QWidget):
 
         # Fila superior: la sección de la lista a la izquierda (ancho
         # fijo, a la misma altura que la ficha) y, a la derecha, la
-        # barra «Ubicación» con su Guardar y la fila Geografía|Cielo,
-        # **fuera del scroll** para que siempre se vean.
+        # sección «Ubicación» fusionada, **fuera del scroll** para que
+        # siempre se vea.
         fila_sup = QHBoxLayout()
         fila_sup.setSpacing(10)
         fila_sup.addWidget(self._seccion_lista())
-        derecha = QVBoxLayout()
-        derecha.setContentsMargins(0, 0, 0, 0)
-        derecha.setSpacing(10)
-        derecha.addWidget(self._cabecera())
-        # Guardada como atributo: el orden Geografía|Cielo es contractual
-        # (lo comprueba el test de regresión de la revisión).
-        self._fila_superior = self._fila_cielo_geografia()
-        derecha.addWidget(self._fila_superior)
-        fila_sup.addLayout(derecha, 1)
+        # Guardada como atributo: sus dos filas de campos son
+        # contractuales (las comprueba el test de regresión).
+        self._ficha = self._seccion_ubicacion()
+        fila_sup.addWidget(self._ficha, 1)
         layout.addLayout(fila_sup)
 
         # Fila inferior: el sitio (rosácea + esquemático + mapa) en un
         # panel con scroll vertical, **a todo el ancho**.
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        ficha = QWidget()
-        flay = QVBoxLayout(ficha)
+        contenido = QWidget()
+        flay = QVBoxLayout(contenido)
         flay.setContentsMargins(0, 0, 6, 0)
         flay.setSpacing(10)
         self._sitio = SitioPanel()
         flay.addWidget(self._sitio)
         flay.addStretch(1)
-        scroll.setWidget(ficha)
+        scroll.setWidget(contenido)
         layout.addWidget(scroll, 1)
 
         # Conectado al final: el esquemático ya existe cuando se carga
@@ -149,47 +148,72 @@ class UbicacionesTab(QWidget):
         lay.addLayout(acciones)
         return marco
 
-    def _cabecera(self) -> QFrame:
-        """Cabecera de la ficha: título + «Guardar ubicación» (siempre visible)."""
+    def _seccion_ubicacion(self) -> QFrame:
+        """Sección única «Ubicación»: su título con «Guardar» y las dos filas de campos.
+
+        Funde la antigua barra + los paneles Geografía|Cielo (pedido del
+        usuario, al estilo de la cabecera de Equipo). El orden de los
+        campos es contractual: fila 1 Nombre · Altitud · Latitud ·
+        Longitud; fila 2 Bortle · SQM · Seeing · ☑ Huso automático ·
+        Desfase. Las filas van **sueltas** (no en una rejilla de
+        columnas compartidas): con la rejilla la casilla y «Longitud»
+        acababan en la misma columna y la ficha crecía; y con los
+        rótulos largos la fila 2 pedía 202 px más —con los dos juntos la
+        ficha no cabía en 2 filas junto a la lista (lo midió la sonda
+        previa, en píxeles reales de la plataforma).
+        """
         marco = QFrame()
         marco.setObjectName("GroupFrame")
-        lay = QHBoxLayout(marco)
-        lay.setContentsMargins(12, 6, 12, 6)
+        lay = QVBoxLayout(marco)
+        lay.setContentsMargins(12, 6, 12, 10)
+        lay.setSpacing(8)
+
+        fila_titulo = QHBoxLayout()
         titulo = QLabel("Ubicación")
         titulo.setObjectName("PanelTitle")
-        lay.addWidget(titulo)
-        lay.addStretch(1)
+        fila_titulo.addWidget(titulo)
+        fila_titulo.addStretch(1)
         boton = QPushButton("Guardar ubicación")
         boton.setObjectName("PrimaryButton")
         boton.clicked.connect(self._guardar)
-        lay.addWidget(boton)
-        return marco
+        fila_titulo.addWidget(boton)
+        lay.addLayout(fila_titulo)
 
-    def _fila_cielo_geografia(self) -> QFrame:
-        """Fila superior: Geografía a la izquierda y Cielo (Bortle/SQM) a medio ancho."""
-        marco = QFrame()
-        marco.setObjectName("GroupFrame")
-        lay = QHBoxLayout(marco)
-        lay.setContentsMargins(12, 6, 12, 10)
-        lay.setSpacing(12)
-        lay.addWidget(self._geografia(), 1)
-        lay.addWidget(self._cielo(), 1)
-        return marco
+        # Fila 1: identidad y coordenadas, en parejas etiqueta|campo.
+        fila1 = QHBoxLayout()
+        fila1.setSpacing(12)
+        self._nombre = QLineEdit()
+        self._nombre.setPlaceholderText("Casa, mirador del puerto…")
+        fila1.addWidget(QLabel("Nombre"))
+        fila1.addWidget(self._nombre, 1)
+        self._altitud = QDoubleSpinBox()
+        self._altitud.setRange(0.0, 9000.0)
+        self._altitud.setDecimals(0)
+        self._altitud.setSuffix(" m")
+        self._altitud.setSpecialValueText("—")
+        sin_botones(self._altitud)
+        fila1.addWidget(QLabel("Altitud"))
+        fila1.addWidget(self._altitud, 1)
+        self._latitud = QDoubleSpinBox()
+        self._latitud.setRange(-90.0, 90.0)
+        self._latitud.setDecimals(3)
+        self._latitud.setSuffix("°")
+        sin_botones(self._latitud)
+        fila1.addWidget(QLabel("Latitud"))
+        fila1.addWidget(self._latitud, 1)
+        self._longitud = QDoubleSpinBox()
+        self._longitud.setRange(-180.0, 180.0)
+        self._longitud.setDecimals(3)
+        self._longitud.setSuffix("°")
+        sin_botones(self._longitud)
+        fila1.addWidget(QLabel("Longitud"))
+        fila1.addWidget(self._longitud, 1)
+        lay.addLayout(fila1)
 
-    def _cielo(self) -> QWidget:
-        """Bortle (obligatorio), SQM cenital y Seeing típico; sin pista, que pasó a tooltips."""
-        caja = QWidget()
-        lay = QVBoxLayout(caja)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(6)
-        titulo = QLabel("Cielo")
-        titulo.setObjectName("PanelTitle")
-        lay.addWidget(titulo)
-
-        rejilla = QGridLayout()
-        rejilla.setHorizontalSpacing(8)
-        rejilla.setVerticalSpacing(6)
-        rejilla.addWidget(QLabel("Bortle"), 0, 0)
+        # Fila 2: cielo y huso. Rótulos cortos («SQM», «Seeing»,
+        # «Huso automático»): el detalle que no cabe vive en tooltips.
+        fila2 = QHBoxLayout()
+        fila2.setSpacing(12)
         self._bortle = QComboBox()
         self._bortle.addItem("Elige un nivel…", None)
         for nivel in range(1, 10):
@@ -198,26 +222,23 @@ class UbicacionesTab(QWidget):
             "1 = cielo pristineo · 9 = centro urbano iluminado. "
             "Obligatorio: la CL alimenta las decisiones de captura."
         )
-        rejilla.addWidget(self._bortle, 0, 1)
-        rejilla.addWidget(QLabel("SQM cenital"), 0, 2)
+        fila2.addWidget(QLabel("Bortle"))
+        fila2.addWidget(self._bortle, 1)
         self._sqm = QDoubleSpinBox()
         self._sqm.setRange(0.0, 30.0)
         self._sqm.setDecimals(2)
         self._sqm.setSpecialValueText("—")
         self._sqm.setSuffix(" mag/arcsec²")
         self._sqm.setToolTip(
-            "Magnitud por segundo de arco cuadrado en el cenit (opcional). "
-            "El informado es la referencia de la gráfica; en «—» se asume "
-            "con el Bortle."
+            "SQM cenital: magnitud por segundo de arco cuadrado en el "
+            "cenit (opcional). El informado es la referencia de la "
+            "gráfica; en «—» se asume con el Bortle."
         )
         sin_botones(self._sqm)
         # Para que el SQM pueda volver a vacío: ver `eventFilter`.
         self._sqm.installEventFilter(self)
-        rejilla.addWidget(self._sqm, 0, 3)
-        # Seeing típico en la fila donde estaba la pista de Bortle/SQM
-        # (el usuario pidió sustituirla por este campo): «—» = sin dato y
-        # el muestreo del equipo, si lo hay, recurre a su resolución.
-        rejilla.addWidget(QLabel("Seeing típico"), 1, 0)
+        fila2.addWidget(QLabel("SQM"))
+        fila2.addWidget(self._sqm, 1)
         self._seeing = QDoubleSpinBox()
         self._seeing.setRange(0.0, 30.0)
         self._seeing.setDecimals(1)
@@ -228,65 +249,17 @@ class UbicacionesTab(QWidget):
             "se evalúa contra él. «—» = sin dato, no se inventa."
         )
         sin_botones(self._seeing)
-        rejilla.addWidget(self._seeing, 1, 1)
-        rejilla.setColumnStretch(1, 1)
-        rejilla.setColumnStretch(3, 1)
-        lay.addLayout(rejilla)
-        return caja
-
-    def _geografia(self) -> QWidget:
-        """Coordenadas y huso en parejas (Nombre|Altitud, Latitud|Longitud)."""
-        caja = QWidget()
-        lay = QVBoxLayout(caja)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(6)
-        titulo = QLabel("Geografía")
-        titulo.setObjectName("PanelTitle")
-        lay.addWidget(titulo)
-
-        form = QGridLayout()
-        form.setHorizontalSpacing(8)
-        form.setVerticalSpacing(6)
-        self._nombre = QLineEdit()
-        self._nombre.setPlaceholderText("Casa, mirador del puerto…")
-        form.addWidget(QLabel("Nombre"), 0, 0)
-        form.addWidget(self._nombre, 0, 1)
-        self._altitud = QDoubleSpinBox()
-        self._altitud.setRange(0.0, 9000.0)
-        self._altitud.setDecimals(0)
-        self._altitud.setSuffix(" m")
-        self._altitud.setSpecialValueText("—")
-        sin_botones(self._altitud)
-        form.addWidget(QLabel("Altitud"), 0, 2)
-        form.addWidget(self._altitud, 0, 3)
-        self._latitud = QDoubleSpinBox()
-        self._latitud.setRange(-90.0, 90.0)
-        self._latitud.setDecimals(3)
-        self._latitud.setSuffix("°")
-        sin_botones(self._latitud)
-        form.addWidget(QLabel("Latitud"), 1, 0)
-        form.addWidget(self._latitud, 1, 1)
-        self._longitud = QDoubleSpinBox()
-        self._longitud.setRange(-180.0, 180.0)
-        self._longitud.setDecimals(3)
-        self._longitud.setSuffix("°")
-        sin_botones(self._longitud)
-        form.addWidget(QLabel("Longitud"), 1, 2)
-        form.addWidget(self._longitud, 1, 3)
-        form.setColumnStretch(1, 1)
-        form.setColumnStretch(3, 1)
-        lay.addLayout(form)
-
-        huso = QHBoxLayout()
-        self._auto = QCheckBox("Huso automático (hora solar local)")
+        fila2.addWidget(QLabel("Seeing"))
+        fila2.addWidget(self._seeing, 1)
+        self._auto = QCheckBox("Huso automático")
         self._auto.setChecked(True)
         self._auto.setToolTip(
-            "El Desfase se calcula de la longitud (regla de 15) y queda "
-            "fijo: desmárcalo para indicarlo a mano."
+            "Marcado, el Desfase es la hora solar local: la regla de 15 "
+            "sobre la longitud lo calcula y queda fijo. Desmárcalo para "
+            "indicarlo a mano."
         )
-        huso.addWidget(self._auto)
-        huso.addStretch(1)
-        huso.addWidget(QLabel("Desfase"))
+        fila2.addWidget(self._auto)
+        fila2.addWidget(QLabel("Desfase"))
         self._huso = QDoubleSpinBox()
         self._huso.setRange(-12.0, 14.0)
         self._huso.setDecimals(1)
@@ -297,11 +270,14 @@ class UbicacionesTab(QWidget):
             "indica a mano y se guarda."
         )
         sin_botones(self._huso)
-        huso.addWidget(self._huso)
+        fila2.addWidget(self._huso, 1)
+        lay.addLayout(fila2)
+
+        # Conexiones de la antigua Geografía: el check bloquea el
+        # Desfase y la longitud lo recalcula (regla de 15).
         self._auto.toggled.connect(self._al_cambiar_auto)
         self._longitud.valueChanged.connect(self._refrescar_desfase)
-        lay.addLayout(huso)
-        return caja
+        return marco
 
     # -- lista y carga -----------------------------------------------------
 
