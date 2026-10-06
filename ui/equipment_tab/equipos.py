@@ -1,13 +1,22 @@
-"""Subpestaña **Equipos**: sección «Equipos guardados», cabecera y ficha.
+"""Subpestaña **Equipos**: la lista de guardados, cabecera y ficha.
 
-Layout: dos filas — la superior es `[sección «Equipos guardados» (ancho
-fijo 280) | cabecera Equipo]`, con la lista y sus botones «Nuevo…»/
-«Eliminar» **a la altura** de la cabecera (no a toda la altura de la
-pestaña); en la fila inferior, un scroll **a todo el ancho** con las
-sub-subpestañas Telescopio / Cámara / Montura / Filtros y el bloque
-«Cálculos». La cabecera (nombre*, categoría, ubicación, precio/peso —
-**suma en vivo, solo lectura** — y notas — a dos columnas — y «Guardar
-equipo») vive fuera del scroll para que su Guardar esté siempre visible.
+Layout: dos filas — la superior es `[sección de la lista (hasta 450 px,
+**sin rótulo**: la pestaña ya se llama «Equipos» y el rótulo robaba
+44 px de altura que ahora son filas) | cabecera Equipo]`, con la lista y
+sus botones «Nuevo…»/«Eliminar» **a la altura** de la cabecera (no a
+toda la altura de la pestaña); en la fila inferior, un scroll **a todo
+el ancho** con las sub-subpestañas Telescopio / Cámara / Montura /
+Filtros y el bloque «Cálculos». La cabecera (nombre, categoría,
+ubicación, precio/peso — **suma en vivo, solo lectura** — y notas — a
+dos columnas — y «Guardar equipo») vive fuera del scroll para que su
+Guardar esté siempre visible.
+
+Las filas de la lista dicen `nombre · categoría · ubicación` a 10 pt en
+una sola línea (450 px de sección = 424 útiles; a 13 pt ese texto pide
+544); si no cabe, se elige al medio con «…» (el texto completo va en el
+tooltip) y la barra horizontal, además de fea, se comía 12 px de alto.
+Cuando la ventana es estrecha la sección baja de 450 (`_ancho_seccion`)
+para no quedar debajo de la cabecera.
 
 Regla UX global (§9): **nada se persiste hasta «Guardar equipo»**: lo que
 toca las piezas globales lo decide su propio botón «Guardar componente»
@@ -18,8 +27,8 @@ base.
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath
+from PyQt6.QtCore import QSize, Qt, pyqtSignal
+from PyQt6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QResizeEvent
 from PyQt6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -27,6 +36,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListView,
     QListWidget,
     QListWidgetItem,
     QMessageBox,
@@ -58,6 +68,68 @@ from .componentes import (
 def _formato(valor: float | None, unidad: str = "") -> str:
     """Pinta una métrica: «—» si falta el dato, 2 decimales con unidad si no."""
     return "—" if valor is None else f"{valor:.2f}{unidad}"
+
+
+#: Ancho máximo de la sección de la lista: es lo que necesita la fila
+#: «nombre · categoría · ubicación» a 10 pt para caber en una línea.
+_ANCHO_SECCION_MAX = 450
+
+
+def _ancho_seccion(ancho_tab: int) -> int:
+    """Ancho de la sección de la lista: 450 px si cabe, si no, la mitad de su hueco.
+
+    La fila superior reparte **a medias** el ancho disponible cuando los
+    mínimos de sus dos hijos no caben (la cabecera pide ~1085 px sola),
+    así que una sección más ancha que la mitad acabaría debajo de la
+    cabecera —solape de hasta 61 px en la ventana mínima (1024)—. Con la
+    mitad del hueco como techo, la sección se queda en su ancho completo
+    cuando la ventana es ancha y encoge (sin solapar) cuando es estrecha.
+
+    Args:
+        ancho_tab: ancho de la pestaña en píxeles.
+
+    Returns:
+        Ancho fijo que hay que darle a la sección.
+    """
+    hueco = max(0, ancho_tab - 22)  # márgenes (6+6) + spacing (10)
+    return min(_ANCHO_SECCION_MAX, hueco // 2)
+
+
+class _ListaEquipos(QListWidget):
+    """Lista de equipos guardados cuyo *sizeHint* no manda sobre la sección.
+
+    `QListWidget` pide de por sí ~192 px de alto; si ese sizeHint
+    llegara a la sección, la fila superior crecería por encima de la
+    cabecera y empujaría el scroll de la ficha, que a 1000×600 solo
+    tiene 12 px de holgura (lo comprueba
+    `test_ficha_sin_hint_de_solo_visuales_y_cabe_sin_scroll`). Aquí el
+    alto preferido es fijo y pequeño, pero **puede crecer**: la sección
+    le da stretch, así que la lista llena los ~112 px que quedan y caben
+    ~7 filas en vez de 2.
+
+    Va a 10 pt y con el texto elegido al medio: el contenido completo
+    `nombre · categoría · ubicación` mide 416 px y hay 424 útiles; lo
+    que no quepa se corta por el centro con «…» (el texto completo va
+    en el tooltip) y la barra horizontal —que se comía otros 12 px—
+    queda desactivada.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWordWrap(False)
+        self.setTextElideMode(Qt.TextElideMode.ElideMiddle)
+        self.setResizeMode(QListView.ResizeMode.Adjust)
+        self.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.setMinimumHeight(40)
+        fuente = self.font()
+        fuente.setPointSizeF(10)
+        self.setFont(fuente)
+
+    def sizeHint(self) -> QSize:
+        """Alto preferido de 60 px: manda la sección, no la lista."""
+        return QSize(400, 60)
 
 
 #: Los 5 niveles de muestreo y sus colores (etiqueta y barra), decididos
@@ -213,12 +285,13 @@ class EquiposTab(QWidget):
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(10)
 
-        # Fila superior: la sección de la lista a la izquierda (ancho
-        # fijo, a la misma altura que la cabecera) y la cabecera a la
+        # Fila superior: la sección de la lista a la izquierda (hasta
+        # 450 px, a la misma altura que la cabecera) y la cabecera a la
         # derecha. El alto lo manda la cabecera; la lista se estira.
         fila_sup = QHBoxLayout()
         fila_sup.setSpacing(10)
-        fila_sup.addWidget(self._seccion_lista())
+        self._marco_lista = self._seccion_lista()
+        fila_sup.addWidget(self._marco_lista)
         fila_sup.addWidget(self._cabecera(), 1)
         layout.addLayout(fila_sup)
 
@@ -247,40 +320,50 @@ class EquiposTab(QWidget):
         self._ubicacion.currentIndexChanged.connect(lambda _i: self._recalcular())
         self._recargar_lista(select_id=None)
 
+    def resizeEvent(self, ev: QResizeEvent) -> None:
+        """Recalcula el ancho de la sección de la lista al redimensionar.
+
+        Sin esto, en la ventana mínima (1024 px → 780 de pestaña) la
+        sección de 450 se metía 61 px debajo de la cabecera: ver
+        `_ancho_seccion`.
+        """
+        super().resizeEvent(ev)
+        marco = getattr(self, "_marco_lista", None)
+        if marco is None:
+            return
+        ancho = _ancho_seccion(self.width())
+        if marco.width() != ancho:
+            marco.setFixedWidth(ancho)
+
     # -- construcción ------------------------------------------------------
 
     def _seccion_lista(self) -> QFrame:
-        """Sección «Equipos guardados»: su lista con scroll propio y sus botones.
+        """Sección de la lista: equipos guardados, sin rótulo, y sus botones.
 
-        Ancho fijo (280 px) para que quepa a la izquierda de la cabecera
-        **a la misma altura** que ella. Alturas alafiladas para no
-        superar a la cabecera (si la sección creciera, la fila superior
-        crecería y la ficha de abajo volvería a scrollear):
+        El ancho lo da `_ancho_seccion` (hasta 450 px, y en ventana
+        estrecha la mitad de su hueco para no solapar la cabecera) para
+        que la fila de la lista quepa a la izquierda de ella **a la
+        misma altura**. Sin rótulo: «Equipos guardados» a `PanelTitle`
+        (13 pt) ocupaba dos líneas —44 px— de los 153 de la sección, y
+        ese alto es de las filas que faltaban para ver 3 equipos
+        seguidos; la pestaña ya se llama «Equipos» y la zona no necesita
+        etiqueta.
 
-        - el título va con word-wrap porque `PanelTitle` (13 pt) pide
-          306 px en una sola línea y solo hay 256;
-        - la lista limita su alto (40–60 px, ~3 filas visibles y scroll
-          interno) porque su sizeHint natural es de 192 px;
+        - la lista va con stretch para llenar lo que sobre
+          (`_ListaEquipos.sizeHint()` es pequeño a propósito: su
+          sizeHint natural de 192 px hincharía la fila superior y
+          empujaría el scroll de la ficha);
         - los botones van en fila («➕ Nuevo…» + «🗑 Eliminar» no caben
-          en 256 → «🗑» con tooltip), que ahorra 31 px sobre apilarlos.
+          en 426 → «🗑» con tooltip), que ahorra 31 px sobre apilarlos.
         """
         marco = QFrame()
         marco.setObjectName("GroupFrame")
-        marco.setFixedWidth(280)
+        marco.setFixedWidth(_ancho_seccion(self.width()))
         lay = QVBoxLayout(marco)
         lay.setContentsMargins(12, 4, 12, 6)
         lay.setSpacing(6)
 
-        titulo = QLabel("Equipos guardados")
-        titulo.setObjectName("PanelTitle")
-        titulo.setWordWrap(True)
-        lay.addWidget(titulo)
-
-        self._lista = QListWidget()
-        # El sizeHint natural de QListWidget (192 px) dispararía la fila
-        # superior; con tope la sección cabe a la altura de la cabecera.
-        self._lista.setMinimumHeight(40)
-        self._lista.setMaximumHeight(60)
+        self._lista = _ListaEquipos()
         self._lista.currentRowChanged.connect(self._al_elegir_fila)
         lay.addWidget(self._lista, 1)
 
@@ -510,8 +593,12 @@ class EquiposTab(QWidget):
         for equipo in manager.list_setups():
             crudo = str(equipo.get("category") or "")
             etiqueta = CATEGORIES.get(crudo, crudo.replace("_", " "))
-            texto = f"{equipo['name']} · {etiqueta}" if etiqueta else str(equipo["name"])
+            # «nombre · categoría · ubicación» (la ubicación, si la hay:
+            # location_name viene del LEFT JOIN de list_setups, M-17).
+            piezas = [str(equipo["name"]), etiqueta, equipo.get("location_name")]
+            texto = " · ".join(pieza for pieza in piezas if pieza)
             item = QListWidgetItem(texto)
+            item.setToolTip(texto)
             item.setData(Qt.ItemDataRole.UserRole, equipo["id"])
             self._lista.addItem(item)
             ids.append(equipo["id"])

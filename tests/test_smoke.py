@@ -860,14 +860,18 @@ def test_ficha_sin_hint_de_solo_visuales_y_cabe_sin_scroll(memory_db):
 
 
 def test_equipos_seccion_lista_arriba_sin_splitter(memory_db):
-    """La lista «Equipos guardados» es una sección de la fila superior, sin splitter.
+    """La lista de guardados es una sección de la fila superior, sin splitter.
 
     Regresión de la reestructuración: la barra lateral (QSplitter)
     ocupaba toda la pestaña y estrechaba la ficha. Ahora la pestaña
-    tiene dos filas — `[sección lista (ancho fijo 280) | cabecera
-    Equipo]` y, debajo, el panel con scroll **a todo el ancho**—, con
-    la sección y la cabecera a la misma altura y sus botones en fila
-    bajo la lista.
+    tiene dos filas — `[sección lista (hasta 450 px, **sin rótulo**)
+    | cabecera Equipo]` y, debajo, el panel con scroll **a todo el
+    ancho**—, con la sección y la cabecera a la misma altura y sus
+    botones en fila bajo la lista.
+
+    El rótulo «Equipos guardados» se quitó a propósito: a `PanelTitle`
+    (13 pt) ocupaba dos líneas —44 px— de los 153 de la sección y ese
+    alto es de las filas que faltaban para ver 3 equipos seguidos.
     """
     import os
 
@@ -883,7 +887,7 @@ def test_equipos_seccion_lista_arriba_sin_splitter(memory_db):
         QSplitter,
     )
 
-    from ui.equipment_tab.equipos import EquiposTab
+    from ui.equipment_tab.equipos import EquiposTab, _ancho_seccion
 
     _app = QApplication.instance() or QApplication([])
     tab = EquiposTab()
@@ -893,25 +897,33 @@ def test_equipos_seccion_lista_arriba_sin_splitter(memory_db):
 
     assert tab.findChildren(QSplitter) == [], "no debe quedar ningún QSplitter"
 
-    # La sección: marco de ancho fijo con su título PanelTitle.
-    secciones = [
-        frame
-        for frame in tab.findChildren(QFrame)
-        if frame.objectName() == "GroupFrame" and frame.minimumWidth() == 280
-    ]
-    assert len(secciones) == 1, "debe haber exactamente una sección de lista a 280 px"
-    seccion = secciones[0]
+    # La sección es el primer elemento de la fila superior (por
+    # estructura, no por objectName: «GroupFrame» es selector de estilo).
+    fila_sup = tab.layout().itemAt(0).layout()
+    seccion = fila_sup.itemAt(0).widget()
+    assert seccion is not None and seccion.objectName() == "GroupFrame"
+    assert seccion.minimumWidth() == _ancho_seccion(tab.width()), (
+        "el ancho de la sección lo calcula _ancho_seccion según la pestaña"
+    )
+    assert seccion.minimumWidth() == 450, "en pestaña ancha la sección va a su ancho completo"
     titulos = [
         etiqueta
         for etiqueta in seccion.findChildren(QLabel)
-        if etiqueta.objectName() == "PanelTitle" and etiqueta.text() == "Equipos guardados"
+        if etiqueta.objectName() == "PanelTitle"
     ]
-    assert len(titulos) == 1, "la sección debe titularse «Equipos guardados»"
+    assert titulos == [], "el rótulo vertical se quitó: el alto es de la lista"
 
-    # La lista limita su alto: si creciera (sizeHint natural de 192 px)
-    # inflaría la fila superior y la ficha de abajo volvería a scrollear.
+    # La lista no infla la fila superior: su sizeHint preferido es
+    # pequeño (el natural de QListWidget es de 192 px) pero **sí llena**
+    # la sección, que es lo que hace visibles a 3+ equipos.
     listas = seccion.findChildren(QListWidget)
-    assert len(listas) == 1 and listas[0].maximumHeight() <= 60
+    assert len(listas) == 1
+    lista = listas[0]
+    assert lista.sizeHint().height() <= 60, "el sizeHint de la lista no debe mandar"
+    assert lista.maximumHeight() > 1000, "la lista no debe tener tope de alto"
+    assert lista.height() >= seccion.height() // 2, (
+        f"la lista ({lista.height()} px) debe llenar la sección ({seccion.height()} px)"
+    )
 
     # Fila superior: sección y cabecera comparten altura (la cabecera
     # es la que manda; la sección no la supera ni en sizeHint).
@@ -932,6 +944,9 @@ def test_equipos_seccion_lista_arriba_sin_splitter(memory_db):
     assert seccion.sizeHint().height() <= cabecera.sizeHint().height(), (
         "el sizeHint de la sección no debe superar al de la cabecera"
     )
+    assert seccion.x() + seccion.width() <= cabecera.x(), (
+        "la sección no debe meterse debajo de la cabecera"
+    )
 
     # Los botones de la sección van en fila (misma altura).
     textos = {boton.text() for boton in seccion.findChildren(QPushButton)}
@@ -950,6 +965,104 @@ def test_equipos_seccion_lista_arriba_sin_splitter(memory_db):
 
     tab.deleteLater()
     _app.processEvents()
+
+
+def test_equipos_lista_nombre_categoria_y_ubicacion(memory_db):
+    """Las filas de la lista dicen «nombre · categoría · ubicación».
+
+    Regresión de dos quejas seguidas del usuario: (a) «con 3 equipos
+    solo se veían 2» —sin rótulo ni tope la lista llena la sección y
+    caben 3+ filas seguidas— y (b) «que también diga la ubicación»
+    —``location_name`` del LEFT JOIN de ``list_setups`` (M-17)—. Sin
+    ubicación se omite el tercer trozo, como antes.
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import QApplication, QListWidget
+
+    from ui.equipment_tab.equipos import EquiposTab
+
+    cur = memory_db.execute(
+        "INSERT INTO locations (name, latitude, longitude) VALUES (?, ?, ?)",
+        ("Cacao", 28.3, -16.5),
+    )
+    memory_db.execute(
+        "INSERT INTO equipment_setups (name, category, location_id) VALUES (?, ?, ?)",
+        ("Orión", "espacio_profundo", cur.lastrowid),
+    )
+    memory_db.execute(
+        "INSERT INTO equipment_setups (name, category) VALUES (?, ?)",
+        ("Sin sitio", "paisaje"),
+    )
+    memory_db.commit()
+
+    _app = QApplication.instance() or QApplication([])
+    tab = EquiposTab()
+    tab.resize(1000, 600)
+    tab.show()
+    _app.processEvents()
+
+    seccion = tab.layout().itemAt(0).layout().itemAt(0).widget()
+    lista = seccion.findChildren(QListWidget)[0]
+    textos = [lista.item(i).text() for i in range(lista.count())]
+    assert textos == [
+        "Orión · Espacio Profundo · Cacao",
+        "Sin sitio · Paisaje",
+    ], f"textos de la lista: {textos}"
+    assert lista.item(0).toolTip() == textos[0], "el texto completo va en el tooltip"
+
+    # Tres equipos seguidos sin scroll interno: viewport ÷ alto de fila.
+    fila = lista.visualItemRect(lista.item(0)).height()
+    visibles = lista.viewport().height() // fila
+    assert visibles >= 3, f"solo caben {visibles} filas ({fila} px) en {lista.viewport().height()}"
+
+
+def test_equipos_seccion_no_solapa_la_cabecera_en_ventana_estrecha(memory_db):
+    """La sección encoge en ventana estrecha y nunca queda bajo la cabecera.
+
+    Regresión: con 450 px fijos, la fila superior —que reparte **a
+    medias** cuando los mínimos de sus dos hijos no caben, y la
+    cabecera sola pide ~1085— metía la sección 61 px debajo de la
+    cabecera en la ventana mínima (1024 px → 780 de pestaña).
+    `_ancho_seccion` la limita a la mitad de su hueco, así que baja de
+    450 solo cuando hace falta.
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import QApplication
+
+    from ui.equipment_tab.equipos import _ancho_seccion
+    from ui.main_window import TABS, MainWindow
+
+    _app = QApplication.instance() or QApplication([])
+    window = MainWindow()
+    window.resize(1024, 640)
+    window.show()
+    indice = [key for key, _title in TABS].index("equipment_tab")
+    window.sidebar.nav.setCurrentRow(indice)
+    _app.processEvents()
+
+    tab = window.content.widget(indice).equipos
+    _app.processEvents()
+
+    fila_sup = tab.layout().itemAt(0).layout()
+    seccion = fila_sup.itemAt(0).widget()
+    cabecera = fila_sup.itemAt(1).widget()
+
+    assert tab.width() < 922, (
+        f"la prueba necesita la pestaña estrecha (mide {tab.width()} px)"
+    )
+    solape = seccion.x() + seccion.width() - cabecera.x()
+    assert solape <= 0, f"la sección se mete {solape} px debajo de la cabecera"
+    assert seccion.minimumWidth() == _ancho_seccion(tab.width()) < 450, (
+        "en ventana estrecha la sección debe bajar de 450"
+    )
+
+    window.close()
 
 
 def test_afines_nuevo_sin_dialogo_lista_vacia_y_falta_nombre(memory_db, monkeypatch):
