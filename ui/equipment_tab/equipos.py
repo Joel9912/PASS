@@ -424,7 +424,7 @@ class EquiposTab(QWidget):
         self._notas = QLineEdit()
         self._notas.setPlaceholderText("Notas (opcional)")
         parejas = (
-            ("Nombre *", self._nombre, "Categoría", self._categoria),
+            ("Nombre", self._nombre, "Categoría", self._categoria),
             ("Ubicación", self._ubicacion, "Precio", self._precio),
             ("Peso", self._peso, "Notas", self._notas),
         )

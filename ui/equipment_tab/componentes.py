@@ -162,7 +162,7 @@ def _combo_opciones(combo: QComboBox, opciones: dict[str, str]) -> None:
 
 
 class _FiltroDialog(QDialog):
-    """Alta/edición de un filtro global (nombre*, tipo, precio, notas).
+    """Alta/edición de un filtro global (nombre, tipo, precio, notas).
 
     Solo valida en backend al aceptar el llamante: aquí se recogen los
     campos y el ``ValueError`` de `validar_filtro` se enseña en un aviso.
@@ -176,7 +176,7 @@ class _FiltroDialog(QDialog):
         form = QFormLayout()
         self._nombre = QLineEdit(str((fila or {}).get("name") or ""))
         self._nombre.setPlaceholderText("UHC, CLS, Baader…")
-        form.addRow("Nombre *", self._nombre)
+        form.addRow("Nombre", self._nombre)
         self._tipo = QComboBox()
         _combo_opciones(self._tipo, FILTER_TYPES)
         tipo = (fila or {}).get("filter_type")
@@ -629,7 +629,7 @@ class TelescopeForm(QFrame):
 
         self._nombre = QLineEdit()
         self._nombre.setPlaceholderText("ED80, Newton 200…")
-        form.addRow("Nombre *", self._nombre)
+        form.addRow("Nombre", self._nombre)
         layout.addLayout(form)
 
         # Precio y peso de la pieza en pareja, tras el Nombre y sin
@@ -871,7 +871,7 @@ class CameraForm(QFrame):
         form = QFormLayout()
         self._nombre = QLineEdit()
         self._nombre.setPlaceholderText("ASI2600MC…")
-        form.addRow("Nombre *", self._nombre)
+        form.addRow("Nombre", self._nombre)
         layout.addLayout(form)
 
         # Precio y peso de la pieza en pareja, tras el Nombre (mismo patrón
@@ -1095,7 +1095,7 @@ class MountForm(QFrame):
         form = QFormLayout()
         self._nombre = QLineEdit()
         self._nombre.setPlaceholderText("AM5, EQ6-R…")
-        form.addRow("Nombre *", self._nombre)
+        form.addRow("Nombre", self._nombre)
         # Precio y peso de la pieza en pareja, tras el Nombre (la fila
         # abarca las dos columnas del form y lleva sus propias etiquetas).
         pareja_precio = QWidget()

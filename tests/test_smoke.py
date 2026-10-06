@@ -1065,6 +1065,34 @@ def test_equipos_seccion_no_solapa_la_cabecera_en_ventana_estrecha(memory_db):
     window.close()
 
 
+def test_equipo_sin_asteriscos_en_los_rotulos(memory_db):
+    """Ningún rótulo de la pestaña Equipo termina en «*».
+
+    Regresión: «Nombre *», «Latitud *», «Bortle *»… no comunicaban nada
+    —la validación real se ve en el «Falta: …» inline y en los tooltips—
+    y solo estorbaban; el usuario pidió quitarlos. Cubre las cuatro
+    piezas de componentes, la cabecera de Equipos y Geografía|Cielo.
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import QApplication, QLabel
+
+    from ui.equipment_tab import EquipmentPage
+
+    _app = QApplication.instance() or QApplication([])
+    pagina = EquipmentPage()
+    asteriscos = sorted(
+        etiqueta.text() for etiqueta in pagina.findChildren(QLabel)
+        if etiqueta.text().endswith("*")
+    )
+    assert asteriscos == [], f"rótulos con asterisco: {asteriscos}"
+
+    pagina.deleteLater()
+    _app.processEvents()
+
+
 def test_afines_nuevo_sin_dialogo_lista_vacia_y_falta_nombre(memory_db, monkeypatch):
     """Afines A de Equipos: «Nuevo…» sin diálogo, ayuda en lista vacía y «Falta: nombre».
 
