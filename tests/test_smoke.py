@@ -742,6 +742,48 @@ def test_telescopio_filas_de_tres_campos():
     form.deleteLater()
 
 
+def test_calculos_orden_y_rotulos(memory_db):
+    """Cálculos: las 5 lecturas en el orden decidido y con dos puntos.
+
+    Regresión del reordenado (antes: Escala · Dawes · F/d · Focal
+    efectiva · Muestreo y sin dos puntos): la fila es Relación Focal ·
+    Distancia Focal Efectiva · Escala · Límite Dawes · Muestreo, cada
+    rótulo con su dos puntos y pegado a su valor.
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import QApplication
+
+    from ui.equipment_tab.equipos import EquiposTab
+
+    _app = QApplication.instance() or QApplication([])
+    tab = EquiposTab()
+
+    # La fila vive dentro del marco del bloque: título + (rótulo, valor)*5
+    # y, al final, el stretch que empuja todo a la izquierda.
+    fila = tab._escala.parentWidget().layout().itemAt(0).layout()
+    widgetes = [
+        item.widget() for j in range(fila.count())
+        if (item := fila.itemAt(j)).widget() is not None
+    ]
+    assert widgetes[0].text() == "Cálculos" and len(widgetes) == 11
+
+    esperado = (
+        ("Relación Focal:", tab._relacion),
+        ("Distancia Focal Efectiva:", tab._efectiva),
+        ("Escala:", tab._escala),
+        ("Límite Dawes:", tab._dawes),
+        ("Muestreo:", tab._muestreo),
+    )
+    for i, (rotulo, valor) in enumerate(esperado):
+        assert widgetes[1 + 2 * i].text() == rotulo, f"rótulo {i}"
+        assert widgetes[2 + 2 * i] is valor, f"valor {i}"
+
+    tab.deleteLater()
+
+
 def test_calculos_con_seeing_rango_y_barra(memory_db):
     """Cálculos: el seeing recorta el rango, colorea el veredicto y pinta la barra.
 

@@ -499,13 +499,14 @@ class EquiposTab(QWidget):
         return contenedor
 
     def _bloque_calculos(self) -> QFrame:
-        """«Cálculos» como barra de una línea: escala, Dawes, F/d, focal efectiva y muestreo.
+        """«Cálculos» como barra de una línea: relación focal, focal efectiva, escala, Dawes y muestreo.
 
         Barra (y no cuadrícula) para que el bloque pese ~60 px menos de
         alto: el formulario entero cabe sin scroll vertical a altura
         maximizada. Aquí viven también las lecturas del telescopio
         (relación focal y focal efectiva) para no duplicarlas en su
-        formulario.
+        formulario. El orden de las lecturas lo decidió el usuario y los
+        rótulos van con dos puntos.
         """
         marco = QFrame()
         marco.setObjectName("GroupFrame")
@@ -523,11 +524,11 @@ class EquiposTab(QWidget):
         self._efectiva = QLabel("—")
         self._muestreo = QLabel("—")
         valores = (
-            ("Escala", self._escala),
-            ("Dawes", self._dawes),
-            ("F/d", self._relacion),
-            ("Focal efectiva", self._efectiva),
-            ("Muestreo", self._muestreo),
+            ("Relación Focal:", self._relacion),
+            ("Distancia Focal Efectiva:", self._efectiva),
+            ("Escala:", self._escala),
+            ("Límite Dawes:", self._dawes),
+            ("Muestreo:", self._muestreo),
         )
         for etiqueta, valor in valores:
             fila.addWidget(QLabel(etiqueta))
