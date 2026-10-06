@@ -749,7 +749,10 @@ class TelescopeForm(QFrame):
         self._precio.setValue(0.0)
         self._peso.setValue(0.0)
         self._reductor.setChecked(False)
-        self._factor.setValue(0.8)
+        # 1,00 igual que el arranque: es el valor neutro (focal efectiva
+        # = focal). Con 0,80 «Nuevo…» enseñaba un factor que nadie había
+        # pedido y tu 1,00 no se veía nunca en pantalla.
+        self._factor.setValue(1.0)
         self._tipo.setCurrentIndex(0)
         self._subtipo.setCurrentIndex(-1)
         self._notas.clear()

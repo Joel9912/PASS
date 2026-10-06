@@ -785,6 +785,12 @@ def test_telescopio_rejilla_de_cuatro_columnas():
     assert (form._focal.minimum(), form._focal.maximum()) == (0.0, 20000.0)
     assert (form._factor.minimum(), form._factor.maximum(), form._factor.value()) == (0.01, 10.0, 1.0)
 
+    # Al vaciarlo («Nuevo…» o carga vacía) el factor vuelve a 1,00 como
+    # al arrancar: `limpiar()` seguía poniendo 0,80 y el 1,00 del
+    # usuario no se llegaba a ver nunca en pantalla.
+    form.limpiar()
+    assert form._factor.value() == 1.0
+
     # La casilla conserva su texto largo, con el detalle en el tooltip.
     assert form._reductor.text() == "Aplanador/Reductor/Coma"
     assert "aplanador, reductor o coma corrector" in form._reductor.toolTip()
