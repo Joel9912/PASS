@@ -537,8 +537,8 @@ def test_cabecera_suma_precio_peso_y_lo_persiste(memory_db):
 
     Regresiones del rediseño: los dos campos de la cabecera ya no se
     teclean (son calculados); los 5 formularios y cada filtro marcado
-    suman precio, cada telescopio con la casilla «Aplanador» añade
-    0,5 kg de peso y sin datos se pinta «—» (0). Al «Guardar equipo» la
+    suman precio, cada telescopio con la casilla «Aplanador/Reductor/Coma»
+    añade 0,5 kg de peso y sin datos se pinta «—» (0). Al «Guardar equipo» la
     suma queda en ``price_eur``/``weight_kg`` del setup (D-3) — sustituye
     al valor manual— y sobrevive a la recarga.
     """
@@ -666,80 +666,131 @@ def test_subtipo_es_solo_seleccionable_conserva_al_cargar_y_cambia_con_el_tipo(
     form.deleteLater()
 
 
-def test_telescopio_filas_de_tres_campos():
-    """Telescopio: dos filas de tres campos, casilla corta y spins estrechos.
+def test_telescopio_rejilla_de_cuatro_columnas():
+    """Telescopio: rejilla de 4 columnas, cajas alineadas y sin tope de ancho.
 
-    Regresiones del reagrupado —antes eran 3 filas: `Precio|Peso`,
-    `Apertura|Focal` y `casilla|Factor`—: la fila 1 es
-    `Precio·Peso·Apertura` y la 2 `Focal·Aplanador·Factor` (la fila que
-    se gana se cede al bloque «Cálculos»); la casilla, cuyo texto mandaba
-    el ancho mínimo de la columna, pasa de «Con aplanador/reductor» a
-    «Aplanador» con el detalle en el tooltip; y cada spin lleva ancho
-    máximo (80/85/95/104/60 px, medidos con la fuente real) porque con
-    el `sizeHint` la fila 1 pedía ~560 px y forzaba scroll horizontal en
-    la columna Principal/Guía.
+    Regresión del rediseño —antes, filas sueltas de `QHBoxLayout`, cada
+    una repartiendo por su cuenta—: todo el formulario vive en **una
+    `QGridLayout` como la cabecera de Equipo**, con las etiquetas en las
+    columnas 0 y 2 y los campos en la 1 y la 3 (ambas con stretch). Al
+    montarla a 628 px —el ancho de la columna Principal/Guía en ventana
+    1000×600—, `Precio`, `Apertura` y `Tipo` arrancan en la misma `x` y
+    miden lo mismo que `Peso`, `Focal` y `Subtipo`, que era justo lo que
+    faltaba: los `setMaximumWidth` (80/85/95/104/60 px) recortaban cada
+    caja por su lado. La casilla ocupa las columnas 0-1 para que su texto
+    largo no ensanche la fila y «Factor ×» va en la 2, delante de su
+    caja. Se conservan los rangos que fijó el usuario: apertura 0-5000,
+    focal 0-20000, factor 0,01-10,00 con inicial 1,00.
     """
     import os
 
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-    from PyQt6.QtWidgets import QApplication
+    from PyQt6.QtWidgets import (
+        QApplication,
+        QGridLayout,
+        QLabel,
+        QLineEdit,
+        QVBoxLayout,
+        QWidget,
+    )
 
     from ui.equipment_tab.componentes import TelescopeForm
 
     _app = QApplication.instance() or QApplication([])
+
+    # Con ancho fijo real, no el del sizeHint: así se mide el reparto.
+    contenedor = QWidget()
+    caja = QVBoxLayout(contenedor)
+    caja.setContentsMargins(0, 0, 0, 0)
     form = TelescopeForm()
+    caja.addWidget(form)
+    contenedor.setFixedWidth(628)
+    contenedor.show()
+    _app.processEvents()
 
-    def fila_de(widget) -> int:
-        """Índice de la fila del layout vertical que contiene `widget`."""
-        vertical = form.layout()
-        for i in range(vertical.count()):
-            fila = vertical.itemAt(i).layout()
-            if fila is None:
-                continue
-            for j in range(fila.count()):
-                if fila.itemAt(j).widget() is widget:
-                    return i
-        return -1
+    # Una sola rejilla con todo dentro (más el stretch de cierre).
+    assert form.layout().count() == 2
+    rejilla = form.layout().itemAt(0).layout()
+    assert isinstance(rejilla, QGridLayout), "los datos van en una única rejilla"
+    assert rejilla.columnCount() == 4
 
-    def widgets_de(indice: int):
-        fila = form.layout().itemAt(indice).layout()
-        return [fila.itemAt(j).widget() for j in range(fila.count()) if fila.itemAt(j).widget()]
+    def celda(widget) -> tuple[int, int]:
+        """(fila, columna) que ocupa `widget`; falla si no está en la rejilla."""
+        indice = rejilla.indexOf(widget)
+        assert indice >= 0, widget
+        fila, columna, _, _ = rejilla.getItemPosition(indice)
+        return fila, columna
 
-    fila_precio = fila_de(form._precio)
-    fila_focal = fila_de(form._focal)
+    def celda_ancha(widget) -> tuple[int, int, int, int]:
+        """(fila, columna, filas, columnas) de `widget`, para las que abarcan."""
+        indice = rejilla.indexOf(widget)
+        assert indice >= 0, widget
+        fila, columna, filas, columnas = rejilla.getItemPosition(indice)
+        return fila, columna, filas, columnas
 
-    # Una fila para Precio·Peso·Apertura, otra para Focal·Aplanador·Factor.
-    assert (fila_de(form._peso), fila_de(form._apertura)) == (fila_precio, fila_precio)
-    assert (fila_de(form._reductor), fila_de(form._factor)) == (fila_focal, fila_focal)
-    assert fila_precio != fila_focal, "los 6 campos deben ir en dos filas, no en una"
+    # Campos de dos en dos en las columnas 1 y 3…
+    assert celda(form._nombre) == (0, 1)
+    assert celda(form._precio) == (1, 1)
+    assert celda(form._peso) == (1, 3)
+    assert celda(form._apertura) == (2, 1)
+    assert celda(form._focal) == (2, 3)
+    assert celda(form._tipo) == (4, 1)
+    assert celda(form._subtipo) == (4, 3)
+    # …la casilla abarca la 0-1, Notas toda la fila y los botones de
+    # imágenes la 2-3 (la lista, la columna de campos 1).
+    assert celda_ancha(form._reductor) == (3, 0, 1, 2)
+    assert celda(form._factor) == (3, 3)
+    assert celda_ancha(form._notas) == (5, 0, 1, 4)
+    assert celda(form._imagenes) == (6, 1)
 
-    # Y en ese orden (rótulo delante de su campo).
-    primera = widgets_de(fila_precio)
-    assert [primera.index(w) for w in (form._precio, form._peso, form._apertura)] == [1, 3, 5]
-    assert [etiqueta.text() for etiqueta in (primera[0], primera[2], primera[4])] == [
+    def rotulo(fila: int, columna: int) -> str:
+        """Texto de la etiqueta que hay en la celda (fila, columna)."""
+        item = rejilla.itemAtPosition(fila, columna)
+        assert item is not None, (fila, columna)
+        assert isinstance(item.widget(), QLabel), (fila, columna)
+        return item.widget().text()
+
+    assert [rotulo(*c) for c in ((0, 0), (1, 0), (1, 2), (2, 0), (2, 2), (3, 2), (4, 0), (4, 2), (6, 0))] == [
+        "Nombre",
         "Precio",
         "Peso",
         "Apertura",
+        "Focal",
+        "Factor ×",
+        "Tipo",
+        "Subtipo",
+        "Imágenes",
     ]
-    segunda = widgets_de(fila_focal)
-    assert [segunda.index(w) for w in (form._focal, form._reductor, form._factor)] == [1, 2, 4]
-    assert segunda[0].text() == "Focal" and segunda[3].text() == "Factor ×"
 
-    # Casilla corta (su texto es lo que más pesa en el ancho mínimo).
-    assert form._reductor.text() == "Aplanador"
+    # Solo las dos columnas de campos están estiradas.
+    assert [rejilla.columnStretch(c) for c in range(4)] == [0, 1, 0, 1]
+
+    # Prueba visual: misma `x` y mismo ancho entre las cajas de una misma
+    # columna (antes se descolocaban), y columnas 1 y 3 con el mismo
+    # reparto (tolerancia por el mínimo que impone la casilla).
+    assert form._precio.x() == form._apertura.x() == form._tipo.x()
+    assert form._peso.x() == form._focal.x() == form._subtipo.x()
+    assert form._precio.width() == form._apertura.width() == form._tipo.width()
+    assert form._peso.width() == form._focal.width() == form._subtipo.width()
+    assert abs(form._precio.width() - form._peso.width()) <= 12
+
+    # Ningún spin con ancho máximo (era lo que recortaba las cajas).
+    ancho_libre = QLineEdit().maximumWidth()  # máximo por defecto de una caja
+    for spin in (form._precio, form._peso, form._apertura, form._focal, form._factor):
+        assert spin.maximumWidth() == ancho_libre, spin
+
+    # Rangos del usuario intactos y factor arrancando en 1,00.
+    assert (form._apertura.minimum(), form._apertura.maximum()) == (0.0, 5000.0)
+    assert (form._focal.minimum(), form._focal.maximum()) == (0.0, 20000.0)
+    assert (form._factor.minimum(), form._factor.maximum(), form._factor.value()) == (0.01, 10.0, 1.0)
+
+    # La casilla conserva su texto largo, con el detalle en el tooltip.
+    assert form._reductor.text() == "Aplanador/Reductor/Coma"
     assert "aplanador, reductor o coma corrector" in form._reductor.toolTip()
 
-    # Ancho máximo de cada spin = su texto más largo.
-    assert {
-        "precio": form._precio.maximumWidth(),
-        "peso": form._peso.maximumWidth(),
-        "apertura": form._apertura.maximumWidth(),
-        "focal": form._focal.maximumWidth(),
-        "factor": form._factor.maximumWidth(),
-    } == {"precio": 80, "peso": 85, "apertura": 95, "focal": 104, "factor": 60}
-
     form.deleteLater()
+    contenedor.deleteLater()
 
 
 def test_calculos_orden_y_rotulos(memory_db):

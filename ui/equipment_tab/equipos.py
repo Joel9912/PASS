@@ -430,8 +430,8 @@ class EquiposTab(QWidget):
         self._peso.setReadOnly(True)
         self._peso.setToolTip(
             "Suma del peso de las piezas en pantalla: +0,5 kg por cada "
-            "telescopio con la casilla «Aplanador» (aplanador, reductor "
-            "o coma corrector)."
+            "telescopio con la casilla «Aplanador/Reductor/Coma» (el "
+            "accesorio pesa aunque la óptica no informe su peso)."
         )
         self._notas = QLineEdit()
         self._notas.setPlaceholderText("Notas (opcional)")
@@ -523,9 +523,10 @@ class EquiposTab(QWidget):
         marco.setObjectName("GroupFrame")
         lay = QVBoxLayout(marco)
         # Márgenes y espaciados un punto más abiertos que la ficha:
-        # «Cálculos» se lleva el alto que gana el Telescopio al agruparse
-        # en dos filas (la ficha sigue cabiendo sin scroll vertical:
-        # `test_ficha_sin_hint…`).
+        # «Cálculos» se lleva el alto que gana el Telescopio al pasar a
+        # rejilla de 4 columnas —una fila más; la lista de imágenes baja
+        # de 56 a 44 px para no gastar ese alto— (la ficha sigue cabiendo
+        # sin scroll vertical: `test_ficha_sin_hint…`).
         lay.setContentsMargins(12, 8, 12, 6)
         lay.setSpacing(8)
         fila = QHBoxLayout()
@@ -826,11 +827,10 @@ class EquiposTab(QWidget):
         """Cabecera: precio/peso = suma en vivo de las piezas en pantalla.
 
         Precio: los 5 formularios + el de cada filtro marcado. Peso: los 5
-        formularios + 0,5 kg por cada telescopio con «Aplanador» (su
-        tooltip recuerda que cubre aplanador, reductor o coma corrector:
-        el accesorio pesa aunque la óptica no informe su peso); los
-        filtros no pesan. 0 = nada informado → el spin pinta «—».
-        «Guardar equipo» persiste estos totales (D-3).
+        formularios + 0,5 kg por cada telescopio con la casilla
+        «Aplanador/Reductor/Coma» (el accesorio pesa aunque la óptica no
+        informe su peso); los filtros no pesan. 0 = nada informado → el
+        spin pinta «—». «Guardar equipo» persiste estos totales (D-3).
         """
         modelos = [
             self._tel_principal.form.a_modelo(),

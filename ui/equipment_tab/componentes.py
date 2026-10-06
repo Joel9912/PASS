@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -610,14 +611,18 @@ class PartEditor(QWidget):
 
 
 class TelescopeForm(QFrame):
-    """Formulario de una óptica: dos filas de datos, reductor e imágenes.
+    """Formulario de una óptica: rejilla de 4 columnas, reductor e imágenes.
 
-    Los datos comparables van en **dos filas de tres campos** —Precio ·
-    Peso · Apertura / Focal · Aplanador · Factor—: la fila que se gana
-    respecto a las tres de antes se cede al bloque «Cálculos». Cada spin
-    lleva ancho máximo (su texto más largo) porque, con el ancho que
-    pide el `sizeHint`, la fila 1 tiraría de la columna Principal/Guía
-    y forzaría scroll horizontal en la ficha.
+    Los datos van en **una sola `QGridLayout` como la cabecera de Equipo**
+    —etiquetas en las columnas 0 y 2, campos en la 1 y la 3, ambas con
+    stretch—: así todas las cajas arrancan en la misma `x` y miden lo
+    mismo, que era lo que faltaba con las filas sueltas (cada `QHBoxLayout`
+    calculaba su propio ancho y las etiquetas de distinto tamaño
+    descolocaban las cajas). Van de dos en dos (Precio·Peso,
+    Apertura·Focal, casilla·Factor, Tipo·Subtipo), una fila más que antes:
+    para no ganar alto la rejilla va a 4 px de espaciado vertical y la
+    lista de Imágenes baja de 56 a 44 px (la ficha ha de seguir cabiendo
+    sin scroll vertical a 1000×600).
     """
 
     changed = pyqtSignal()
@@ -629,110 +634,104 @@ class TelescopeForm(QFrame):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        # Espaciado 6 (no 8): cada fila de más empuja el contenido a
-        # necesitar scroll vertical a altura maximizada.
         layout.setSpacing(6)
-        form = QFormLayout()
-        form.setSpacing(6)
+
+        # Rejilla de 4 columnas como la cabecera de Equipo: etiquetas en
+        # la 0 y la 2, campos en la 1 y la 3 con stretch. Sin ancho
+        # máximo en ningún spin: las columnas reparten el sobrante y
+        # todas las cajas del mismo campo miden y empiezan igual.
+        rejilla = QGridLayout()
+        rejilla.setHorizontalSpacing(12)  # como Equipo
+        rejilla.setVerticalSpacing(4)  # 6 no cabe: la rejilla gana una fila
 
         self._nombre = QLineEdit()
         self._nombre.setPlaceholderText("ED80, Newton 200…")
-        form.addRow("Nombre", self._nombre)
-        layout.addLayout(form)
+        rejilla.addWidget(QLabel("Nombre"), 0, 0)
+        rejilla.addWidget(self._nombre, 0, 1, 1, 3)
 
-        # Precio, peso y apertura en la misma fila, los tres sin flechas
-        # y con ancho máximo: la fila que se gana se cede a «Cálculos».
-        # Los máximos son el texto más largo de cada campo (medido con
-        # la fuente real): el sizeHint pedía ~560 px y la columna
-        # Principal/Guía en la ventana mínima solo tiene ~390.
+        # Precio y peso en pareja, sin flechas: la cabecera del equipo
+        # los suma en vivo.
         self._precio = spin_precio()
         self._peso = spin_peso()
-        self._precio.setMaximumWidth(80)
-        self._peso.setMaximumWidth(85)
+        rejilla.addWidget(QLabel("Precio"), 1, 0)
+        rejilla.addWidget(self._precio, 1, 1)
+        rejilla.addWidget(QLabel("Peso"), 1, 2)
+        rejilla.addWidget(self._peso, 1, 3)
+
+        # Apertura y focal en pareja y sin flechas: el usuario teclea el
+        # valor de la ficha técnica (rangos los que fijó él: 5000 y
+        # 20000 mm). Relación focal y focal efectiva no se duplican aquí:
+        # viven en la barra «Cálculos», siempre visible bajo las pestañas.
         self._apertura = QDoubleSpinBox()
-        self._apertura.setRange(0.0, 600.0)
+        self._apertura.setRange(0.0, 5000.0)
         self._apertura.setDecimals(1)
         self._apertura.setSuffix(" mm")
         self._apertura.setSpecialValueText("—")
         sin_botones(self._apertura)
-        self._apertura.setMaximumWidth(95)
-        fila_precio = QHBoxLayout()
-        fila_precio.addWidget(QLabel("Precio"))
-        fila_precio.addWidget(self._precio, 1)
-        fila_precio.addWidget(QLabel("Peso"))
-        fila_precio.addWidget(self._peso, 1)
-        fila_precio.addWidget(QLabel("Apertura"))
-        fila_precio.addWidget(self._apertura, 1)
-        layout.addLayout(fila_precio)
-
-        # Relación focal y focal efectiva no se duplican aquí: viven en
-        # la barra «Cálculos», siempre visible bajo las pestañas.
-        # Focal, casilla y factor en la misma fila. La casilla se llamó
-        # «Con aplanador/reductor» y ahora es «Aplanador»: su texto manda
-        # el ancho mínimo de la fila (261 px el largo → umbral de scroll
-        # horizontal ~1500 px de ventana; 110 px el corto → ~1265) y el
-        # detalle —aplanador, reductor o coma corrector— va en el tooltip.
         self._focal = QDoubleSpinBox()
-        self._focal.setRange(0.0, 5000.0)
+        self._focal.setRange(0.0, 20000.0)
         self._focal.setDecimals(1)
         self._focal.setSuffix(" mm")
         self._focal.setSpecialValueText("—")
         sin_botones(self._focal)
-        self._focal.setMaximumWidth(104)
-        self._reductor = QCheckBox("Aplanador")
+        rejilla.addWidget(QLabel("Apertura"), 2, 0)
+        rejilla.addWidget(self._apertura, 2, 1)
+        rejilla.addWidget(QLabel("Focal"), 2, 2)
+        rejilla.addWidget(self._focal, 2, 3)
+
+        # La casilla ocupa las columnas 0 y 1 (comparte la de los
+        # campos, así su texto largo no ensancha ninguna fila) y
+        # «Factor ×» va en la 2, delante de su caja como el resto de
+        # etiquetas. El detalle —aplanador, reductor o coma corrector—
+        # está en el tooltip.
+        self._reductor = QCheckBox("Aplanador/Reductor/Coma")
         self._reductor.setToolTip(
             "Focal efectiva = focal × factor: vale para aplanador, "
             "reductor o coma corrector."
         )
         self._factor = QDoubleSpinBox()
-        self._factor.setRange(0.01, 1.0)
+        self._factor.setRange(0.01, 10.00)
         self._factor.setDecimals(2)
         self._factor.setSingleStep(0.05)
-        self._factor.setValue(0.8)
+        self._factor.setValue(1.0)
         self._factor.setEnabled(False)
         sin_botones(self._factor)
-        self._factor.setMaximumWidth(60)
-        reductor = QHBoxLayout()
-        # Espaciado 4: la fila manda el ancho mínimo de la columna
-        # Principal/Guía y con 6 quedaba al filo (2 px de holgura).
-        reductor.setSpacing(4)
-        reductor.addWidget(QLabel("Focal"))
-        reductor.addWidget(self._focal, 1)
-        reductor.addWidget(self._reductor)
-        reductor.addStretch(1)
-        reductor.addWidget(QLabel("Factor ×"))
-        reductor.addWidget(self._factor)
-        layout.addLayout(reductor)
+        rejilla.addWidget(self._reductor, 3, 0, 1, 2)
+        rejilla.addWidget(QLabel("Factor ×"), 3, 2)
+        rejilla.addWidget(self._factor, 3, 3)
 
-        tipos = QHBoxLayout()
         self._tipo = QComboBox()
         _combo_opciones(self._tipo, OPTICAL_TYPES)
         self._subtipo = QComboBox()  # solo seleccionable (taxonomía por tipo)
         self._subtipo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        tipos.addWidget(QLabel("Tipo"))
-        tipos.addWidget(self._tipo, 1)
-        tipos.addWidget(QLabel("Subtipo"))
-        tipos.addWidget(self._subtipo, 1)
-        layout.addLayout(tipos)
+        rejilla.addWidget(QLabel("Tipo"), 4, 0)
+        rejilla.addWidget(self._tipo, 4, 1)
+        rejilla.addWidget(QLabel("Subtipo"), 4, 2)
+        rejilla.addWidget(self._subtipo, 4, 3)
 
         self._notas = QLineEdit()
         self._notas.setPlaceholderText("Notas (opcional)")
-        layout.addWidget(self._notas)
+        rejilla.addWidget(self._notas, 5, 0, 1, 4)
 
-        imagenes = QHBoxLayout()
-        imagenes.addWidget(QLabel("Imágenes"))
+        # Imágenes: la lista en la columna de campos 1 y los dos botones
+        # en paralelo en la 2-3 (apilados sumaban 56 px de fila).
+        rejilla.addWidget(QLabel("Imágenes"), 6, 0)
         self._imagenes = QListWidget()
-        self._imagenes.setMaximumHeight(56)  # 2 filas: el alto sobra menos que el ancho
-        imagenes.addWidget(self._imagenes, 1)
-        columna = QVBoxLayout()
+        self._imagenes.setMaximumHeight(44)  # 1,5 filas: el alto sobra menos que el ancho
+        rejilla.addWidget(self._imagenes, 6, 1)
+        botones = QHBoxLayout()
+        botones.setSpacing(6)
         boton_anadir = QPushButton("➕ Adjuntar…")
         boton_anadir.clicked.connect(self._anadir_imagenes)
-        columna.addWidget(boton_anadir)
+        botones.addWidget(boton_anadir)
         boton_quitar = QPushButton("Quitar")
         boton_quitar.clicked.connect(self._quitar_imagenes)
-        columna.addWidget(boton_quitar)
-        imagenes.addLayout(columna)
-        layout.addLayout(imagenes)
+        botones.addWidget(boton_quitar)
+        rejilla.addLayout(botones, 6, 2, 1, 2)
+
+        rejilla.setColumnStretch(1, 1)
+        rejilla.setColumnStretch(3, 1)
+        layout.addLayout(rejilla)
         layout.addStretch(1)
 
         self._tipo.currentIndexChanged.connect(self._subtipos)
