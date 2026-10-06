@@ -197,12 +197,17 @@ class BarraMuestreo(QWidget):
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        """Barra apilable de alto fijo; los datos llegan con `pintar`."""
+        """Barra apilable de 24 px de alto; los datos llegan con `pintar`.
+
+        El alto (y el ancho, con stretch en su fila) crece a costa de la
+        fila que el Telescopio cede al agruparse en dos: «Cálculos» se
+        lleva el espacio ganado por la ficha.
+        """
         super().__init__(parent)
         self._escala: float | None = None
         self._limites: tuple[float, float, float, float] | None = None
         self._posicion: float | None = None
-        self.setFixedHeight(16)
+        self.setFixedHeight(24)
         self.setMinimumWidth(160)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setToolTip(
@@ -318,6 +323,12 @@ class EquiposTab(QWidget):
         self._filtros.changed.connect(self._recalcular)  # casilla → suma en vivo
         # Cambiar de ubicación cambia el seeing que recorta el rango.
         self._ubicacion.currentIndexChanged.connect(lambda _i: self._recalcular())
+        # El nombre del equipo sale en la pista de Cálculos («Muestreo
+        # del Equipo: …»), así que se repinta al teclearlo; durante la
+        # carga manda `_cargar`, que recalcula al final.
+        self._nombre.textChanged.connect(
+            lambda _texto: self._recalcular() if not self._cargando else None
+        )
         self._recargar_lista(select_id=None)
 
     def resizeEvent(self, ev: QResizeEvent) -> None:
@@ -511,8 +522,12 @@ class EquiposTab(QWidget):
         marco = QFrame()
         marco.setObjectName("GroupFrame")
         lay = QVBoxLayout(marco)
-        lay.setContentsMargins(12, 4, 12, 6)  # apretados: la ficha cabe sin scroll
-        lay.setSpacing(6)
+        # Márgenes y espaciados un punto más abiertos que la ficha:
+        # «Cálculos» se lleva el alto que gana el Telescopio al agruparse
+        # en dos filas (la ficha sigue cabiendo sin scroll vertical:
+        # `test_ficha_sin_hint…`).
+        lay.setContentsMargins(12, 8, 12, 6)
+        lay.setSpacing(8)
         fila = QHBoxLayout()
         fila.setSpacing(8)
         titulo = QLabel("Cálculos")
@@ -536,16 +551,17 @@ class EquiposTab(QWidget):
         fila.addStretch(1)
         lay.addLayout(fila)
         self._pista_calculos = QLabel(
-            "Sobre el telescopio y la cámara principales en pantalla."
+            "Muestreo del Equipo: (sin nombre) en (sin ubicación)."
         )
         self._pista_calculos.setObjectName("HintLabel")
         self._pista_calculos.setWordWrap(True)
-        # Barra de zonas a la izquierda de la pista: el usuario aprobó
-        # «Rango adecuado: …» junto a los «Falta:…» y su barra con marcador.
+        # Barra y pista con el mismo stretch: el usuario pidió la barra
+        # más larga y el resumen «Muestreo del Equipo: … en …», el rango
+        # adecuado (Dawes y Seeing) y los «Falta:…».
         self._barra = BarraMuestreo()
         fila_pista = QHBoxLayout()
         fila_pista.setSpacing(8)
-        fila_pista.addWidget(self._barra)
+        fila_pista.addWidget(self._barra, 1)
         fila_pista.addWidget(self._pista_calculos, 1)
         lay.addLayout(fila_pista)
         return marco
@@ -758,10 +774,11 @@ class EquiposTab(QWidget):
     def _recalcular(self) -> None:
         """Repinta «Cálculos» con la pareja principal en pantalla (en vivo).
 
-        El seeing de la ubicación elegida en la cabecera recorta el rango
-        adecuado y Configuración aporta los dos umbrales y el margen
-        «Ligero» de los 5 niveles; sin ubicación o sin dato manda solo
-        Dawes.
+        La pista resume el equipo en pantalla (nombre en su ubicación),
+        el rango adecuado y lo que falta. El seeing de la ubicación
+        elegida en la cabecera recorta el rango adecuado y Configuración
+        aporta los dos umbrales y el margen «Ligero» de los 5 niveles;
+        sin ubicación o sin dato manda solo Dawes.
         """
         telescopio = self._tel_principal.form.a_modelo()
         camara = self._cam_principal.form.a_modelo()
@@ -791,9 +808,14 @@ class EquiposTab(QWidget):
         if telescopio.aperture_mm is None:
             faltan.append("apertura")
         limites = filas["muestreo_limites"]
-        piezas = ["Sobre el telescopio y la cámara principales en pantalla."]
+        nombre = self._nombre.text().strip() or "(sin nombre)"
+        lugar = self._ubicacion.currentText().strip() or "(sin ubicación)"
+        piezas = [f"Muestreo del Equipo: {nombre} en {lugar}."]
         if limites:
-            piezas.append(f"Rango adecuado: {limites[1]:.2f}–{limites[2]:.2f} ″/px.")
+            piezas.append(
+                f"Rango adecuado (Dawes y Seeing): "
+                f"{limites[1]:.2f}–{limites[2]:.2f} ″/px."
+            )
         if faltan:
             piezas.append(f"Falta: {' · '.join(faltan)}.")
         self._pista_calculos.setText(" ".join(piezas))

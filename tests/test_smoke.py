@@ -787,7 +787,8 @@ def test_calculos_orden_y_rotulos(memory_db):
 def test_calculos_con_seeing_rango_y_barra(memory_db):
     """Cálculos: el seeing recorta el rango, colorea el veredicto y pinta la barra.
 
-    Regresiones: la pista añade «Rango adecuado: X–Y ″/px», la etiqueta
+    Regresiones: la pista añade «Rango adecuado (Dawes y Seeing): X–Y
+    ″/px», la etiqueta
     de Muestreo se tiñe según el veredicto (arcoíris de 5 niveles:
     violeta/azul/verde/amarillo/naranja), la barra pinta, elegir una
     ubicación con seeing cambia rango y veredicto (sin ubicación o sin
@@ -814,7 +815,10 @@ def test_calculos_con_seeing_rango_y_barra(memory_db):
     cam._pixel.setValue(2.4)  # ≈ 1,24 ″/px
 
     # Sin ubicación: solo Dawes (0,725–1,45) → correcto en verde.
-    assert "Rango adecuado:" in tab._pista_calculos.text()
+    assert "Muestreo del Equipo: (sin nombre) en (sin ubicación)." in (
+        tab._pista_calculos.text()
+    )
+    assert "Rango adecuado (Dawes y Seeing):" in tab._pista_calculos.text()
     assert tab._muestreo.text() == "Muestreo Correcto"
     assert "#2ECC71" in tab._muestreo.styleSheet()
     assert not tab._barra.grab().isNull()
@@ -844,9 +848,82 @@ def test_calculos_con_seeing_rango_y_barra(memory_db):
     tab.reload_locations()
     tab._ubicacion.setCurrentIndex(tab._ubicacion.findData(pk))
 
-    assert "Rango adecuado: 0.25–0.50 ″/px." in tab._pista_calculos.text()
+    assert "Muestreo del Equipo: (sin nombre) en Cielo fino." in (
+        tab._pista_calculos.text()
+    )
+    assert "Rango adecuado (Dawes y Seeing): 0.25–0.50 ″/px." in (
+        tab._pista_calculos.text()
+    )
     assert tab._muestreo.text() == "Submuestreado"
     assert "#F39C12" in tab._muestreo.styleSheet()
+
+    tab.deleteLater()
+
+
+def test_pista_calculos_con_equipo_y_barra_mayor(memory_db):
+    """Cálculos: la pista resume el equipo y la barra gana alto y ancho.
+
+    Regresiones del reparto del espacio que gana el Telescopio al
+    agruparse en dos filas: la pista empieza por «Muestreo del Equipo:
+    {nombre} en {ubicación}» —nombre vacío → «(sin nombre)», y el combo
+    ya trae «(sin ubicación)»— y se repinta al teclear el nombre; el
+    bloque abre márgenes y espaciado para llevarse ese alto, y en su
+    fila la `BarraMuestreo` comparte stretch con la pista (más larga en
+    horizontal) y pasa de 16 a 24 px de alto.
+    """
+    import os
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PyQt6.QtWidgets import QApplication
+
+    from ui.equipment_tab.equipos import EquiposTab
+
+    _app = QApplication.instance() or QApplication([])
+    tab = EquiposTab()
+
+    tel = tab._tel_principal.form
+    tel._apertura.setValue(80.0)
+    tel._focal.setValue(400.0)
+    tab._cam_principal.form._pixel.setValue(2.4)
+
+    # Sin nombre y sin ubicación, pero ya con rango (Dawes solo).
+    assert tab._pista_calculos.text().startswith(
+        "Muestreo del Equipo: (sin nombre) en (sin ubicación)."
+    )
+    assert "Rango adecuado (Dawes y Seeing):" in tab._pista_calculos.text()
+
+    # El nombre se teclea en la ficha y la pista lo repinta al instante.
+    tab._nombre.setText("Noche larga")
+    assert tab._pista_calculos.text().startswith(
+        "Muestreo del Equipo: Noche larga en (sin ubicación)."
+    )
+
+    def fila_de(widget) -> int:
+        """Índice de la fila del bloque que contiene `widget` (-1 = no)."""
+        vertical = widget.parentWidget().layout()
+        for i in range(vertical.count()):
+            fila = vertical.itemAt(i).layout()
+            if fila is None:
+                continue
+            for j in range(fila.count()):
+                if fila.itemAt(j).widget() is widget:
+                    return i
+        return -1
+
+    # La barra es de 24 px y su fila la estira igual que la pista.
+    assert (tab._barra.minimumHeight(), tab._barra.maximumHeight()) == (24, 24)
+    indice = fila_de(tab._barra)
+    assert indice >= 0 and fila_de(tab._pista_calculos) == indice, "juntas"
+    fila = tab._barra.parentWidget().layout().itemAt(indice).layout()
+    assert fila.stretch(fila.indexOf(tab._barra)) == 1
+    assert fila.stretch(fila.indexOf(tab._pista_calculos)) == 1
+
+    # El bloque abre márgenes y espaciado: se lleva el alto ganado.
+    caja = tab._barra.parentWidget().layout()
+    caja_margen = caja.contentsMargins()
+    assert caja_margen.top() + caja_margen.bottom() >= 14
+    assert caja.spacing() >= 8
 
     tab.deleteLater()
 
