@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import QSize, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QAbstractSpinBox,
     QCheckBox,
@@ -30,6 +30,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListView,
     QListWidget,
     QListWidgetItem,
     QMessageBox,
@@ -93,6 +94,42 @@ _PIEZAS: dict[str, dict] = {
         "modelo": Mount,
     },
 }
+
+
+class ListaGuardados(QListWidget):
+    """Lista de guardados (equipos o ubicaciones) cuyo *sizeHint* no manda.
+
+    `QListWidget` pide de por sí ~192 px de alto; si ese sizeHint
+    llegara a la sección de la lista, la fila superior se hincharía y
+    empujaría lo que haya debajo (en Equipos, el scroll de la ficha,
+    que a 1000×600 solo tiene 12 px de holgura —lo comprueba
+    `test_ficha_sin_hint_de_solo_visuales_y_cabe_sin_scroll`—; en
+    Ubicaciones, el scroll del sitio). Aquí el alto preferido es fijo y
+    pequeño, pero **puede crecer**: la sección le da stretch, así que
+    la lista llena lo que sobre y caben ~7 filas en vez de 2.
+
+    Va a 10 pt y con el texto elegido al medio: lo que no quepa se
+    corta por el centro con «…» —el texto completo va en el tooltip de
+    cada fila— y la barra horizontal, que se comía 12 px, queda
+    desactivada. Compartida por `EquiposTab` y `UbicacionesTab`.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWordWrap(False)
+        self.setTextElideMode(Qt.TextElideMode.ElideMiddle)
+        self.setResizeMode(QListView.ResizeMode.Adjust)
+        self.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.setMinimumHeight(40)
+        fuente = self.font()
+        fuente.setPointSizeF(10)
+        self.setFont(fuente)
+
+    def sizeHint(self) -> QSize:
+        """Alto preferido de 60 px: manda la sección, no la lista."""
+        return QSize(400, 60)
 
 
 def _opt_f(spin: QDoubleSpinBox) -> float | None:

@@ -27,7 +27,7 @@ base.
 """
 from __future__ import annotations
 
-from PyQt6.QtCore import QSize, Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QResizeEvent
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -36,8 +36,6 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QListView,
-    QListWidget,
     QListWidgetItem,
     QMessageBox,
     QPushButton,
@@ -57,6 +55,7 @@ from equipment.models import CATEGORIES, EquipmentSetup
 from .componentes import (
     CameraForm,
     FiltersPanel,
+    ListaGuardados,
     MountForm,
     PartEditor,
     TelescopeForm,
@@ -93,43 +92,6 @@ def _ancho_seccion(ancho_tab: int) -> int:
     """
     hueco = max(0, ancho_tab - 22)  # márgenes (6+6) + spacing (10)
     return min(_ANCHO_SECCION_MAX, hueco // 2)
-
-
-class _ListaEquipos(QListWidget):
-    """Lista de equipos guardados cuyo *sizeHint* no manda sobre la sección.
-
-    `QListWidget` pide de por sí ~192 px de alto; si ese sizeHint
-    llegara a la sección, la fila superior crecería por encima de la
-    cabecera y empujaría el scroll de la ficha, que a 1000×600 solo
-    tiene 12 px de holgura (lo comprueba
-    `test_ficha_sin_hint_de_solo_visuales_y_cabe_sin_scroll`). Aquí el
-    alto preferido es fijo y pequeño, pero **puede crecer**: la sección
-    le da stretch, así que la lista llena los ~112 px que quedan y caben
-    ~7 filas en vez de 2.
-
-    Va a 10 pt y con el texto elegido al medio: el contenido completo
-    `nombre · categoría · ubicación` mide 416 px y hay 424 útiles; lo
-    que no quepa se corta por el centro con «…» (el texto completo va
-    en el tooltip) y la barra horizontal —que se comía otros 12 px—
-    queda desactivada.
-    """
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.setWordWrap(False)
-        self.setTextElideMode(Qt.TextElideMode.ElideMiddle)
-        self.setResizeMode(QListView.ResizeMode.Adjust)
-        self.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-        self.setMinimumHeight(40)
-        fuente = self.font()
-        fuente.setPointSizeF(10)
-        self.setFont(fuente)
-
-    def sizeHint(self) -> QSize:
-        """Alto preferido de 60 px: manda la sección, no la lista."""
-        return QSize(400, 60)
 
 
 #: Los 5 niveles de muestreo y sus colores (etiqueta y barra), decididos
@@ -361,7 +323,7 @@ class EquiposTab(QWidget):
         etiqueta.
 
         - la lista va con stretch para llenar lo que sobre
-          (`_ListaEquipos.sizeHint()` es pequeño a propósito: su
+          (`ListaGuardados.sizeHint()` es pequeño a propósito: su
           sizeHint natural de 192 px hincharía la fila superior y
           empujaría el scroll de la ficha);
         - los botones van en fila («➕ Nuevo…» + «🗑 Eliminar» no caben
@@ -374,7 +336,7 @@ class EquiposTab(QWidget):
         lay.setContentsMargins(12, 4, 12, 6)
         lay.setSpacing(6)
 
-        self._lista = _ListaEquipos()
+        self._lista = ListaGuardados()
         self._lista.currentRowChanged.connect(self._al_elegir_fila)
         lay.addWidget(self._lista, 1)
 

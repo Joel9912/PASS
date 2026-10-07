@@ -1,10 +1,11 @@
 """Subpestaña **Ubicaciones**: sección «Ubicaciones guardados» + ficha.
 
 Layout simétrico al de Equipos, **sin `QSplitter`**: dos filas — la
-superior es `[sección «Ubicaciones guardados» (ancho fijo 280) | sección
-«Ubicación»]`, con la ficha **fuera del scroll** para que siempre esté
-visible; en la inferior, un scroll **a todo el ancho** con el
-``SitioPanel`` (rosácea + esquemático + mapa de CL).
+superior es `[sección «Ubicaciones guardados» sin rótulo, con el ancho
+que le deja la ficha (`_ancho_lista`: la ficha manda para caber en
+2 filas) | sección «Ubicación»]`, con la ficha **fuera del scroll** para
+que siempre esté visible; en la inferior, un scroll **a todo el
+ancho** con el ``SitioPanel`` (rosácea + esquemático + mapa de CL).
 
 La sección «Ubicación» es **una sola** (pedido del usuario, al estilo de
 la cabecera de Equipo): su título con «Guardar ubicación» y dos filas de
@@ -20,6 +21,7 @@ la base, D-5).
 from __future__ import annotations
 
 from PyQt6.QtCore import QEvent, Qt, pyqtSignal
+from PyQt6.QtGui import QResizeEvent
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -28,7 +30,6 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QListWidget,
     QListWidgetItem,
     QMessageBox,
     QPushButton,
@@ -42,8 +43,13 @@ from equipment.images import list_images
 from equipment.models import Location
 from planners.analytical_transit import local_utc_offset
 
-from .componentes import sin_botones
+from .componentes import ListaGuardados, sin_botones
 from .sitio import SitioPanel
+
+#: Suelo del ancho de la sección de la lista: más estrecho, deja de ser útil.
+_ANCHO_LISTA_MIN = 200
+#: Techo del ancho de la sección de la lista: el mismo que la de Equipos.
+_ANCHO_LISTA_MAX = 450
 
 
 class UbicacionesTab(QWidget):
@@ -66,16 +72,18 @@ class UbicacionesTab(QWidget):
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(10)
 
-        # Fila superior: la sección de la lista a la izquierda (ancho
-        # fijo, a la misma altura que la ficha) y, a la derecha, la
-        # sección «Ubicación» fusionada, **fuera del scroll** para que
-        # siempre se vea.
+        # Fila superior: la sección de la lista a la izquierda (su
+        # ancho lo da `_ancho_lista`, que cede hueco a la ficha para
+        # que quepa en 2 filas) y, a la derecha, la sección «Ubicación»
+        # fusionada, **fuera del scroll** para que siempre se vea. La
+        # ficha se construye primero: el ancho de la lista depende de
+        # su mínimo. Sus dos filas de campos son contractuales (las
+        # comprueba el test de regresión).
+        self._ficha = self._seccion_ubicacion()
         fila_sup = QHBoxLayout()
         fila_sup.setSpacing(10)
-        fila_sup.addWidget(self._seccion_lista())
-        # Guardada como atributo: sus dos filas de campos son
-        # contractuales (las comprueba el test de regresión).
-        self._ficha = self._seccion_ubicacion()
+        self._marco_lista = self._seccion_lista()
+        fila_sup.addWidget(self._marco_lista)
         fila_sup.addWidget(self._ficha, 1)
         layout.addLayout(fila_sup)
 
@@ -101,37 +109,62 @@ class UbicacionesTab(QWidget):
 
     # -- construcción ------------------------------------------------------
 
-    def _seccion_lista(self) -> QFrame:
-        """Sección «Ubicaciones guardados»: su lista con scroll propio y sus botones.
+    def _ancho_lista(self) -> int:
+        """Ancho de la sección de la lista: lo que queda tras el mínimo de la ficha.
 
-        Réplica de la de Equipos: ancho fijo (280 px) para quedar a la
-        misma altura que la ficha de la derecha (barra + Geografía|Cielo,
-        ~199 px); el título con word-wrap (`PanelTitle` a 13 pt pediría
-        ~370 px en una línea) y la lista con el alto limitado a 100 px
-        para rellenar la fila sin superar el sizeHint de la ficha (su
-        sizeHint natural es de 192 px y dispararía el scroll de abajo).
-        Los botones van en fila porque en columna no caben a esa
-        altura; «🗑» lleva el «Eliminar» en tooltip (en fila con
-        «➕ Nueva…» no caben los dos textos).
+        La ficha manda (el usuario pidió que la lista se ajuste para
+        que «Ubicación» quepa en 2 filas): hueco de la pestaña menos el
+        ancho mínimo que piden sus dos filas, con suelo
+        `_ANCHO_LISTA_MIN` (más estrecho deja de ser útil) y techo
+        `_ANCHO_LISTA_MAX` (el mismo que la sección de Equipos). Si el
+        hueco no llega ni al suelo, manda el suelo: la lista no baja de
+        `_ANCHO_LISTA_MIN` y la fila queda estrecha en ventanas menores
+        que la mínima para las dos.
+
+        Returns:
+            Ancho fijo que hay que darle a la sección.
+        """
+        hueco = max(0, self.width() - 22)  # márgenes (6+6) + spacing (10)
+        min_ficha = self._ficha.minimumSizeHint().width()
+        return max(_ANCHO_LISTA_MIN, min(_ANCHO_LISTA_MAX, hueco - 10 - min_ficha))
+
+    def resizeEvent(self, ev: QResizeEvent) -> None:
+        """Recalcula el ancho de la sección de la lista al redimensionar.
+
+        El ancho depende del hueco que le queda a la pestaña tras el
+        mínimo de la ficha; sin esto, la lista se quedaría en el valor
+        del arranque.
+        """
+        super().resizeEvent(ev)
+        marco = getattr(self, "_marco_lista", None)
+        if marco is None:
+            return
+        ancho = self._ancho_lista()
+        if marco.width() != ancho:
+            marco.setFixedWidth(ancho)
+
+    def _seccion_lista(self) -> QFrame:
+        """Sección «Ubicaciones guardados»: su lista y sus botones, sin rótulo.
+
+        Réplica de la de Equipos, con el mismo rótulo quitado:
+        «Ubicaciones guardados» a `PanelTitle` (13 pt) robaba dos
+        líneas y la pestaña ya se llama «Ubicaciones». El ancho lo da
+        `_ancho_lista` —la ficha manda, para que quepa en 2 filas— y la
+        lista va con stretch **sin tope de alto**
+        (`ListaGuardados.sizeHint()` es pequeño a propósito: su
+        sizeHint natural de 192 px hincharía la fila y empujaría el
+        scroll de abajo). Los botones van en fila; «🗑» lleva el
+        «Eliminar» en tooltip (en fila con «➕ Nueva…» no caben los dos
+        textos).
         """
         marco = QFrame()
         marco.setObjectName("GroupFrame")
-        marco.setFixedWidth(280)
+        marco.setFixedWidth(self._ancho_lista())
         lay = QVBoxLayout(marco)
         lay.setContentsMargins(12, 4, 12, 6)
         lay.setSpacing(6)
 
-        titulo = QLabel("Ubicaciones guardados")
-        titulo.setObjectName("PanelTitle")
-        titulo.setWordWrap(True)
-        lay.addWidget(titulo)
-
-        self._lista = QListWidget()
-        # El sizeHint natural de QListWidget (192 px) dispararía la fila
-        # superior; con tope la sección cabe a la altura de la ficha
-        # (barra + Geografía|Cielo ≈ 199 px) y la lista la rellena.
-        self._lista.setMinimumHeight(40)
-        self._lista.setMaximumHeight(100)
+        self._lista = ListaGuardados()
         self._lista.currentRowChanged.connect(self._al_elegir_fila)
         lay.addWidget(self._lista, 1)
 
@@ -288,6 +321,8 @@ class UbicacionesTab(QWidget):
         ids: list[int] = []
         for lugar in localizations.list_locations():
             item = QListWidgetItem(str(lugar["name"]))
+            # La lista elige al medio: el nombre completo va al tooltip.
+            item.setToolTip(str(lugar["name"]))
             item.setData(Qt.ItemDataRole.UserRole, lugar["id"])
             self._lista.addItem(item)
             ids.append(lugar["id"])

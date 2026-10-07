@@ -353,10 +353,11 @@ def test_ubicaciones_seccion_lista_arriba_sin_splitter(memory_db):
     """La lista «Ubicaciones guardados» es una sección de la fila superior, sin splitter.
 
     Regresión de la reestructuración (simétrica a la de Equipos): la
-    barra lateral (QSplitter) desaparece; la sección de la lista va a
-    280 px en la fila superior **a la misma altura** que la ficha de la
-    derecha (sección «Ubicación» fusionada), que ahora queda
-    **fuera del scroll**; debajo, el `SitioPanel` corre a todo el ancho.
+    barra lateral (QSplitter) desaparece; la sección de la lista —**sin
+    rótulo** y con el ancho que le deja la ficha (`_ancho_lista`: la
+    ficha manda para que «Ubicación» quepa en 2 filas)— va en la fila
+    superior **a la misma altura** que la ficha, que queda **fuera del
+    scroll**; debajo, el `SitioPanel` corre a todo el ancho.
     """
     import os
 
@@ -364,7 +365,6 @@ def test_ubicaciones_seccion_lista_arriba_sin_splitter(memory_db):
 
     from PyQt6.QtWidgets import (
         QApplication,
-        QFrame,
         QLabel,
         QListWidget,
         QPushButton,
@@ -382,25 +382,42 @@ def test_ubicaciones_seccion_lista_arriba_sin_splitter(memory_db):
 
     assert tab.findChildren(QSplitter) == [], "no debe quedar ningún QSplitter"
 
-    # La sección: marco de ancho fijo con su título PanelTitle.
-    secciones = [
-        frame
-        for frame in tab.findChildren(QFrame)
-        if frame.objectName() == "GroupFrame" and frame.minimumWidth() == 280
-    ]
-    assert len(secciones) == 1, "debe haber exactamente una sección de lista a 280 px"
-    seccion = secciones[0]
+    # La sección es el primer elemento de la fila superior (por
+    # estructura, no por objectName: «GroupFrame» es selector de estilo)
+    # y su ancho lo calcula `_ancho_lista` —la ficha manda, para que
+    # «Ubicación» quepa en 2 filas—.
+    fila_sup = tab.layout().itemAt(0).layout()
+    seccion = fila_sup.itemAt(0).widget()
+    assert seccion is not None and seccion.objectName() == "GroupFrame"
+    hueco = tab.width() - 22  # márgenes (6+6) + spacing (10)
+    esperado = max(200, min(450, hueco - 10 - tab._ficha.minimumSizeHint().width()))
+    assert seccion.minimumWidth() == esperado, (
+        "el ancho de la lista sale de la regla: hueco − mínimo de la ficha, con suelo y techo"
+    )
+    # Con la pestaña suficientemente ancha, la sección llega a su techo
+    # (y al pasar por ahí se comprueba que `resizeEvent` la recalcula).
+    tab.resize(3000, 600)
+    _app.processEvents()
+    assert seccion.minimumWidth() == 450, "en pestaña ancha la sección va a su techo"
+    tab.resize(1000, 600)
+    _app.processEvents()
     titulos = [
         etiqueta
         for etiqueta in seccion.findChildren(QLabel)
-        if etiqueta.objectName() == "PanelTitle" and etiqueta.text() == "Ubicaciones guardados"
+        if etiqueta.objectName() == "PanelTitle"
     ]
-    assert len(titulos) == 1, "la sección debe titularse «Ubicaciones guardados»"
+    assert titulos == [], "el rótulo «Ubicaciones guardados» se quitó: la pestaña ya se llama así"
 
-    # La lista limita su alto: si creciera (sizeHint de 192 px) la fila
-    # superior se hincharía y empujaría el scroll de abajo.
+    # La lista no infla la fila superior: sizeHint pequeño, **sin tope
+    # de alto** y llenando la sección (el tope de 100 px la recortaba).
     listas = seccion.findChildren(QListWidget)
-    assert len(listas) == 1 and 40 <= listas[0].maximumHeight() <= 100
+    assert len(listas) == 1
+    lista = listas[0]
+    assert lista.sizeHint().height() <= 60, "el sizeHint de la lista no debe mandar"
+    assert lista.maximumHeight() > 1000, "la lista no debe llevar tope de alto"
+    assert lista.height() >= seccion.height() // 2, (
+        f"la lista ({lista.height()} px) debe llenar la sección ({seccion.height()} px)"
+    )
 
     # Los botones van en fila (misma altura) y «🗑» lleva «Eliminar» en tooltip.
     bots = seccion.findChildren(QPushButton)
