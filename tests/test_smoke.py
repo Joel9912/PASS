@@ -349,15 +349,17 @@ def test_ubicaciones_seccion_unica_y_vista_previa_mapa(tmp_path):
     _app.processEvents()
 
 
-def test_ubicaciones_seccion_lista_arriba_sin_splitter(memory_db):
-    """La lista «Ubicaciones guardados» es una sección de la fila superior, sin splitter.
+def test_ubicaciones_todo_en_un_scroll_sin_splitter(memory_db):
+    """La lista, la ficha y el sitio viven en UN solo scroll, sin splitter.
 
     Regresión de la reestructuración (simétrica a la de Equipos): la
-    barra lateral (QSplitter) desaparece; la sección de la lista —**sin
-    rótulo** y con el ancho que le deja la ficha (`_ancho_lista`: la
-    ficha manda para que «Ubicación» quepa en 2 filas)— va en la fila
-    superior **a la misma altura** que la ficha, que queda **fuera del
-    scroll**; debajo, el `SitioPanel` corre a todo el ancho.
+    barra lateral (QSplitter) desaparece y la pestaña no deja nada
+    fijo —su único hijo directo es el `QScrollArea`—, así que la
+    sección de la lista, la ficha «Ubicación» y el `SitioPanel` (a
+    todo el ancho) se ven todos con la misma barra. La sección va
+    **sin rótulo** y con el ancho que le deja la ficha (`_ancho_lista`,
+    calculado sobre el viewport real del scroll: la ficha manda para
+    que «Ubicación» quepa en 2 filas).
     """
     import os
 
@@ -382,23 +384,34 @@ def test_ubicaciones_seccion_lista_arriba_sin_splitter(memory_db):
 
     assert tab.findChildren(QSplitter) == [], "no debe quedar ningún QSplitter"
 
-    # La sección es el primer elemento de la fila superior (por
-    # estructura, no por objectName: «GroupFrame» es selector de estilo)
-    # y su ancho lo calcula `_ancho_lista` —la ficha manda, para que
-    # «Ubicación» quepa en 2 filas—.
-    fila_sup = tab.layout().itemAt(0).layout()
+    # Un solo hijo directo de la pestaña: el scroll. Nada queda fijo
+    # fuera de él (ése era el objetivo: las gráficas sin cabecera que
+    # les robara altura).
+    assert tab.layout().count() == 1, "la pestaña solo debe contener el scroll"
+    area = tab.layout().itemAt(0).widget()
+    assert isinstance(area, QScrollArea), "el hijo directo debe ser el scroll"
+    assert tab.findChildren(QScrollArea) == [area], "debe haber exactamente un scroll"
+
+    # Dentro del scroll: primero la fila [lista | ficha] y debajo el
+    # sitio, a todo el ancho.
+    flay = area.widget().layout()
+    fila_sup = flay.itemAt(0).layout()
     seccion = fila_sup.itemAt(0).widget()
     assert seccion is not None and seccion.objectName() == "GroupFrame"
-    hueco = tab.width() - 22  # márgenes (6+6) + spacing (10)
+    assert flay.itemAt(1).widget() is tab._sitio, "el sitio va debajo de la fila, en el scroll"
+
+    # El ancho de la lista sale del viewport real del scroll (hueco
+    # tras el mínimo de la ficha, con suelo 200 y techo 450).
+    hueco = area.viewport().width()
     esperado = max(200, min(450, hueco - 10 - tab._ficha.minimumSizeHint().width()))
     assert seccion.minimumWidth() == esperado, (
-        "el ancho de la lista sale de la regla: hueco − mínimo de la ficha, con suelo y techo"
+        "el ancho de la lista sale de la regla: viewport − mínimo de la ficha, con suelo y techo"
     )
-    # Con la pestaña suficientemente ancha, la sección llega a su techo
+    # Con el scroll suficientemente ancho, la sección llega a su techo
     # (y al pasar por ahí se comprueba que `resizeEvent` la recalcula).
     tab.resize(3000, 600)
     _app.processEvents()
-    assert seccion.minimumWidth() == 450, "en pestaña ancha la sección va a su techo"
+    assert seccion.minimumWidth() == 450, "con scroll ancho la sección va a su techo"
     tab.resize(1000, 600)
     _app.processEvents()
     titulos = [
@@ -425,10 +438,9 @@ def test_ubicaciones_seccion_lista_arriba_sin_splitter(memory_db):
     assert abs(bots[0].y() - bots[1].y()) <= 2, "los botones deben compartir fila"
     assert "Eliminar" in (bots[1].toolTip() or "")
 
-    # Fila superior: la sección ocupa la misma banda que la ficha
-    # derecha (sección «Ubicación»): mismo pie abajo. Y el sizeHint de
-    # la sección no manda: si lo superara, la fila se hincharía y
-    # empujaría el scroll.
+    # La sección y la ficha derecha ocupan la misma banda (mismo pie
+    # abajo) y el sizeHint de la sección no manda: si lo superara, la
+    # fila se hincharía a costa del sitio.
     assert abs(
         (seccion.y() + seccion.height())
         - (tab._ficha.y() + tab._ficha.height())
@@ -437,15 +449,10 @@ def test_ubicaciones_seccion_lista_arriba_sin_splitter(memory_db):
         "el sizeHint de la sección no debe ser el que dispare la fila superior"
     )
 
-    # La ficha queda FUERA del scroll; dentro solo va el sitio.
-    areas = tab.findChildren(QScrollArea)
-    assert len(areas) == 1
-    area = areas[0]
-    assert not area.isAncestorOf(tab._ficha), (
-        "la ficha no debe vivir dentro del scroll"
-    )
+    # Todo vive dentro del scroll: lista, ficha y sitio.
+    assert area.isAncestorOf(seccion), "la sección de la lista debe ir en el scroll"
+    assert area.isAncestorOf(tab._ficha), "la ficha «Ubicación» debe ir en el scroll"
     assert area.isAncestorOf(tab._sitio), "el SitioPanel sí va en el scroll"
-    assert area.y() >= seccion.y() + seccion.height(), "el scroll debe ir bajo la fila superior"
     assert area.width() >= tab.width() - 30, (
         f"scroll a {area.width()} px de {tab.width()} (debe ir a todo el ancho)"
     )

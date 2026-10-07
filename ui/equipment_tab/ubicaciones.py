@@ -1,11 +1,12 @@
 """Subpestaña **Ubicaciones**: sección «Ubicaciones guardados» + ficha.
 
-Layout simétrico al de Equipos, **sin `QSplitter`**: dos filas — la
-superior es `[sección «Ubicaciones guardados» sin rótulo, con el ancho
-que le deja la ficha (`_ancho_lista`: la ficha manda para caber en
-2 filas) | sección «Ubicación»]`, con la ficha **fuera del scroll** para
-que siempre esté visible; en la inferior, un scroll **a todo el
-ancho** con el ``SitioPanel`` (rosácea + esquemático + mapa de CL).
+Layout **sin `QSplitter` y con un solo scroll, nada fijo** (pedido del
+usuario): dentro de la zona con scroll va `[sección «Ubicaciones
+guardados» sin rótulo, con el ancho que le deja la ficha
+(`_ancho_lista`: la ficha manda para caber en 2 filas) | sección
+«Ubicación»]` y, debajo, el ``SitioPanel`` (rosácea + esquemático +
+mapa de CL) a todo el ancho: sin cabecera fija, las gráficas tienen
+toda la altura que sobra en vez de quedar cortadas.
 
 La sección «Ubicación» es **una sola** (pedido del usuario, al estilo de
 la cabecera de Equipo): su título con «Guardar ubicación» y dos filas de
@@ -72,34 +73,35 @@ class UbicacionesTab(QWidget):
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(10)
 
-        # Fila superior: la sección de la lista a la izquierda (su
-        # ancho lo da `_ancho_lista`, que cede hueco a la ficha para
-        # que quepa en 2 filas) y, a la derecha, la sección «Ubicación»
-        # fusionada, **fuera del scroll** para que siempre se vea. La
-        # ficha se construye primero: el ancho de la lista depende de
-        # su mínimo. Sus dos filas de campos son contractuales (las
-        # comprueba el test de regresión).
+        # Un solo scroll, nada fijo (pedido del usuario): la lista, la
+        # ficha y el sitio viven dentro de la misma zona con scroll, así
+        # las gráficas tienen toda la altura que sobra en vez de quedar
+        # cortadas bajo una cabecera fija. La ficha se construye
+        # primero: el ancho de la lista depende de su mínimo
+        # (`_ancho_lista`, para que «Ubicación» quepa en 2 filas), y sus
+        # dos filas de campos son contractuales (las comprueba el test
+        # de regresión).
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        contenido = QWidget()
+        flay = QVBoxLayout(contenido)
+        flay.setContentsMargins(0, 0, 0, 0)
+        flay.setSpacing(10)
+
         self._ficha = self._seccion_ubicacion()
         fila_sup = QHBoxLayout()
         fila_sup.setSpacing(10)
         self._marco_lista = self._seccion_lista()
         fila_sup.addWidget(self._marco_lista)
         fila_sup.addWidget(self._ficha, 1)
-        layout.addLayout(fila_sup)
+        flay.addLayout(fila_sup)
 
-        # Fila inferior: el sitio (rosácea + esquemático + mapa) en un
-        # panel con scroll vertical, **a todo el ancho**.
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        contenido = QWidget()
-        flay = QVBoxLayout(contenido)
-        flay.setContentsMargins(0, 0, 6, 0)
-        flay.setSpacing(10)
         self._sitio = SitioPanel()
         flay.addWidget(self._sitio)
         flay.addStretch(1)
-        scroll.setWidget(contenido)
-        layout.addWidget(scroll, 1)
+
+        self._scroll.setWidget(contenido)
+        layout.addWidget(self._scroll, 1)
 
         # Conectado al final: el esquemático ya existe cuando se carga
         # la primera fila (los spins emiten al rellenarse).
@@ -113,27 +115,38 @@ class UbicacionesTab(QWidget):
         """Ancho de la sección de la lista: lo que queda tras el mínimo de la ficha.
 
         La ficha manda (el usuario pidió que la lista se ajuste para
-        que «Ubicación» quepa en 2 filas): hueco de la pestaña menos el
-        ancho mínimo que piden sus dos filas, con suelo
+        que «Ubicación» quepa en 2 filas): hueco real del scroll —el
+        **viewport**, que ya descuenta márgenes, marco y barra vertical;
+        contar solo el ancho de la pestaña dejaría la fila sin esos
+        ~22 px y saldría barra horizontal incluso en la ventana de
+        1536— menos el ancho mínimo que piden las dos filas, con suelo
         `_ANCHO_LISTA_MIN` (más estrecho deja de ser útil) y techo
         `_ANCHO_LISTA_MAX` (el mismo que la sección de Equipos). Si el
-        hueco no llega ni al suelo, manda el suelo: la lista no baja de
-        `_ANCHO_LISTA_MIN` y la fila queda estrecha en ventanas menores
-        que la mínima para las dos.
+        hueco no llega ni al suelo, manda el suelo: la fila se queda
+        corta y el scroll de la pestaña enseña su barra horizontal.
 
         Returns:
             Ancho fijo que hay que darle a la sección.
         """
-        hueco = max(0, self.width() - 22)  # márgenes (6+6) + spacing (10)
+        area = getattr(self, "_scroll", None)
+        if area is not None and area.viewport().width() > 0:
+            hueco = area.viewport().width()
+        else:
+            # Aún sin viewport (construcción): estimo con la pestaña y
+            # `resizeEvent` lo corrige en cuanto hay medidas reales.
+            hueco = max(0, self.width() - 22)
         min_ficha = self._ficha.minimumSizeHint().width()
         return max(_ANCHO_LISTA_MIN, min(_ANCHO_LISTA_MAX, hueco - 10 - min_ficha))
 
     def resizeEvent(self, ev: QResizeEvent) -> None:
         """Recalcula el ancho de la sección de la lista al redimensionar.
 
-        El ancho depende del hueco que le queda a la pestaña tras el
-        mínimo de la ficha; sin esto, la lista se quedaría en el valor
-        del arranque.
+        El ancho depende del viewport del scroll (hueco real tras el
+        mínimo de la ficha), que a su vez cambia con el tamaño de la
+        ventana; sin esto, la lista se quedaría en el valor del
+        arranque. Se recalcula en cada resize, también de alto, porque
+        la barra vertical del scroll solo aparece cuando el contenido
+        no cabe y eso estrecha el viewport.
         """
         super().resizeEvent(ev)
         marco = getattr(self, "_marco_lista", None)
@@ -152,10 +165,9 @@ class UbicacionesTab(QWidget):
         `_ancho_lista` —la ficha manda, para que quepa en 2 filas— y la
         lista va con stretch **sin tope de alto**
         (`ListaGuardados.sizeHint()` es pequeño a propósito: su
-        sizeHint natural de 192 px hincharía la fila y empujaría el
-        scroll de abajo). Los botones van en fila; «🗑» lleva el
-        «Eliminar» en tooltip (en fila con «➕ Nueva…» no caben los dos
-        textos).
+        sizeHint natural de 192 px hincharía la fila). Los botones van
+        en fila; «🗑» lleva el «Eliminar» en tooltip (en fila con
+        «➕ Nueva…» no caben los dos textos).
         """
         marco = QFrame()
         marco.setObjectName("GroupFrame")
