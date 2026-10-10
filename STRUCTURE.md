@@ -107,7 +107,9 @@ Planning-Stacking-Suite/
 │   ├── planner_equip_tab/README.md  # Comparativas por métricas de usuario
 │   ├── stacker_tab/              # Asistente Apilador: cinco pasos
 │   │   ├── __init__.py           # StackerPage y orquestación de fases
-│   │   ├── pasos.py              # Paneles y miniatura/gráfica
+│   │   ├── pasos_common.py     # Helpers de los paneles (fichas, QSS, previews)
+│   │   ├── paneles/            # Un módulo por paso: sesiones, calibrar,
+│   │   │                       #   auditar, apilar, final (re-export en __init__)
 │   │   ├── visor_sesiones.py     # Vista interactiva del FITS del paso Sesiones
 │   │   ├── worker.py             # Tareas Qt cancelables
 │   │   └── README.md

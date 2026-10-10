@@ -79,7 +79,7 @@ def test_boton_apilar_comparte_fila_con_titulo():
     """El botón se sitúa junto al título en vez de consumir otra fila inferior."""
     from PyQt6.QtWidgets import QHBoxLayout
 
-    from ui.stacker_tab.pasos import PanelApilar
+    from ui.stacker_tab.paneles import PanelApilar
 
     panel = PanelApilar()
     contenido = panel._scroll.widget().layout()
@@ -94,7 +94,7 @@ def test_final_muestra_preview_rgb_y_fallo_legible(tmp_path):
     import numpy as np
     from astropy.io import fits
 
-    from ui.stacker_tab.pasos import PanelFinal
+    from ui.stacker_tab.paneles import PanelFinal
 
     ruta = tmp_path / "pila.fit"
     datos = np.arange(3 * 24 * 32, dtype=np.float32).reshape(3, 24, 32)
@@ -116,16 +116,16 @@ def test_final_muestra_preview_rgb_y_fallo_legible(tmp_path):
 
 def test_final_abre_fits_seleccionado_en_siril_grafico(tmp_path, monkeypatch):
     """El botón lanza el GUI con la ruta elegida, no el CLI de procesado."""
-    from ui.stacker_tab import pasos
+    from ui.stacker_tab.paneles import final as panel_final
 
     gui = tmp_path / "siril.exe"
     gui.touch()
     imagen = tmp_path / "final.fit"
     imagen.touch()
-    monkeypatch.setattr(pasos, "find_siril", lambda: str(tmp_path / "siril-cli.exe"))
+    monkeypatch.setattr(panel_final, "find_siril", lambda: str(tmp_path / "siril-cli.exe"))
     llamadas = []
-    monkeypatch.setattr(pasos.subprocess, "Popen", lambda args: llamadas.append(args))
-    panel = pasos.PanelFinal()
+    monkeypatch.setattr(panel_final.subprocess, "Popen", lambda args: llamadas.append(args))
+    panel = panel_final.PanelFinal()
     panel.mostrar(nombre="final", sesiones=1, registrados=2, descartados=0,
                   salidas=[imagen])
     panel._siril_boton.click()
@@ -136,7 +136,7 @@ def test_autoestirado_resalta_senal_tenue_sin_tocar_datos():
     """El asinh levanta nebulosidad débil y conserva la matriz de entrada."""
     import numpy as np
 
-    from ui.stacker_tab.pasos import _estirar
+    from ui.stacker_tab.pasos_common import _estirar
 
     imagen = np.full((80, 80), 0.002, dtype=np.float32)
     imagen[20:60, 20:60] = 0.0024
@@ -152,7 +152,7 @@ def test_autoestirado_moderado_conserva_contraste_de_nubes_y_cables():
     """Levanta el fondo sin esconder zonas claras u oscuras defectuosas."""
     import numpy as np
 
-    from ui.stacker_tab.pasos import _estirar
+    from ui.stacker_tab.pasos_common import _estirar
 
     rng = np.random.default_rng(23)
     imagen = rng.normal(0.002, 0.00012, (128, 128)).astype(np.float32)
@@ -168,7 +168,7 @@ def test_autoestirado_moderado_conserva_contraste_de_nubes_y_cables():
 
 def test_nombre_vacio_admite_generacion_automatica():
     """El formulario no impide usar la exposición de los frames aceptados."""
-    from ui.stacker_tab.pasos import PanelApilar
+    from ui.stacker_tab.paneles import PanelApilar
 
     assert PanelApilar().nombre() == ""
 
@@ -399,7 +399,7 @@ def test_tabla_sesiones_region_y_ficha_fits():
     """La región sale de las coordenadas FITS y la ficha junta óptica/sitio."""
     from stacks.session_parser import FichaFITS
     from ui.stacker_tab import StackerPage
-    from ui.stacker_tab.pasos import _formato_ficha, _formato_region
+    from ui.stacker_tab.pasos_common import _formato_ficha, _formato_region
 
     assert _formato_region(None) == "—"
     assert _formato_region(FichaFITS()) == "—"
@@ -443,7 +443,7 @@ def test_visor_sesiones_usa_fits_y_seleccion_sin_modificar_originales(tmp_path):
     import numpy as np
     from astropy.io import fits
 
-    from ui.stacker_tab.pasos import PanelSesiones
+    from ui.stacker_tab.paneles import PanelSesiones
 
     sesiones = []
     originales = {}
@@ -495,7 +495,7 @@ def test_visor_ignora_lectura_tardia_y_datos_ausentes():
 def test_cielo_capturado_reutiliza_catalogo_y_no_activa_telescopius(memory_db):
     """Carta centrada en FITS: usa objetos reales, marco y botón aún inerte."""
     from stacks.session_parser import FichaFITS
-    from ui.stacker_tab.pasos import PanelSesiones
+    from ui.stacker_tab.paneles import PanelSesiones
 
     memory_db.execute(
         "INSERT INTO catalog(object_id, catalog, ra_hours, dec_deg)"
@@ -527,7 +527,7 @@ def test_sesiones_diseno_referencia_grupos_fichas_y_escala():
     oculto hasta que haya encuadre, y escala/Región tomadas del FITS.
     """
     from stacks.session_parser import FichaFITS
-    from ui.stacker_tab.pasos import PanelSesiones
+    from ui.stacker_tab.paneles import PanelSesiones
 
     panel = PanelSesiones()
 
@@ -596,7 +596,7 @@ def test_sesiones_objctalt_visible_sin_elevacion_del_observatorio(tmp_path):
     from astropy.io import fits
 
     from stacks.session_parser import ficha_de_luz
-    from ui.stacker_tab.pasos import PanelSesiones
+    from ui.stacker_tab.paneles import PanelSesiones
 
     ruta = tmp_path / "light.fit"
     fits.writeto(ruta, np.zeros((2, 2)), header=fits.Header({
@@ -745,7 +745,7 @@ def test_repartir_anchos_reparte_el_ancho_de_la_cabecera():
     fuente de la plataforma (offscreen en CI, Windows en escritorio): el
     reparto es el mismo para el mismo ancho de cabecera.
     """
-    from ui.stacker_tab.pasos import PanelSesiones
+    from ui.stacker_tab.paneles import PanelSesiones
 
     panel = PanelSesiones()
     tabla = panel._tabla
@@ -771,7 +771,7 @@ def test_tabla_sesiones_anchos_sigue_al_widget():
     importa es que el filtro corre con la cabecera ya medida y llena el
     hueco sin dejar los 100 px por columna de fábrica.
     """
-    from ui.stacker_tab.pasos import PanelSesiones
+    from ui.stacker_tab.paneles import PanelSesiones
 
     panel = PanelSesiones()  # sin padre: su resize manda sobre sus hijos
     sesion = Session(path=Path("/x/noche1"))
@@ -1029,7 +1029,7 @@ def test_siguiente_salta_las_fases_ya_hechas(tmp_path):
 
 def test_opciones_de_apilado_rechazan_lo_que_siril_no_acepta():
     """Combinaciones que SirIL no admite revientan ya en el formulario."""
-    from ui.stacker_tab.pasos import PanelApilar
+    from ui.stacker_tab.paneles import PanelApilar
 
     panel = PanelApilar()
     panel._integracion.setCurrentIndex(panel._integracion.findData("med"))
@@ -1045,7 +1045,7 @@ def test_opciones_de_apilado_rechazan_lo_que_siril_no_acepta():
 
 def test_pesos_todos_a_cero_no_se_aceptan():
     """La puntuación sin pesos no existe: avisa en vez de puntuar a ciegas."""
-    from ui.stacker_tab.pasos import PanelAuditar
+    from ui.stacker_tab.paneles import PanelAuditar
 
     panel = PanelAuditar()
     for spin in panel._pesos.values():
@@ -1147,7 +1147,7 @@ def test_actualizar_repuntua_sin_registrar_y_conserva_las_casillas(tmp_path):
     """«Actualizar» aplica el mínimo nuevo al instante y no pisa elecciones."""
     from PyQt6.QtCore import Qt
 
-    from ui.stacker_tab.pasos import PanelAuditar
+    from ui.stacker_tab.paneles import PanelAuditar
 
     refs = [
         LightRef(
@@ -1189,7 +1189,7 @@ def test_actualizar_repuntua_sin_registrar_y_conserva_las_casillas(tmp_path):
 
 def test_aviso_si_el_minimo_se_lleva_todos_los_frames(tmp_path):
     """Si el mínimo deja el pool vacío, el resumen lo dice (puntuación relativa)."""
-    from ui.stacker_tab.pasos import PanelAuditar
+    from ui.stacker_tab.paneles import PanelAuditar
 
     refs = [
         LightRef(
@@ -1227,7 +1227,7 @@ def test_seleccionar_un_frame_carga_su_miniatura(tmp_path):
     import numpy as np
     from astropy.io import fits
 
-    from ui.stacker_tab.pasos import PanelAuditar
+    from ui.stacker_tab.paneles import PanelAuditar
 
     ruta = tmp_path / "pp_light_00001.fit"
     fits.writeto(ruta, np.full((64, 48), 1000, dtype=np.uint16), overwrite=True)
@@ -1258,7 +1258,7 @@ def test_preview_de_un_cfa_sale_a_color_y_el_mono_en_gris(tmp_path):
     from astropy.io import fits
     from PyQt6.QtGui import QImage
 
-    from ui.stacker_tab.pasos import _preview_fits
+    from ui.stacker_tab.pasos_common import _preview_fits
 
     cfa = np.full((64, 64), 500, dtype=np.uint16)
     cfa[::2, ::2] = 2000  # canal R del mosaico RGGB
@@ -1283,7 +1283,7 @@ def test_preview_enlaza_canales_de_fits_normalizado(tmp_path):
     import numpy as np
     from astropy.io import fits
 
-    from ui.stacker_tab.pasos import _preview_fits
+    from ui.stacker_tab.pasos_common import _preview_fits
 
     cfa = np.empty((64, 64), dtype=np.float32)
     cfa[::2, ::2] = 0.0018  # R
@@ -1305,7 +1305,7 @@ def test_controles_auditoria_comparten_filas_y_ancho():
     """Pesos, criterios y acciones caben juntos; registrar va con la pista."""
     from PyQt6.QtWidgets import QHBoxLayout
 
-    from ui.stacker_tab.pasos import PanelAuditar
+    from ui.stacker_tab.paneles import PanelAuditar
 
     panel = PanelAuditar()
     filas = [
@@ -1346,7 +1346,7 @@ def test_auditoria_tabla_compacta_centrada_y_visor_ampliado(tmp_path):
     from PyQt6.QtCore import Qt
     from PyQt6.QtWidgets import QApplication, QHeaderView
 
-    from ui.stacker_tab.pasos import PanelAuditar
+    from ui.stacker_tab.paneles import PanelAuditar
 
     panel = PanelAuditar()
     panel.resize(1640, 780)
@@ -1382,7 +1382,7 @@ def test_auditoria_no_reserva_hueco_tras_descartada():
     """Con scrollbar visible, las columnas llegan al borde útil de la tabla."""
     from PyQt6.QtWidgets import QApplication, QTableWidgetItem
 
-    from ui.stacker_tab.pasos import PanelAuditar
+    from ui.stacker_tab.paneles import PanelAuditar
 
     panel = PanelAuditar()
     panel.resize(1309, 735)
@@ -1406,7 +1406,7 @@ def test_apilar_bloques_referencia_y_opciones_reales(tmp_path):
     """Los cuatro bloques caben y sus controles alimentan el guion de SirIL."""
     from PyQt6.QtWidgets import QApplication, QGroupBox
 
-    from ui.stacker_tab.pasos import PanelApilar
+    from ui.stacker_tab.paneles import PanelApilar
 
     panel = PanelApilar()
     panel.resize(1309, 735)
@@ -1447,7 +1447,7 @@ def test_apilar_bloques_referencia_y_opciones_reales(tmp_path):
 
 def test_apilar_flat_explicito_no_lanza_trabajo_sin_fits(tmp_path):
     """El flat de drizzle solo se pasa al worker tras validarlo."""
-    from ui.stacker_tab.pasos import PanelApilar
+    from ui.stacker_tab.paneles import PanelApilar
 
     panel = PanelApilar()
     panel._drizzle.setChecked(True)

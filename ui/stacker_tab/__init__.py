@@ -54,7 +54,8 @@ from stacks.stacker import apilar_pool, exportar_apilados
 from ui.config_tab.config_dialog import PROJECT_ROOT_KEY
 from ui.style import PALETTE
 
-from .pasos import PanelApilar, PanelAuditar, PanelCalibrar, PanelFinal, PanelSesiones
+from .paneles import PanelApilar, PanelAuditar, PanelCalibrar, PanelFinal, PanelSesiones
+from .pasos_common import configurar_pyqtgraph
 from .worker import CANCELADO, SirilWorker, arrancar_en_hilo
 
 #: Nombres de los cinco pasos; el orden ES el flujo del asistente.
@@ -105,6 +106,7 @@ class StackerPage(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         """Monta barra de pasos, los 5 paneles, navegación, progreso y log."""
         super().__init__(parent)
+        configurar_pyqtgraph()  # antialias + fondo de la gráfica (A-13: nada al importar)
 
         # --- estado del flujo (la página es la dueña; los paneles solo pintan)
         self.sesiones: list[Session] = []
