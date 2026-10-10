@@ -118,8 +118,9 @@ Planning-Stacking-Suite/
 │   └── README.md
 │
 ├── tests/                # pytest: ficheros test_*.py + conftest.py (detalle en su README)
-│   ├── test_smoke.py
-│   ├── test_settings.py
+│   ├── test_smoke.py / test_ui_equipment.py
+│   ├── test_ui_planner.py / test_ui_config.py
+│   ├── test_settings.py / test_siril_finder.py
 │   ├── test_weather.py
 │   ├── test_planners.py
 │   ├── test_dialogos.py

@@ -64,3 +64,11 @@ def test_siril_version_none_on_failure(memory_settings, monkeypatch):
 
     monkeypatch.setattr(siril_finder.subprocess, "run", raise_oserror)
     assert siril_finder.siril_version("otro.exe") is None
+
+
+def test_find_siril_does_not_crash():
+    """Detección de SirIL funciona aunque no esté instalado (None o ruta)."""
+    from stacks.siril_finder import find_siril
+
+    result = find_siril()
+    assert result is None or isinstance(result, str)
