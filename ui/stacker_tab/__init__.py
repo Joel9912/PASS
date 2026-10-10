@@ -33,8 +33,8 @@ from stacks.calibrator import (
     list_calibrated,
     save_calibration,
 )
+from stacks.frame_metrics import FrameMetrics, extract_metrics
 from stacks.global_pool import GlobalPool, pool_desde_calibradas
-from stacks.metrics import FrameMetrics, extract_metrics
 from stacks.registration import Registro, audit_pool, auditoria_guardada, register_pool
 from stacks.session_parser import (
     FichaFITS,

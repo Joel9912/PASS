@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 
 from stacks.calibrator import CalibrationResult
+from stacks.frame_metrics import FrameMetrics
 from stacks.global_pool import GlobalPool, LightRef
-from stacks.metrics import FrameMetrics
 from stacks.registration import Registro
 from stacks.session_parser import Session
 
@@ -1362,8 +1362,8 @@ def test_auditoria_tabla_compacta_centrada_y_visor_ampliado(tmp_path):
 
     ruta = tmp_path / "pp_light_00001.fit"
     fits.writeto(ruta, np.full((64, 48), 1000, dtype=np.uint16))
+    from stacks.frame_metrics import FrameMetrics
     from stacks.global_pool import LightRef
-    from stacks.metrics import FrameMetrics
     from stacks.registration import Registro
     ref = LightRef(ruta=ruta, sesion="noche", filtro=None, exposicion_s=30.0)
     panel.mostrar(Registro(dir=tmp_path, seq="registro_", frames=[ref]), [

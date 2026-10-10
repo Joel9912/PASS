@@ -1,4 +1,4 @@
-"""stacks/metrics: lectura de las métricas del .seq, puntuación 0–100 y evaluación.
+"""stacks/frame_metrics: lectura de las métricas del .seq, puntuación 0–100 y evaluación.
 
 Ojo: no confundir con `test_metrics.py`, que prueba `equipment/metrics.py`.
 Nada de SirIL aquí: los .seq se escriben a mano con el formato real
@@ -8,14 +8,14 @@ from pathlib import Path
 
 import pytest
 
-from stacks.global_pool import LightRef
-from stacks.metrics import (
+from stacks.frame_metrics import (
     FrameMetrics,
     Pesos,
     evaluar,
     extract_metrics,
     puntuar,
 )
+from stacks.global_pool import LightRef
 from stacks.registration import Registro
 
 

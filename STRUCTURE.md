@@ -42,7 +42,7 @@ Planning-Stacking-Suite/
 │   ├── calibrator.py         # Calibración cruda → working + calibrated_sessions
 │   ├── global_pool.py        # Pool de REFERENCIAS (cero copias)
 │   ├── registration.py       # Auditoría -2pass y registro final con SirIL
-│   ├── metrics.py            # .seq: puntuación, transparencia y recomendaciones
+│   ├── frame_metrics.py      # .seq: puntuación, transparencia y recomendaciones
 │   ├── stacker.py            # Opciones SirIL, pilas por canal y RGB
 │   └── README.md
 │
@@ -132,7 +132,7 @@ Planning-Stacking-Suite/
 │   ├── test_ldn_loader.py
 │   ├── test_session_parser.py / test_siril_runner.py
 │   ├── test_calibrator.py / test_global_pool.py
-│   ├── test_registration.py / test_stack_metrics.py
+│   ├── test_registration.py / test_frame_metrics.py
 │   ├── test_stacker.py / test_stacker_tab.py
 │   ├── conftest.py
 │   └── README.md

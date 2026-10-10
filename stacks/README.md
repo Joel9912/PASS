@@ -10,7 +10,7 @@ Integración de SirIL **externo** por CLI. Los originales se leen, nunca se modi
 - `calibrator.py` — másters, calibración cruda por sesión y persistencia en `calibrated_sessions` desde el hilo UI; la carpeta global configurada se pasa al worker como dato. El log identifica procedencia, enlaces y medianas FITS sin atribuir unidades ADU a valores normalizados.
 - `global_pool.py` — referencias a los lights calibrados, sin copias.
 - `registration.py` — auditoría `register -2pass` reutilizable solo con manifiesto de lights y secuencia coincidentes; registro final (debayer **o** drizzle) con encuadre, escala, pixfrac, kernel y flat explícito.
-- `metrics.py` — lectura `.seq`, conversión del fondo normalizado de SirIL a ADU equivalentes de 16 bits/s (÷ exposición), puntuación y recomendaciones; la transparencia es un proxy relativo del fondo, no una medición directa. El usuario decide qué descartar.
+- `frame_metrics.py` — lectura `.seq`, conversión del fondo normalizado de SirIL a ADU equivalentes de 16 bits/s (÷ exposición), puntuación y recomendaciones; la transparencia es un proxy relativo del fondo, no una medición directa. El usuario decide qué descartar.
 - `stacker.py` — opciones de `stack` (rechazo/mapas, normalización, precisión, RGB), apilado por canal y composición R/G/B inequívoca. Exportación exclusiva de FITS finales a la carpeta madre sin sobrescribir.
 
 ## Qué hacer aquí

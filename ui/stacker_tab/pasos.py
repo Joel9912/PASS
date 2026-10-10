@@ -51,7 +51,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from stacks.metrics import Evaluacion, FrameMetrics, Pesos, evaluar
+from stacks.frame_metrics import Evaluacion, FrameMetrics, Pesos, evaluar
 from stacks.registration import Registro
 from stacks.session_parser import FichaFITS, Session
 from stacks.siril_finder import find_siril

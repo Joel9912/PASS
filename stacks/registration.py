@@ -5,7 +5,7 @@ Dos registros distintos, según el flujo decidido por el usuario:
 1. **Auditoría** (``audit_pool``): registro RÁPIDO con ``register -2pass``
    SIN aplicar transformadas, debayer ni drizzle. SirIL solo calcula las
    transformadas y deja las métricas (FWHM, redondez, fondo…) en el
-   ``.seq``, que es lo que ``stacks/metrics.py`` lee para puntuar y
+   ``.seq``, que es lo que ``stacks/frame_metrics.py`` lee para puntuar y
    descartar. Validado sobre CFA crudo: mide sin necesidad de rebayerizar.
 2. **Registro final** (``register_pool``): SOBRE los frames que el usuario
    aceptó en la auditoría, ya con sus opciones: solo registrar, debayer
