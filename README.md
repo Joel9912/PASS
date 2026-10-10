@@ -1,25 +1,27 @@
-# PAS.S — Planning & Astronomical Stacking Suite
+# PASS — Planning & Astronomical Stacking Suite
 
-**PAS.S** es un programa de escritorio para **planificar sesiones de astrofotografía** y tomar decisiones de equipo. Combina planificación de sesiones, planificación/comparativa de equipo y un planetario de apoyo, con integración de **SirIL** para el apilado.
+**PASS** es un programa de escritorio para **planificar sesiones de astrofotografía** y tomar decisiones de equipo. Combina planificación de sesiones, planificación/comparativa de equipo y un planetario de apoyo, con integración de **SirIL** para el apilado.
 
 > La base del programa es la planificación (sesiones y equipo). El planetario y el apilador son añadidos que lo completan.
 
+**Estado: `v0.1` (alpha).** Es software libre en desarrollo activo: funciona sobre capturas reales, pero algunas pestañas siguen en construcción (indicadas abajo).
+
 ## Pestañas
 
-| Pestaña | Qué hace |
-|---|---|
-| **Resumen** | Progreso de captura por objeto (tiempo de exposición total), sesión planificada activa, estado del equipo |
-| **Planetario** | Planetario con imágenes DSS2: esfera de fondo + esfera de objetos (Messier, NGC, IC, LDN) |
-| **Equipo** | Setups y localizaciones del equipo con datos fríos y adjuntos visuales |
-| **Planificador de Equipo** | Comparativas de equipo por características comparables y presupuesto |
-| **Planificador** ⭐ | Búsqueda con filtros, tránsito/luna/noche astronómica, ranking de recomendaciones, catálogo personal y sesiones planificadas |
-| **Apilador** | Calibración automática por sesión, pool global de referencias, auditoría con métricas SirIL y apilado con todas sus opciones |
+| Pestaña | Qué hace | Estado |
+|---|---|---|
+| **Resumen** | Progreso de captura por objeto, sesión planificada activa, estado del equipo | 🔶 placeholder |
+| **Planetario** | Planetario con imágenes DSS2: esfera de fondo + esfera de objetos (Messier, NGC, IC, LDN) | 🔶 placeholder |
+| **Equipo** | Setups y localizaciones del equipo con datos fríos y adjuntos visuales | ✅ |
+| **Planificador de Equipo** | Comparativas de equipo por características comparables y presupuesto | 🔶 placeholder |
+| **Planificador** ⭐ | Búsqueda con filtros, tránsito/luna/noche astronómica, ranking de recomendaciones, catálogo personal y sesiones planificadas | ✅ |
+| **Apilador** | Escaneo de sesiones, calibración automática, auditoría con métricas de SirIL y apilado (drizzle, rechazo, ponderación, RGB) | ✅ |
 
 ## Requisitos
 
 - Windows, PowerShell
 - Python 3.12
-- [SirIL](https://siril.org/) para la pestaña Apilador (se detecta desde el `PATH`; si no, el usuario indica la ruta)
+- [SirIL](https://siril.org/) para la pestaña Apilador (se detecta desde el `PATH`; si no, el usuario indica la ruta en Configuración)
 
 ## Instalación
 
@@ -45,7 +47,7 @@ pytest
 
 ```
 Planning Stacking Suite/
-├── README.md / AGENTS.md / PROGRAM.md / MEMORY.md / STRUCTURE.md
+├── README.md / PROGRAM.md / MEMORY.md / STRUCTURE.md
 ├── main.py            # Entry point (PyQt6)
 ├── db/                # Capa SQLite (conexión y esquema)
 ├── planners/          # Búsqueda, tránsito, ranking, clima/seeing
@@ -58,15 +60,14 @@ Planning Stacking Suite/
 └── data/              # Base de datos local (no versionada)
 ```
 
-Detalles de cada carpeta: ver `STRUCTURE.md`. Reglas de trabajo con agentes: ver `AGENTS.md`.
+Detalles de cada carpeta: ver `STRUCTURE.md`.
 
 ## Documentación
 
-- `AGENTS.md` — reglas y qué leer según la tarea
 - `PROGRAM.md` — filosofía y diseño de cada pestaña
 - `MEMORY.md` — estado actual y roadmap
 - `STRUCTURE.md` — árbol de carpetas y convenciones
 
 ## Licencia
 
-[GPL-3.0](LICENSE)
+[GPL-3.0](LICENSE) — el programa es gratuito y de libre uso: cualquiera puede descargarlo, usarlo, modificarlo y compartirlo. Lo que no puede hacerse es apropiarse de él: quien distribuya una versión derivada debe publicar también su código fuente y no puede venderlo ni ofrecerlo como producto cerrado.

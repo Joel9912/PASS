@@ -41,8 +41,7 @@ El corazón de la subpestaña: mirar el target en el planetario, ajustar el encu
 - «💾 Guardar sesión» escribe con `planners.planned_sessions` y avisa a Sesiones por señal (`session_saved`).
 
 ## Planes futuros
-1. **Rediseño aprobado y pendiente** (especificación completa en
-   `C:\Users\Usuario\.opencode\plan\plan-rediseno-planificacion.md`):
+1. **Rediseño aprobado y pendiente** (especificación completa en el historial del proyecto):
    izquierda = «Encuadre de sesión» (planetario con **FOV lectura + switch
    teselas**) y la **curva de tránsito debajo**; derecha = **Plan de captura
    amplio con opciones propias** (integración por tesela o total, slider de

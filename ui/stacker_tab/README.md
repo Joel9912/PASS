@@ -1,33 +1,19 @@
 # ui/stacker_tab/ — Pestaña Apilador
 
 ## Qué es
-Cargar sesiones completadas, calibrarlas automáticamente, auditarlas con las métricas de SirIL y apilarlas con todas las opciones de SirIL.
+Asistente PyQt6 que organiza el flujo de SirIL sin ejecutar cálculos de procesado en la UI.
 
 ## Estado actual
-- Carpeta sin código (placeholder en `ui/main_window.py`); la lógica vive en `stacks/`.
+- `__init__.py` — `StackerPage`: Sesiones → Calibrar → Auditar → Apilar → Final, navegación, barra y log plegable, orquestación y persistencia desde el hilo principal. Auditoría ofrece reutilizar un registro coincidente; Apilar siempre exige revisar frames y opciones. Calibrar ofrece conservar o limpiar con confirmación.
+- `pasos.py` — Sesiones con banner, tabla y fichas FITS de solo lectura (sin flechas; altura `OBJCTALT` visible y elevación del observatorio en el detalle); Auditoría con pesos, tabla y visor FITS con autoestirado moderado solo en pantalla. Apilar admite nombre vacío para usar el tiempo integrado; Final usa el mismo estirado y permite abrir el FITS en SirIL gráfico.
+- `visor_sesiones.py` — carta del FOV usando los catálogos/estrellas y proyección de Planificación (solo consulta y navegación, sin crear regiones), marco de captura con rotación CROTA2 si existe, botón Telescopius visible e inerte y capas de texto de la referencia (FOV, rotación, leyenda de catálogos, centro y coordenadas). «Ver FITS» alterna con la imagen original, sin modificarla, y solo aparece cuando hay FITS legible. Sin RA/Dec no se inventa región.
+- `worker.py` — `QThread` cancelable: progreso, log, resultado y parada de SirIL al cancelar/cerrar.
 
 ## Qué hacer aquí
-
-### Carga de sesiones
-- Mostrar las sesiones detectadas (`stacks/session_parser.py`): lights, flats, darks, bias, dark flats y másters por sesión.
-- Resumen por sesión: nº de lights por día → **tiempo de exposición total** (lo consume Resumen).
-
-### Calibración (automática)
-- Un botón calibra cada sesión con SirIL → salida en `data/working/calibrados/<sesion>/` (`stacks/calibrator.py`).
-- Mostrar progreso; **nunca tocar los originales** (solo lectura).
-
-### Auditoría
-- Tras registrar (`stacks/registration.py`): gráficas de FWHM, redondez y transparencia a lo largo de sesiones (`stacks/metrics.py`).
-- Ranking de frames y descarte de valores extremos, con confirmación del usuario.
-
-### Apilado
-- Exponer **todas** las opciones de SirIL (`stacks/stacker.py`): drizzle, criterios de rechazo, ponderación, integración.
-- Si SirIL no está en el PATH (`stacks/siril_finder.py`), pedir al usuario que seleccione la ruta.
-- Usar todos los hilos de la CPU y mostrar progreso.
-- **Prohibido copiar ficheros en cadena**: la UI trabaja con los datos ya referenciados por el pool.
+- Mantener originales solo lectura, casillas de descarte bajo control del usuario y SQL fuera del worker. Usar `stacks/` para todas las fases SirIL.
+- Si falta CLI, permitir escaneo pero impedir las fases de procesado; escoger en Windows un ejecutable que responda a `--version`.
+- Exportar únicamente el FITS final a la carpeta madre común; nunca reemplazar un archivo existente.
+- Al introducir controles SirIL, verificar opciones con la versión efectivamente instalada y probar UI en escritorio real.
 
 ## Planes futuros
-1. Carga e inspección de sesiones.
-2. Calibración con progreso.
-3. Auditoría con gráficas y descarte.
-4. Apilado con opciones completas de SirIL.
+- Integrar Telescopius cuando se defina su comportamiento; verificar orientación/WCS por cámara y revisión a otras escalas DPI.

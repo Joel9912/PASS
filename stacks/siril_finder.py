@@ -16,9 +16,9 @@ def find_siril() -> str | None:
 
     Orden: 1) PATH del sistema, 2) ruta guardada por el usuario en ``settings``.
     """
-    # Nombres del binario según instalación: 'siril'/'siril-cli' (PATH de Unix)
-    # y 'Siril.exe' (instalador de Windows); se prueban los tres por ese orden.
-    path = which("siril") or which("siril-cli") or which("Siril.exe")
+    # Prioriza la variante CLI: el ejecutable gráfico no siempre admite
+    # guiones por stdin. Conserva la preferencia del PATH sobre settings.
+    path = which("siril-cli") or which("siril") or which("Siril.exe")
     if path:
         return path
     return get_setting(SETTINGS_KEY) or None   # "" cuenta como no guardado

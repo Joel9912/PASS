@@ -1,1 +1,1 @@
-"""Capa de datos de PAS.S: conexión SQLite única (stdlib sqlite3)."""
+"""Capa de datos de PASS: conexión SQLite única (stdlib sqlite3)."""

@@ -1,7 +1,7 @@
 # planners/
 
 ## Qué es
-Lógica de planificación de PAS.S: catálogo, búsqueda, tránsito/luna/noche, ranking, encuadre/FOV, plan de captura y gestión del catálogo personal y de sesiones.
+Lógica de planificación de PASS: catálogo, búsqueda, tránsito/luna/noche, ranking, encuadre/FOV, plan de captura y gestión del catálogo personal y de sesiones.
 
 ## Estado actual
 Todo implementado; la suite de `tests/` es la verificación disponible.

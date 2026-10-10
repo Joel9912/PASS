@@ -1,4 +1,4 @@
-"""Conexión SQLite única para PAS.S (sin dependencias externas)."""
+"""Conexión SQLite única para PASS (sin dependencias externas)."""
 import sqlite3
 from pathlib import Path
 

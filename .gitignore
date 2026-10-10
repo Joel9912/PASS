@@ -16,3 +16,11 @@ venv/
 
 # Datos locales del programa (base de SQLite, caché de catálogos, etc.)
 data/
+
+# Entorno de desarrollo (no forma parte del proyecto distribuido)
+.idea/
+.opencode/
+AGENTS.md
+
+# Documentación histórica interna (port del Apilador, fuera del repo)
+actualizacion apilado/

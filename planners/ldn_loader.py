@@ -35,7 +35,7 @@ CACHE_DIR = Path(__file__).resolve().parent.parent / "data" / "downloads"
 URL_LDN_TAP = "https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync"
 QUERY_LDN = 'SELECT "LDN", "_RA.icrs", "_DE.icrs", "Area", "Opacity" FROM "VII/7A/ldn"'
 
-_USER_AGENT = "PAS-S/0.1 (planning-astronomical-stacking-suite)"
+_USER_AGENT = "PASS/0.1 (planning-astronomical-stacking-suite)"
 
 #: Tipo OpenNGC de nebulosa oscura (los LDN se cargan con ese código).
 LDN_TYPE = "DrkN"

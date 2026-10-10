@@ -1,18 +1,18 @@
-# Filosofía del Programa PAS.S
+# Filosofía del Programa PASS
 
 ## 🌟 Misión y Propósito
 
-**Planning & Astronomical Stacking Suite (PAS.S)** nace para cubrir un vacío significativo en el software de astrofotografía amateur:
+**Planning & Astronomical Stacking Suite (PASS)** nace para cubrir un vacío significativo en el software de astrofotografía amateur:
 
 > **El problema actual:** Existe abundante software para afilado/apilamiento (SirIL, PyRAF, etc.) y planetarios virtuales (Stellarium, SkyField, etc.), pero **NINGUNO** combina planificación integral de sesión con gestión de compras de equipo basada en métricas personalizadas por usuario.
 
-## 🎯 Principio Central: ¿Por qué PAS.S?
+## 🎯 Principio Central: ¿Por qué PASS?
 
-| Área | Software existente | Vacío que cubre PAS.S |
+| Área | Software existente | Vacío que cubre PASS |
 |------|-------------------|----------------------|
-| **Afilado/apilamiento** | SirIL, PyRAF, etc. | ✅ Ya resuelto - PAS.S integra SirIL |
+| **Afilado/apilamiento** | SirIL, PyRAF, etc. | ✅ Ya resuelto - PASS integra SirIL |
 | **Planetarios virtuales** | Stellarium, SkyField, etc. | ✅ Ya resuelto - planetario como añadido |
-| **Planificación de sesiones** | Pocas opciones, poca integración | ⭐ **Núcleo principal de PAS.S** |
+| **Planificación de sesiones** | Pocas opciones, poca integración | ⭐ **Núcleo principal de PASS** |
 | **Comparativa de equipos** | Basado en specs técnicas puras | ⭐ **Métricas definidas por usuario** |
 
 ## 🚀 Funcionalidades Principales (Por Tabs)

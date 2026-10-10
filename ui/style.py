@@ -1,4 +1,4 @@
-"""Estilo visual de PAS.S: tema oscuro azulado, tipografía y pie de aplicación.
+"""Estilo visual de PASS: tema oscuro azulado, tipografía y pie de aplicación.
 
 Un único lugar para la hoja de estilos QSS y la fuente base (13pt, rango 12-14).
 Los colores del QSS salen del diccionario PALETTE (fuente única de verdad).

@@ -145,6 +145,11 @@ class PlanetarioVisual(QWidget):
     region_clicked = pyqtSignal(float, float)
     view_changed = pyqtSignal(float, float, float)
 
+    #: Color del contorno del encuadre (ámbar en el Planificador).
+    _color_marco = "#f59e0b"
+    #: Relleno del encuadre: el mismo tono con alfa bajo.
+    _color_relleno_marco = QColor(245, 158, 11, 26)
+
     def __init__(self, parent: QWidget | None = None) -> None:
         """Estado inicial: vista central, sin arrastre ni encuadre, y datos de la base."""
         super().__init__(parent)
@@ -548,14 +553,16 @@ class PlanetarioVisual(QWidget):
             2.0 * half_h,
         )
 
-        pen = QPen(QColor("#f59e0b"), 1.8)
+        pen = QPen(QColor(self._color_marco), 1.8)
         pen.setStyle(Qt.PenStyle.DashLine)
         painter.setPen(pen)
-        painter.setBrush(QColor(245, 158, 11, 26))
+        painter.setBrush(self._color_relleno_marco)
         painter.drawRect(rect)
 
-        # Teselas internas
-        painter.setPen(QPen(QColor(245, 158, 11, 120), 1.0))
+        # Teselas internas (mismo tono que el contorno, más apagadas)
+        teselas = QColor(self._color_marco)
+        teselas.setAlpha(120)
+        painter.setPen(QPen(teselas, 1.0))
         for k in range(1, tiles_x):
             x = rect.left() + rect.width() * k / tiles_x
             painter.drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()))

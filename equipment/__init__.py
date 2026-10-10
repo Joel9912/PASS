@@ -1,1 +1,1 @@
-"""Gestión de equipos y localizaciones de PAS.S."""
+"""Gestión de equipos y localizaciones de PASS."""

@@ -1,7 +1,7 @@
 # ui/planner_tab/busqueda/ — Subpestaña Búsqueda
 
 ## Qué es
-Primer paso del flujo de PAS.S: filtrar el catálogo (OpenNGC + HYG + LDN) y ver, al seleccionar un objeto, sus efemérides del día y su curva de tránsito. Aquí vive también la `LocationBar`, única fuente de verdad de latitud, longitud y desfase horario para las 4 subpestañas.
+Primer paso del flujo de PASS: filtrar el catálogo (OpenNGC + HYG + LDN) y ver, al seleccionar un objeto, sus efemérides del día y su curva de tránsito. Aquí vive también la `LocationBar`, única fuente de verdad de latitud, longitud y desfase horario para las 4 subpestañas.
 
 ## Estado actual
 - `tab.py` — `BusquedaTab`. Señales `object_selected` (objeto elegido en la tabla) y `add_to_personal` (botón «⭐ Añadir a Mi Lista», escribe en Catálogo Personal desde `PlannerPage`, nunca directo en la base).

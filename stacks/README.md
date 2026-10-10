@@ -1,29 +1,22 @@
 # stacks/
 
 ## Qué es
-Integración de PAS.S con **SirIL** para calibrar, auditar y apilar sesiones completadas. SirIL es una herramienta externa (CLI): aquí NO se programa ningún motor propio de calibrado o apilado.
+Integración de SirIL **externo** por CLI. Los originales se leen, nunca se modifican; calibración, registro y apilado los realiza SirIL, no PASS.
 
 ## Estado actual
-- `siril_finder.py` — detección de SirIL: PATH del sistema → ruta guardada por el usuario en `settings` (`siril_path`), vía los helpers de `db.settings`.
-- `session_parser.py` — detecta estructura de cada sesión (`lights`, `flats`, `darks`, `bias`, `dark_flats` y carpeta `masters/`).
-- `calibrator.py` — calibración **automática** por sesión → salida a `data/working/calibrados/<sesion>/`.
-- `global_pool.py` — pool global de **referencias** a los lights calibrados (cero copias).
-- `registration.py` — registro con SirIL desde el pool.
-- `metrics.py` — métricas de SirIL (FWHM, redondez, transparencia), gráficas, ranking y descarte de extremos.
-- `stacker.py` — apilado con todas las opciones de SirIL (drizzle, rechazo, ponderación, integración) + multihilo.
-- **Solo `siril_finder.py` está operativo**: `session_parser`, `calibrator`, `global_pool`, `registration`, `metrics` y `stacker` son hoy stubs (`NotImplementedError`) — las líneas anteriores describen el diseño previsto para la fase del Apilador, no el estado actual.
+- `session_parser.py` — sesiones, alias de carpetas, FITS/RAW, ficha de cabeceras (CROTA2, elevación del sitio en metros y `OBJCTALT` del objeto en grados, sin confundirlos) y campo angular si la escala o focal/píxel lo permiten.
+- `siril_finder.py` — binario CLI desde PATH o ruta guardada en `settings.siril_path`, versión con `--version`.
+- `siril_runner.py` — scripts por stdin, ini aislado, progreso/cancelación, binario capturado en UI por contexto de tarea, enlaces symlink→hardlink y limpieza restringida a `data/working/`. El log visible muestra el guion y omite líneas `HDU` repetitivas y controles ANSI; el resultado conserva la salida íntegra. El borrado explícito valida rutas y desenlaza sin seguir enlaces a originales.
+- `calibrator.py` — másters, calibración cruda por sesión y persistencia en `calibrated_sessions` desde el hilo UI; la carpeta global configurada se pasa al worker como dato. El log identifica procedencia, enlaces y medianas FITS sin atribuir unidades ADU a valores normalizados.
+- `global_pool.py` — referencias a los lights calibrados, sin copias.
+- `registration.py` — auditoría `register -2pass` reutilizable solo con manifiesto de lights y secuencia coincidentes; registro final (debayer **o** drizzle) con encuadre, escala, pixfrac, kernel y flat explícito.
+- `metrics.py` — lectura `.seq`, conversión del fondo normalizado de SirIL a ADU equivalentes de 16 bits/s (÷ exposición), puntuación y recomendaciones; la transparencia es un proxy relativo del fondo, no una medición directa. El usuario decide qué descartar.
+- `stacker.py` — opciones de `stack` (rechazo/mapas, normalización, precisión, RGB), apilado por canal y composición R/G/B inequívoca. Exportación exclusiva de FITS finales a la carpeta madre sin sobrescribir.
 
 ## Qué hacer aquí
-- **Reglas duras (no negociables):**
-  1. Los originales de sesión son **solo lectura**: jamás modificar ni borrar nada en la carpeta de la sesión.
-  2. **Prohibido copiar ficheros en cadena**: se trabaja por rutas/referencias; la única escritura es la salida de calibración en la carpeta de trabajo.
-  3. Todo procesamiento lo ejecuta SirIL (CLI); no reimplementar algoritmos de SirIL.
-- Detectar SirIL con `find_siril()`; si devuelve `None`, la UI ofrece seleccionar la ruta.
-- Exponer las opciones de SirIL tal cual (no inventar límites); documentar cada parámetro aquí.
-- Aprovechar todos los hilos de la CPU en registro y apilado.
+- **Nunca** escribir/borrar originales ni copiar frames en cadena. Limpiar solo subcarpetas ancladas a `WORKING_FOLDER`; detenerse si symlink y hardlink fallan (otros volúmenes/permisos).
+- Solo SirIL procesa píxeles; astropy/numpy leen FITS y sirven a las miniaturas de UI. No acceder a SQLite desde el worker.
+- La gramática de SirIL se comprueba con el CLI instalado en Windows, no se presupone compatible por pasar mocks.
 
 ## Planes futuros
-1. Parser real de sesiones y detección de másters.
-2. Calibración automática por sesión con SirIL.
-3. Pool global + registro + extracción de métricas y auditoría.
-4. Apilado completo con opciones de SirIL y progreso en la UI.
+- Ampliar la matriz E2E real a másters bias/dark/flat, errores y cancelación con sesiones sintéticas/autorizadas. Ya se comprobó en Windows SirIL 1.4.4: mono, CFA sin/con drizzle ×2 y R/G/B con `rgbcomp` (hashes de originales intactos).

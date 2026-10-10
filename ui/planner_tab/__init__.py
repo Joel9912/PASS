@@ -1,4 +1,4 @@
-"""Subpestañas del Planificador de PAS.S.
+"""Subpestañas del Planificador de PASS.
 
 Orden de las subpestañas (decisión del usuario) — **cada una en su propia
 carpeta con su propio `README.md`**:

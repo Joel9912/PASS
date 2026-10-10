@@ -1,1 +1,1 @@
-"""Lógica de planificación de PAS.S: búsqueda, tránsito, ranking y catálogos."""
+"""Lógica de planificación de PASS: búsqueda, tránsito, ranking y catálogos."""

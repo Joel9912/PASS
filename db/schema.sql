@@ -1,4 +1,4 @@
--- Esquema de PAS.S (SQLite 3, stdlib). Idempotente: CREATE ... IF NOT EXISTS.
+-- Esquema de PASS (SQLite 3, stdlib). Idempotente: CREATE ... IF NOT EXISTS.
 
 -- Localizaciones del usuario (+ bloque de sitio de la pestaña Equipo)
 CREATE TABLE IF NOT EXISTS locations (
@@ -183,6 +183,16 @@ CREATE TABLE IF NOT EXISTS planned_sessions (
 );
 
 -- Configuración general (ruta de SirIL, API keys, idioma, etc.)
+-- Estado persistente del calibrado: originales solo como rutas, salida en working.
+CREATE TABLE IF NOT EXISTS calibrated_sessions (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_dir    TEXT NOT NULL UNIQUE,
+    calibrated_dir TEXT NOT NULL,
+    n_frames       INTEGER NOT NULL,
+    exposure_s     REAL,
+    created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL

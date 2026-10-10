@@ -1,4 +1,4 @@
-"""Fixtures compartidos de los tests de PAS.S."""
+"""Fixtures compartidos de los tests de PASS."""
 import sqlite3
 from pathlib import Path
 

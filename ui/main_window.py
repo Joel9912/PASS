@@ -1,4 +1,4 @@
-"""Ventana principal de PAS.S: barra lateral con iconos, contenido y pie de página.
+"""Ventana principal de PASS: barra lateral con iconos, contenido y pie de página.
 
 - Barra lateral izquierda: pestañas apiladas verticalmente con icono (+ texto si
   está expandida), colapsable con animación y acceso a Configuración abajo.
@@ -31,6 +31,7 @@ from .planner_tab import (
     PlanificacionTab,
     SesionesTab,
 )
+from .stacker_tab import StackerPage
 
 APP_NAME = "Planning & Astronomical Stacking Suite"
 APP_VERSION = "v0.1"
@@ -171,12 +172,18 @@ def _equipment_page() -> QWidget:
     return EquipmentPage()
 
 
+def _stacker_page() -> QWidget:
+    """Construye la pestaña Apilador sin sustituir las otras páginas."""
+    return StackerPage()
+
+
 #: Constructor de la página real de cada pestaña; las claves sin entrada
-#: (Resumen, Planetario, Apilador…) reciben un placeholder. Así no hay
+#: (Resumen, Planetario…) reciben un placeholder. Así no hay
 #: índices mágicos de ``TABS`` que descuadren al reordenar.
 _PAGE_BUILDERS: dict[str, Callable[[], QWidget]] = {
     "planner_tab": _planner_page,
     "equipment_tab": _equipment_page,
+    "stacker_tab": _stacker_page,
 }
 
 
@@ -255,7 +262,7 @@ class _Sidebar(QWidget):
 class MainWindow(QMainWindow):
     """Ventana principal: barra lateral, páginas apiladas y pie de página.
 
-    Páginas reales: Planificador y Equipo (``_PAGE_BUILDERS``); el resto son
+    Páginas reales: Planificador, Equipo y Apilador (``_PAGE_BUILDERS``); el resto son
     provisionales (``_placeholder_page``) hasta que se implementen. Aquí se
     concentra el cableado **entre** pestañas (Equipo → Planificador), para
     que ninguna importe a otra.
@@ -264,7 +271,7 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         """Monta sidebar, páginas y pie, y maximiza la ventana tras el primer layout."""
         super().__init__()
-        self.setWindowTitle(f"PAS.S {APP_VERSION}")
+        self.setWindowTitle(f"PASS {APP_VERSION}")
         self.setMinimumSize(1024, 640)
 
         central = QWidget()

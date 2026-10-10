@@ -41,7 +41,7 @@ _SKIP_TYPES = {"Dup", "NonEx"}
 #: con NGC 5866 (Galaxia del Huso), que OpenNGC no marca como Messier.
 _MANUAL_MESSIER = {"NGC5866": 102}
 
-_USER_AGENT = "PAS-S/0.1 (planning-astronomical-stacking-suite)"
+_USER_AGENT = "PASS/0.1 (planning-astronomical-stacking-suite)"
 
 
 # ---------------------------------------------------------------- descargas

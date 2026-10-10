@@ -1,4 +1,4 @@
-"""Integración de PAS.S con SirIL: calibrado, auditoría y apilado.
+"""Integración de PASS con SirIL: calibrado, auditoría y apilado.
 
 REGLAS DUAS de esta carpeta:
 - Los archivos originales de sesión son de SOLO LECTURA: jamás se modifican ni eliminan.

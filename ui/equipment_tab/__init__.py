@@ -1,4 +1,4 @@
-"""Pestaña **Equipo** de PAS.S: equipos (setups) y ubicaciones.
+"""Pestaña **Equipo** de PASS: equipos (setups) y ubicaciones.
 
 Exporta ``EquipmentPage``, la página que monta la ventana principal en su
 fila de navegación: un ``QTabWidget`` con **Equipos** (``EquiposTab``) y

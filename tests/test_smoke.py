@@ -1,4 +1,4 @@
-"""Smoke tests: la estructura y la base de PAS.S están sanas."""
+"""Smoke tests: la estructura y la base de PASS están sanas."""
 import sqlite3
 import sys
 from pathlib import Path
@@ -28,7 +28,6 @@ def test_root_docs_exist():
     """Los documentos de nivel raíz existen."""
     for doc in (
         "README.md",
-        "AGENTS.md",
         "PROGRAM.md",
         "MEMORY.md",
         "STRUCTURE.md",

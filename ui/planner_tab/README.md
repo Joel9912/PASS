@@ -1,7 +1,7 @@
 # ui/planner_tab/ — Pestaña Planificador (corazón del programa)
 
 ## Qué es
-El núcleo de PAS.S: buscar objetos, evaluar cuándo fotografiarlos, guardar los que interesan y concretar sesiones. **4 subpestañas** en este orden: **Búsqueda → Catálogo Personal → Planificación → Sesiones Planificadas**.
+El núcleo de PASS: buscar objetos, evaluar cuándo fotografiarlos, guardar los que interesan y concretar sesiones. **4 subpestañas** en este orden: **Búsqueda → Catálogo Personal → Planificación → Sesiones Planificadas**.
 
 **Cada subpestaña tiene su propia carpeta con su propio `README.md`** (4 secciones fijas + esquema ASCII del estado actual):
 
@@ -37,7 +37,7 @@ Carpeta **implementada** y probada (suite + render offscreen + arranque real de 
 - Cada subcarpeta nueva nace con su `README.md` de 4 secciones (lo garantiza `test_every_code_folder_has_readme`).
 
 ## Planes futuros
-1. **Rediseño de Planificación** aprobado y pendiente (especificación en `C:\Users\Usuario\.opencode\plan\plan-rediseno-planificacion.md`) — detallado en `planificacion/README.md`.
+1. **Rediseño de Planificación** aprobado y pendiente — detallado en `planificacion/README.md`.
 2. Ranking de objetos desde Planificación (`planners/ranking.py`) con pesos editables por el usuario.
 3. Planetario completo (paneles de objeto, región visible al hacer zoom, medición angular).
 4. i18n de todos los textos (`i18n/es.ts`, `i18n/en.ts`), empezando por esta pestaña.

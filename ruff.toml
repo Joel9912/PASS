@@ -1,4 +1,4 @@
-# Configuración de ruff para PAS.S (instalado en el venv; ver AGENTS.md).
+# Configuración de ruff para PASS (instalado en el venv).
 # Salida esperada: `ruff check .` en VERDE — es la puerta antes de cada commit.
 #
 # Reglas ignoradas (deuda o decisión consciente, no olvido):

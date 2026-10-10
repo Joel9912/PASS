@@ -1,4 +1,4 @@
-"""PAS.S — Planning & Astronomical Stacking Suite.
+"""PASS — Planning & Astronomical Stacking Suite.
 
 Entry point: ventana principal con las 6 pestañas del programa.
 """

@@ -1,14 +1,13 @@
-# Estructura de Carpetas y Archivos PAS.S
+# Estructura de Carpetas y Archivos PASS
 
 ## 📁 Estructura actual
 
 ```
 Planning-Stacking-Suite/
-├── README.md / AGENTS.md / PROGRAM.md / MEMORY.md / STRUCTURE.md
+├── README.md / PROGRAM.md / MEMORY.md / STRUCTURE.md
 ├── LICENSE               # GPL-3.0
 ├── requirements.txt      # PyQt6, pyqtgraph, astropy, numpy, PyYAML, pytest
 ├── .gitignore
-├── .opencode/skills/     # Skills de OpenCode: auditoria-pas, verificacion-fix
 ├── main.py               # Entry point: crea QApplication y la ventana principal
 │
 ├── db/                   # Capa SQLite (stdlib sqlite3)
@@ -38,12 +37,13 @@ Planning-Stacking-Suite/
 │
 ├── stacks/               # Integración SirIL (CLI externa, sin motor propio)
 │   ├── siril_finder.py       # PATH → ruta del usuario (settings.siril_path)
-│   ├── session_parser.py     # Detecta lights/flats/darks/bias/dark_flats/masters
-│   ├── calibrator.py         # Calibración automática → data/working/calibrados/
+│   ├── siril_runner.py       # CLI por stdin, ini, enlaces, cancelación y working
+│   ├── session_parser.py     # Sesiones, alias y cabeceras FITS
+│   ├── calibrator.py         # Calibración cruda → working + calibrated_sessions
 │   ├── global_pool.py        # Pool de REFERENCIAS (cero copias)
-│   ├── registration.py       # Registro con SirIL
-│   ├── metrics.py            # FWHM, redondez, transparencia, ranking, descarte
-│   ├── stacker.py            # Todas las opciones de SirIL + multihilo
+│   ├── registration.py       # Auditoría -2pass y registro final con SirIL
+│   ├── metrics.py            # .seq: puntuación, transparencia y recomendaciones
+│   ├── stacker.py            # Opciones SirIL, pilas por canal y RGB
 │   └── README.md
 │
 ├── equipment/            # Datos de equipo (sin UI)
@@ -105,7 +105,12 @@ Planning-Stacking-Suite/
 │   │   ├── ubicaciones.py        # UbicacionesTab
 │   │   └── README.md
 │   ├── planner_equip_tab/README.md  # Comparativas por métricas de usuario
-│   ├── stacker_tab/README.md     # Sesiones, calibración, auditoría, apilado
+│   ├── stacker_tab/              # Asistente Apilador: cinco pasos
+│   │   ├── __init__.py           # StackerPage y orquestación de fases
+│   │   ├── pasos.py              # Paneles y miniatura/gráfica
+│   │   ├── visor_sesiones.py     # Vista interactiva del FITS del paso Sesiones
+│   │   ├── worker.py             # Tareas Qt cancelables
+│   │   └── README.md
 │   └── README.md
 │
 ├── i18n/                 # Traducciones Qt (sistema nativo)
@@ -125,11 +130,15 @@ Planning-Stacking-Suite/
 │   ├── test_moon_distance.py
 │   ├── test_framing.py
 │   ├── test_ldn_loader.py
+│   ├── test_session_parser.py / test_siril_runner.py
+│   ├── test_calibrator.py / test_global_pool.py
+│   ├── test_registration.py / test_stack_metrics.py
+│   ├── test_stacker.py / test_stacker_tab.py
 │   ├── conftest.py
 │   └── README.md
 │
 ├── data/                 # Datos locales (NO versionados)
-│   ├── pass.db               # Base SQLite (se crea en runtime)
+│   ├── pass.db               # Base SQLite, calibrated_sessions (se crea en runtime)
 │   ├── equipment_images/     # Copias de imágenes adjuntas por entidad (D-1):
 │   │                         #   setup, telescope, camera y location
 │   ├── working/calibrados/   # Salida de calibración por sesión
@@ -140,7 +149,7 @@ Planning-Stacking-Suite/
 
 ## 📏 Convención de README por carpeta (obligatoria)
 
-Cada carpeta con código tiene **un solo** `README.md` con 4 secciones fijas, creado y actualizado en la misma tarea. Plantilla y reglas completas: **ver `AGENTS.md`** (fuente única, R2).
+Cada carpeta con código tiene **un solo** `README.md` con 4 secciones fijas (**Qué es / Estado actual / Qué hacer aquí / Planes futuros**), creado y actualizado en la misma tarea.
 
 ## 🗂️ Reglas de separación por carpeta
 

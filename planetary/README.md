@@ -1,7 +1,7 @@
 # planetary/
 
 ## Qué es
-Planetario virtual de PAS.S: **dos esferas concéntricas** con el usuario en el centro — una con imágenes DSS2 de fondo y otra con los puntos de los objetos (Messier, NGC, IC, LDN).
+Planetario virtual de PASS: **dos esferas concéntricas** con el usuario en el centro — una con imágenes DSS2 de fondo y otra con los puntos de los objetos (Messier, NGC, IC, LDN).
 
 ## Estado actual
 - `catalog.py` — modelo `CelestialObject` y contrato de carga de los 4 catálogos (datos pendientes).

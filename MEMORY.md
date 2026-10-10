@@ -1,12 +1,14 @@
-# Estado Actual y Planes del Programa PAS.S
+# Estado Actual y Planes del Programa PASS
 
-## 📅 Situación Actual (4 de Octubre 2026)
+## 📅 Situación Actual (10 de Octubre 2026)
 
 | Aspecto | Estado |
 |---------|--------|
-| **Etapa de desarrollo** | Esqueleto completo + **`planners/` implementado** + **pestañas Planificador (4 subpestañas) y Equipo implementadas**; resto de pestañas aún placeholder |
+| **Etapa de desarrollo** | `v0.1` (alpha): pestañas Planificador, Equipo y Apilador implementadas; Resumen, Planetario y Planificador de Equipo aún placeholder |
+| **Repositorio público** | ✅ GitHub `Joel9912/PASS`, tag `v0.1-alpha` (10/10/2026); historia conservada desde la primera versión |
+| **Licencia** | ✅ GPL-3.0: libre para usar/modificar/vender, pero las versiones derivadas deben publicar su código (no se puede apropiar ni cerrar) |
 | **Estructura de carpetas** | ✅ Creada: `db/`, `planners/`, `stacks/`, `equipment/`, `planetary/`, `ui/` (6 pestañas), `i18n/`, `tests/`, `data/` |
-| **Docs** | ✅ Raíz: README, AGENTS, PROGRAM, MEMORY, STRUCTURE + LICENSE GPL-3.0 + requirements.txt |
+| **Docs** | ✅ Raíz: README, PROGRAM, MEMORY, STRUCTURE + LICENSE GPL-3.0 + requirements.txt |
 | **Auditoría de código** | ✅ Tandas A, B y C aplicadas (deuda C cerrada 4/10/2026); pendientes anotados: M-02, D-4, D-7 y bajos (§4 del informe) |
 | **Entry point** | ✅ `main.py` con tema oscuro, barra lateral colapsable, pie `v0.1` y las 6 pestañas; carga catálogos al arrancar; se abre **maximizado** |
 | **Tests** | ✅ pytest (recuento y lista por módulo en `tests/README`) |
@@ -14,7 +16,7 @@
 | **Catálogos astronómicos** | ✅ OpenNGC (13 372 objetos) + HYG (41 487 estrellas mag ≤ 8) + **LDN (1 787)** en `data/pass.db` |
 | **Pestaña Planificador** | ✅ `ui/planner_tab/`: Búsqueda → Catálogo Personal → Planificación → Sesiones Planificadas, planetario QPainter, curva de tránsito PyQtGraph (un eje), plan de captura, barra de ubicación compartida |
 | **Pestaña Equipo** | ✅ `ui/equipment_tab/` (4/10/2026): equipos con componentes globales (Telescopio/Cámara/Montura/Filtros) y bloque «Cálculos» con umbrales configurables; ubicaciones v2 con rosácea de 3 discos (orientación/obstrucciones/CL) y esquemático de horizonte; backend `equipment/` CRUD completo + validaciones + `metrics.py`; cableado Equipo → Planificador en `main_window.py` |
-| **Integración SirIL** | Diseñada en `stacks/` (detección PATH + ruta usuario); sin implementar |
+| **Integración SirIL** | Flujo de cinco pasos en `stacks/` + `ui/stacker_tab/`; probado con SirIL CLI 1.4.4 Windows sobre FITS sintéticos mono, CFA sin/con drizzle ×2 y R/G/B con `rgbcomp` (originales intactos). |
 | **APIs clima/seeing** | Clear Outside + Meteoblue con mocks (sin API keys todavía) → tarjetas "Sin datos" |
 | **Persistencia** | ✅ SQLite (stdlib) con esquema completo + migración de columnas (`_MIGRATIONS` en `db/connection.py`) |
 | **i18n** | Estructura `i18n/es.ts` + `en.ts` creada; sin integrar en `main.py` |
@@ -47,8 +49,7 @@
    - Herramientas de mosaico y planificación de campo
 
 3. **Integración profunda con SirIL**
-   - Flujo de trabajo calibración → astrofotometría → apilamiento
-   - Auditoría automática de sesiones
+   - Ampliar pruebas reales Windows a másters bias/dark/flat y cancelación
    - Plantillas de procesamiento predefinidas
 
 4. **Recomendaciones inteligentes de equipo**
@@ -62,7 +63,7 @@
 |--------|-------------|-----------|
 | **Programar motor de apilado propio** | Distracción del objetivo principal, código spaghetti | **QUEDARÍA EXPLÍCITAMENTE PROHIBIDO** - solo integrar SirIL |
 | **Especificar métricas impositivas** | Usuario se siente limitado, valor del proyecto disminuye | Las métricas son definidas y ajustables por el usuario |
-| **Descuidar la planificación por el apilado** | PAS.S se vuelve "otro procesador de imágenes" | Enfocarse en roadmap: planificación primero, procesamiento segundo |
+| **Descuidar la planificación por el apilado** | PASS se vuelve "otro procesador de imágenes" | Enfocarse en roadmap: planificación primero, procesamiento segundo |
 | **Estructura de MDs inconsistente** | Agentes pierden contexto, tiempo perdido en adivinar | MDs por carpeta obligatorios, formato estandarizado |
 
 ## 📊 Roadmap Visual
@@ -79,8 +80,8 @@
 ## 💡 Próximos Pasos Inmediatos
 *(solo pendientes: lo completado vive en «Situación Actual»)*
 
-1. 🔜 UI de `planner_equip_tab`: comparativa con las métricas que defina el usuario (`RankingWeights`, `CaptureWeights` expuestos)
-2. 🔌 Llamadas reales a Clear Outside/Meteoblue cuando haya API keys
-3. 🔌 i18n (`QTranslator` + `.ts/.qm`) empezando por `planner_tab/`
-4. 📂 Documentos de plan (fuera del repo): `plan-rediseno-planificacion.md` (rediseño de Planificación) e `informe-auditoria-codigo.md` (auditoría de código).
-5. 🔧 Bajos de la auditoría de Markdown (3/10/2026): marcador de estado por pestaña en la tabla del README raíz (B-2); orden de subpestañas y clima en `PROGRAM.md` (B-3); rutas con prefijo `planner_tab/` en `ui/README` (B-4); precisar en `equipment/README` que la UI usa `list_setups()` (B-6).
+1. 🔍 **Auditoría técnica post-v0.1** — recorrer `stacks/`, `ui/`, `planners/` y `equipment/` con el método de auditoría: informe con IDs, deudas y prioridades (código muerto, imports, docstrings, malas prácticas).
+2. 🧹 **Refactor en commits pequeños** — arreglos de la auditoría, uno por tema, cada uno con su test de regresión; `STRUCTURE.md` al día si cambia la estructura.
+3. 🔜 UI de `planner_equip_tab`: comparativa con las métricas que defina el usuario (`RankingWeights`, `CaptureWeights` expuestos)
+4. 🔌 Llamadas reales a Clear Outside/Meteoblue cuando haya API keys
+5. 🔌 i18n (`QTranslator` + `.ts/.qm`) empezando por `planner_tab/`

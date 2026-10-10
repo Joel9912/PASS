@@ -1,1 +1,1 @@
-"""Planetario virtual de PAS.S: dos esferas concéntricas con el usuario al centro."""
+"""Planetario virtual de PASS: dos esferas concéntricas con el usuario al centro."""
