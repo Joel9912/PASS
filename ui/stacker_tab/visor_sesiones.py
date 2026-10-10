@@ -70,22 +70,22 @@ class CieloCapturado(PlanetarioVisual):
             if campo:
                 self._captura = (ficha.ra_deg / 15, ficha.dec_deg, *campo)
                 self.set_framing(*self._captura)
-                self._fov_deg = min(180, max(1, max(campo) * 1.6))
+                self.set_fov_deg(min(180, max(1, max(campo) * 1.6)))
             else:
                 self._captura = None
                 self.clear_framing()
-                self._fov_deg = 6.0
+                self.set_fov_deg(6.0)
         else:
             self._valido = False
             self._centro_ficha = None
             self._captura = None
             self.clear_framing()
-            self._label = "FITS sin coordenadas: encuadre desconocido"
+            self.set_center_label("FITS sin coordenadas: encuadre desconocido")
         self.update()
 
     def tiene_encuadre(self) -> bool:
         """True si ahora mismo hay un contorno FOV dibujado (hay sensor activo)."""
-        return self._framing is not None
+        return self.framing is not None
 
     def actualizar_campo(self, campo: tuple[float, float] | None) -> None:
         """Reancla el contorno FOV al centro del FITS con el campo indicado.
@@ -98,15 +98,15 @@ class CieloCapturado(PlanetarioVisual):
         if not self._valido or self._centro_ficha is None:
             return
         if campo is None:
-            if self._framing is not None:
+            if self.framing is not None:
                 self.clear_framing()
             self.update()
             return
-        habia = self._framing is not None
+        habia = self.framing is not None
         ra, dec = self._centro_ficha
         self.set_framing(ra, dec, campo[0], campo[1])
         if not habia:
-            self._fov_deg = min(180, max(1, max(campo) * 1.6))
+            self.set_fov_deg(min(180, max(1, max(campo) * 1.6)))
         self.update()
 
     def set_rotation(self, grados: float) -> None:
@@ -116,7 +116,7 @@ class CieloCapturado(PlanetarioVisual):
 
     def _draw_framing(self, painter: QPainter, ppr: float) -> None:
         """Pinta el marco con la rotación disponible y su cruz de centro."""
-        if not self._framing:
+        if not self.framing:
             return
         painter.save()
         painter.translate(self.width() / 2, self.height() / 2)
@@ -128,10 +128,12 @@ class CieloCapturado(PlanetarioVisual):
 
     def _draw_cruz_centro(self, painter: QPainter, ppr: float) -> None:
         """Cruz punteada (±12 px) sobre el centro exacto del encuadre."""
-        if not self._framing:
+        marco = self.framing
+        if not marco:
             return
-        ra, dec = self._framing[0], self._framing[1]
-        xi, eta, ok = gnomonic([ra], [dec], self._ra0, self._dec0)
+        ra, dec = marco[0], marco[1]
+        ra0, dec0 = self.center_deg
+        xi, eta, ok = gnomonic([ra], [dec], ra0, dec0)
         if not bool(ok[0]):
             return
         x, y = self._to_screen(xi, eta, ppr)
@@ -167,10 +169,11 @@ class CieloCapturado(PlanetarioVisual):
         fuente.setPointSize(9)
         painter.setFont(fuente)
         painter.setPen(QColor("#c9d1d9"))
-        if self._framing:
+        marco = self.framing
+        if marco:
             painter.drawText(
                 12, 22,
-                f"FOV: {self._framing[2]:.2f}° × {self._framing[3]:.2f}°",
+                f"FOV: {marco[2]:.2f}° × {marco[3]:.2f}°",
             )
             crota = (
                 f" (CROTA2 {self._crota_fits:.1f}°)"
@@ -205,20 +208,21 @@ class CieloCapturado(PlanetarioVisual):
 
     def _coordenadas_vista(self) -> str:
         """«RA 00h47m | Dec +41,3°» del centro mirado ahora (coma decimal)."""
-        ra_h = (self._ra0 / 15.0) % 24.0
+        ra_deg, dec_deg = self.center_deg
+        ra_h = (ra_deg / 15.0) % 24.0
         horas = int(ra_h)
         minutos = int(round((ra_h - horas) * 60.0))
         if minutos == 60:
             horas, minutos = (horas + 1) % 24, 0
-        dec = f"{self._dec0:+.1f}".replace(".", ",")
+        dec = f"{dec_deg:+.1f}".replace(".", ",")
         return f"RA {horas:02d}h{minutos:02d}m | Dec {dec}°"
 
     def reset_view(self) -> None:
         """Restaura centro y campo de la captura, no el origen genérico (0°,0°)."""
         if self._captura:
             ra, dec, ancho, alto = self._captura
-            self.set_center(ra, dec, self._label)
-            self._fov_deg = min(180, max(1, max(ancho, alto) * 1.6))
+            self.set_center(ra, dec, self.center_label)
+            self.set_fov_deg(min(180, max(1, max(ancho, alto) * 1.6)))
             self.update()
 
     def _handle_click(self, _pos) -> None:

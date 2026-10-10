@@ -236,9 +236,34 @@ class PlanetarioVisual(QWidget):
         """(ra_hours, dec_deg, fov_deg) de la vista actual."""
         return self._ra0 / 15.0, self._dec0, self._fov_deg
 
-    def sky_at_center(self) -> tuple[float, float]:
-        """(ra_hours, dec_deg) del centro de la vista (para el editor de encuadre)."""
-        return self._ra0 / 15.0, self._dec0
+    @property
+    def framing(self) -> tuple[float, float, float, float, int, int] | None:
+        """Encuadre dibujado ``(ra_deg, dec_deg, mayor, menor, teselas_x, teselas_y)``.
+
+        ``None`` si no hay encuadre. API pública para subclases (p. ej.
+        ``CieloCapturado`` del Apilador): leer el estado del encuadre sin
+        apoyarse en el atributo privado ``_framing``.
+        """
+        return self._framing
+
+    @property
+    def center_deg(self) -> tuple[float, float]:
+        """(ra_deg, dec_deg) del centro de la vista, en grados (para pintar)."""
+        return self._ra0, self._dec0
+
+    @property
+    def center_label(self) -> str:
+        """Etiqueta del centro (p. ej. «M31»)."""
+        return self._label
+
+    def set_center_label(self, label: str) -> None:
+        """Cambia solo la etiqueta del centro, sin mover la vista."""
+        self._label = label
+
+    def set_fov_deg(self, fov_deg: float) -> None:
+        """Cambia el campo visible (zoom) sin mover el centro."""
+        self._fov_deg = fov_deg
+        self.update()
 
     def _find_object_index(self, object_id: str, catalog: str | None) -> int | None:
         """Índice de ``object_id`` (y catálogo si se indica); ``None`` si no está."""
@@ -260,7 +285,13 @@ class PlanetarioVisual(QWidget):
         return (height / 2.0) / max(math.tan(half_fov), 1e-9)
 
     def _to_screen(self, xi: np.ndarray, eta: np.ndarray, ppr: float) -> tuple[np.ndarray, np.ndarray]:
-        """(xi, eta) en radianes → píxeles. Norte arriba, este a la izquierda."""
+        """(xi, eta) en radianes → píxeles. Norte arriba, este a la izquierda.
+
+        Punto de extensión protegido: los overrides de pintado de subclases
+        (p. ej. ``CieloCapturado`` del Apilador) pueden usarlo; para leer o
+        cambiar el estado de la vista, la API pública es la de arriba
+        (``view``, ``framing``, ``center_deg``, ``set_fov_deg``, …).
+        """
         cx = self.width() / 2.0
         cy = self.height() / 2.0
         return cx - xi * ppr, cy - eta * ppr

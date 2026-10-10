@@ -508,15 +508,15 @@ def test_cielo_capturado_reutiliza_catalogo_y_no_activa_telescopius(memory_db):
     panel._cielo.mostrar(ficha)
     panel._rellenar_campos(ficha)
     assert "M31" in panel._cielo._objects["ids"]
-    assert panel._cielo._framing[2:4] == (3.2, 2.1333333333333333)
+    assert panel._cielo.framing[2:4] == (3.2, 2.1333333333333333)
     assert not panel._telescopius.isEnabled()
     assert panel._sitio_campos_2.text() == "--"
-    panel._cielo._fov_deg = 30
+    panel._cielo.set_fov_deg(30)
     panel._cielo.reset_view()
     assert panel._cielo.view[0] == pytest.approx(11.7764 / 15)
     assert panel._cielo.view[2] < 30
     panel._cielo.mostrar(None)
-    assert panel._cielo._framing is None and not panel._cielo._valido
+    assert panel._cielo.framing is None and not panel._cielo._valido
 
 
 def test_sesiones_diseno_referencia_grupos_fichas_y_escala():
