@@ -31,6 +31,11 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+## Primer arranque
+
+- **La primera ejecución descarga los catálogos astronómicos** (~18 MB: OpenNGC, HYG y LDN) desde internet. Sin conexión el programa abre igualmente, pero las pestañas Planificador y Planetario quedarán vacías.
+- **SirIL solo es necesario para la pestaña Apilador.** El resto del programa (Planificador, Equipo, etc.) funciona sin él.
+
 ## Ejecución
 
 ```powershell
