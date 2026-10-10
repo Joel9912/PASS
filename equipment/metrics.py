@@ -8,8 +8,10 @@ El veredicto de muestreo no impone verdad: usa dos **umbrales
 configurables** (claves de ``settings``: ``sampling_under_ratio`` y
 ``sampling_over_ratio`` sobre el límite de Dawes, defaults 1.0 y 0.5) y
 un **margen «Ligero»** (`sampling_light_factor`, default 1.4) que abre
-los dos niveles intermedios. Se leen con ``db.settings.get_float`` y
-llegan aquí como parámetros: las métricas las define el usuario. Si la
+los dos niveles intermedios. Este módulo es el **dueño de esas claves**:
+`umbrales_desde_settings` las recaba de ``settings`` (la UI no las lee
+sueltas) y llegan aquí como parámetros: las métricas las define el
+usuario. Si la
 ubicación informa su **seeing**, `rango_muestreo` recorta el intervalo
 adecuado con él y el veredicto pasa por el mismo filtro (sin veredicto
 ni límites si no hay dato: nada se inventa).
@@ -23,6 +25,22 @@ _ARCSEC_POR_RADIAN = 206.264806
 
 #: Fórmula de Dawes: resolución resoluble en ″ ≈ 116 / apertura(mm).
 _DAWES = 116.0
+
+
+def umbrales_desde_settings() -> dict[str, float]:
+    """Los tres umbrales configurables del muestreo leídos de ``settings``.
+
+    Dueño de las claves de Configuración ``sampling_*`` (A-07 de la
+    auditoría): la UI llama a esto en vez de leer las claves sueltas. El
+    import de ``db`` es local para no ensuciar la pureza del resto.
+    """
+    from db.settings import get_float
+
+    return {
+        "umbral_sub": get_float("sampling_under_ratio", 1.0),
+        "umbral_sob": get_float("sampling_over_ratio", 0.5),
+        "factor_ligero": get_float("sampling_light_factor", 1.4),
+    }
 
 
 def focal_efectiva(

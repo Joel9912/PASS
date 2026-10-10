@@ -9,6 +9,10 @@ from __future__ import annotations
 
 from db.connection import get_connection
 
+#: Clave de ``settings`` de la carpeta base de proyectos (raíz de sesiones).
+#: Vive aquí, no en la UI: la comparten Configuración y el Apilador (A-23).
+PROJECT_ROOT_KEY = "project_root"
+
 
 def get_setting(key: str, default: str | None = None) -> str | None:
     """Valor de ``key``; ``default`` (por defecto ``None``) si no existe."""

@@ -46,10 +46,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from db.settings import get_float
 from equipment import localizations, manager
 from equipment.images import list_images
-from equipment.metrics import calculos
+from equipment.metrics import calculos, umbrales_desde_settings
 from equipment.models import CATEGORIES, EquipmentSetup
 
 from .componentes import (
@@ -745,13 +744,14 @@ class EquiposTab(QWidget):
         """
         telescopio = self._tel_principal.form.a_modelo()
         camara = self._cam_principal.form.a_modelo()
+        umbrales = umbrales_desde_settings()
         filas = calculos(
             telescopio,
             camara,
-            get_float("sampling_under_ratio", 1.0),
-            get_float("sampling_over_ratio", 0.5),
+            umbrales["umbral_sub"],
+            umbrales["umbral_sob"],
             self._seeing_ubicacion(),
-            get_float("sampling_light_factor", 1.4),
+            umbrales["factor_ligero"],
         )
         self._escala.setText(_formato(filas["escala"], " ″/px"))
         self._dawes.setText(_formato(filas["dawes"], " ″"))

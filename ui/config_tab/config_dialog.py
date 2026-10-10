@@ -35,12 +35,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from db.settings import get_float, get_setting, set_setting
+from db.settings import PROJECT_ROOT_KEY, get_float, get_setting, set_setting
 from planners.weather.base import load_api_key, save_api_key
 from stacks.siril_finder import SETTINGS_KEY, find_siril, siril_version
-
-#: Clave de ``settings`` para la carpeta base de proyectos.
-PROJECT_ROOT_KEY = "project_root"
 
 #: Colores de estado (mismos tonos que las tarjetas de clima).
 _OK = "#22c55e"      # verde: detectado y operativo

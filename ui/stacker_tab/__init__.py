@@ -24,7 +24,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from db.settings import get_setting, set_setting
+from db.settings import PROJECT_ROOT_KEY, get_setting, set_setting
 from stacks.calibrator import (
     CALIBRATED_DIR,
     SETTING_GLOBAL_DIR,
@@ -35,7 +35,13 @@ from stacks.calibrator import (
 )
 from stacks.frame_metrics import FrameMetrics, extract_metrics
 from stacks.global_pool import GlobalPool, pool_desde_calibradas
-from stacks.registration import Registro, audit_pool, auditoria_guardada, register_pool
+from stacks.registration import (
+    REGISTRADOS_DIR,
+    Registro,
+    audit_pool,
+    auditoria_guardada,
+    register_pool,
+)
 from stacks.session_parser import (
     FichaFITS,
     Session,
@@ -50,8 +56,7 @@ from stacks.siril_runner import (
     binario_de_tarea,
     eliminar_salidas_trabajo,
 )
-from stacks.stacker import apilar_pool, exportar_apilados
-from ui.config_tab.config_dialog import PROJECT_ROOT_KEY
+from stacks.stacker import APILADOS_DIR, apilar_pool, exportar_apilados
 from ui.style import PALETTE
 
 from .paneles import PanelApilar, PanelAuditar, PanelCalibrar, PanelFinal, PanelSesiones
@@ -734,8 +739,8 @@ class StackerPage(QWidget):
             self._decir("Ya existe un stack con ese nombre en la carpeta madre; elige otro.")
             return
         for carpeta in (
-            WORKING_FOLDER / "registrados" / nombre,
-            WORKING_FOLDER / "apilados" / nombre,
+            WORKING_FOLDER / REGISTRADOS_DIR / nombre,
+            WORKING_FOLDER / APILADOS_DIR / nombre,
         ):
             if carpeta.exists() and (not carpeta.is_dir() or any(carpeta.iterdir())):
                 self._decir(f"Ya hay datos en {carpeta}; elige otro nombre para conservarlos.")

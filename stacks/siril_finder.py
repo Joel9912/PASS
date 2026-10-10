@@ -27,6 +27,15 @@ def find_siril(ruta_guardada: str | None = None) -> str | None:
     return ruta_guardada or None
 
 
+def find_siril_gui() -> str | None:
+    """Ruta de la variante gráfica (``siril.exe``) en el PATH, o ``None``.
+
+    El Apilador abre el FITS final en la GUI de SirIL; aquí no se mira
+    ``settings`` (mismo criterio A-03 que ``find_siril``).
+    """
+    return which("siril") or which("Siril.exe")
+
+
 def siril_version(path: str) -> str | None:
     """Primera línea de ``siril --version``; ``None`` si no se pudo ejecutar.
 

@@ -240,26 +240,29 @@ def test_calculos_sin_datos_pintan_none():
 
 
 def test_umbrales_de_muestreo_se_leen_de_settings(memory_settings):
-    """Las claves de Configuración (`sampling_*`) con defaults defensivos.
+    """`umbrales_desde_settings`: claves de Configuración con defaults defensivos.
 
     Ausente → default del plan (1.0 / 0.5 / margen 1.4); texto raro →
     default; numérico → se usa. El bloque «Cálculos» las recaba en cada
-    recálculo (sin señal).
+    recálculo (sin señal). Dueño de las claves: `equipment/metrics` (A-07).
     """
     from db import settings
+    from equipment.metrics import umbrales_desde_settings
 
-    assert settings.get_float("sampling_under_ratio", 1.0) == 1.0
-    assert settings.get_float("sampling_over_ratio", 0.5) == 0.5
-    assert settings.get_float("sampling_light_factor", 1.4) == 1.4
+    assert umbrales_desde_settings() == {
+        "umbral_sub": 1.0,
+        "umbral_sob": 0.5,
+        "factor_ligero": 1.4,
+    }
 
     settings.set_setting("sampling_under_ratio", "2.0")
-    assert settings.get_float("sampling_under_ratio", 1.0) == pytest.approx(2.0)
+    assert umbrales_desde_settings()["umbral_sub"] == pytest.approx(2.0)
 
     settings.set_setting("sampling_over_ratio", "basura")
-    assert settings.get_float("sampling_over_ratio", 0.5) == 0.5
+    assert umbrales_desde_settings()["umbral_sob"] == 0.5
 
     settings.set_setting("sampling_light_factor", "1.75")
-    assert settings.get_float("sampling_light_factor", 1.4) == pytest.approx(1.75)
+    assert umbrales_desde_settings()["factor_ligero"] == pytest.approx(1.75)
 
     settings.set_setting("sampling_light_factor", "basura")
-    assert settings.get_float("sampling_light_factor", 1.4) == 1.4
+    assert umbrales_desde_settings()["factor_ligero"] == 1.4

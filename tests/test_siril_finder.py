@@ -31,6 +31,15 @@ def test_find_siril_ignores_empty_saved_path(monkeypatch):
     assert siril_finder.find_siril("") is None
 
 
+def test_find_siril_gui_sin_settings_ni_preferencia_cli(monkeypatch):
+    """La variante gráfica viene del PATH, sin mirar ruta guardada (A-12)."""
+    monkeypatch.setattr(siril_finder, "which", lambda name: "C:/bin/siril.exe" if name == "siril" else None)
+    assert siril_finder.find_siril_gui() == "C:/bin/siril.exe"
+
+    monkeypatch.setattr(siril_finder, "which", lambda _name: None)
+    assert siril_finder.find_siril_gui() is None
+
+
 def test_siril_version_reads_first_line(monkeypatch):
     """siril_version devuelve la primera línea de `--version` si todo va bien."""
     import subprocess as sp
