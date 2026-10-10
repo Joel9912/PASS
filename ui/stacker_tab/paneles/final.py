@@ -22,7 +22,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from stacks.siril_finder import find_siril
+from db.settings import get_setting
+from stacks.siril_finder import SETTINGS_KEY, find_siril
 
 from ..pasos_common import (
     _pista,
@@ -159,7 +160,7 @@ class PanelFinal(QWidget):
         if item is None:
             return
         ruta = Path(item.toolTip())
-        cli = find_siril()
+        cli = find_siril(get_setting(SETTINGS_KEY) or None)
         candidato = Path(cli).with_name("siril.exe") if cli else None
         grafico = which("siril") or which("Siril.exe")
         ejecutable = candidato if candidato and candidato.is_file() else grafico

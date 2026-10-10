@@ -37,7 +37,7 @@ from PyQt6.QtWidgets import (
 
 from db.settings import get_float, get_setting, set_setting
 from planners.weather.base import load_api_key, save_api_key
-from stacks.siril_finder import find_siril, save_user_path, siril_version
+from stacks.siril_finder import SETTINGS_KEY, find_siril, siril_version
 
 #: Clave de ``settings`` para la carpeta base de proyectos.
 PROJECT_ROOT_KEY = "project_root"
@@ -332,7 +332,7 @@ class ConfigDialog(QDialog):
         Lo llama ``MainWindow._show_settings`` al reabrir: el diálogo se
         crea una sola vez y se reutiliza en vez de montarse otra vez.
         """
-        path = find_siril() or ""
+        path = find_siril(get_setting(SETTINGS_KEY) or None) or ""
         self._siril_path.setText(path)
         self._project_root.setText(get_setting(PROJECT_ROOT_KEY) or "")
         self._clear_outside_key.setText(load_api_key("clear_outside_api_key") or "")
@@ -416,7 +416,7 @@ class ConfigDialog(QDialog):
 
     def _save(self) -> None:
         """Escribe todo de una vez en ``settings`` y avisa a la ventana."""
-        save_user_path(self._siril_path.text().strip())
+        set_setting(SETTINGS_KEY, self._siril_path.text().strip())
         set_setting(PROJECT_ROOT_KEY, self._project_root.text().strip())
         save_api_key("clear_outside_api_key", self._clear_outside_key.text().strip())
         save_api_key("meteoblue_api_key", self._meteoblue_key.text().strip())

@@ -1,32 +1,30 @@
 """Detección del ejecutable de SirIL.
 
-Busca SirIL en el PATH; si no lo encuentra, usa la ruta guardada por el
-usuario en ``settings`` (clave ``siril_path``).
+Busca SirIL en el PATH; si no está, se devuelve la ruta que el llamante
+haya guardado para el usuario. La lectura de ``settings`` vive fuera (en
+la UI): este módulo no toca la BD, porque el hilo de trabajo de SirIL no
+debe usar la conexión creada en el hilo de UI (SQLite lo prohibió y ya hay
+regresión de eso en `test_siril_runner.py`).
 """
 import subprocess
 from shutil import which
 
-from db.settings import get_setting, set_setting
-
+#: Clave de ``settings`` donde la UI guarda la ruta elegida por el usuario.
 SETTINGS_KEY = "siril_path"
 
 
-def find_siril() -> str | None:
-    """Devuelve la ruta de SirIL o ``None`` si no se encontró.
+def find_siril(ruta_guardada: str | None = None) -> str | None:
+    """Ruta del binario CLI de SirIL o ``None`` si no se encontró.
 
-    Orden: 1) PATH del sistema, 2) ruta guardada por el usuario en ``settings``.
+    Orden: 1) PATH del sistema, 2) ``ruta_guardada`` (lo que el llamante
+    leyó de settings; ``""`` cuenta como no guardado).
     """
     # Prioriza la variante CLI: el ejecutable gráfico no siempre admite
-    # guiones por stdin. Conserva la preferencia del PATH sobre settings.
+    # guiones por stdin. Conserva la preferencia del PATH sobre lo guardado.
     path = which("siril-cli") or which("siril") or which("Siril.exe")
     if path:
         return path
-    return get_setting(SETTINGS_KEY) or None   # "" cuenta como no guardado
-
-
-def save_user_path(path: str) -> None:
-    """Guarda la ruta que eligió el usuario (fallback cuando no está en el PATH)."""
-    set_setting(SETTINGS_KEY, path)
+    return ruta_guardada or None
 
 
 def siril_version(path: str) -> str | None:

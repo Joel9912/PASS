@@ -1,39 +1,37 @@
 """stacks/siril_finder: localización del binario de SirIL y versión instalada.
 
-Estos tests prueban el descubrimiento del binario (PATH del sistema, ruta
-guardada por el usuario y prioridades entre ambas) y la lectura de
-``--version`` con un ``subprocess.run`` sustituido: nunca se ejecuta SirIL.
+El descubrimiento (PATH primero, ruta guardada que aporta el llamante) no
+toca la BD: `settings` lo lee la UI y se lo pasa por parámetro (A-03). La
+lectura de ``--version`` va con ``subprocess.run`` sustituido: nunca se
+ejecuta SirIL.
 """
 from stacks import siril_finder
 
 
-def test_find_siril_falls_back_to_saved_path(memory_settings, monkeypatch):
-    """Sin SirIL en el PATH usa la ruta guardada por el usuario."""
+def test_find_siril_falls_back_to_saved_path(monkeypatch):
+    """Sin SirIL en el PATH usa la ruta que aporta el llamante."""
     monkeypatch.setattr(siril_finder, "which", lambda _name: None)
     assert siril_finder.find_siril() is None
 
-    siril_finder.save_user_path(r"C:\Program Files\Siril\bin\siril-cli.exe")
     assert (
-        siril_finder.find_siril()
+        siril_finder.find_siril(r"C:\Program Files\Siril\bin\siril-cli.exe")
         == r"C:\Program Files\Siril\bin\siril-cli.exe"
     )
 
 
-def test_find_siril_prefers_path_over_saved(memory_settings, monkeypatch):
+def test_find_siril_prefers_path_over_saved(monkeypatch):
     """El PATH del sistema tiene prioridad sobre la ruta guardada."""
     monkeypatch.setattr(siril_finder, "which", lambda _name: "C:/bin/siril.exe")
-    siril_finder.save_user_path("ruta-antigua")
-    assert siril_finder.find_siril() == "C:/bin/siril.exe"
+    assert siril_finder.find_siril("ruta-antigua") == "C:/bin/siril.exe"
 
 
-def test_find_siril_ignores_empty_saved_path(memory_settings, monkeypatch):
-    """Una ruta vacía guardada cuenta como «no guardado»."""
+def test_find_siril_ignores_empty_saved_path(monkeypatch):
+    """Una ruta vacía cuenta como «no guardado»."""
     monkeypatch.setattr(siril_finder, "which", lambda _name: None)
-    siril_finder.save_user_path("")
-    assert siril_finder.find_siril() is None
+    assert siril_finder.find_siril("") is None
 
 
-def test_siril_version_reads_first_line(memory_settings, monkeypatch):
+def test_siril_version_reads_first_line(monkeypatch):
     """siril_version devuelve la primera línea de `--version` si todo va bien."""
     import subprocess as sp
 
@@ -47,7 +45,7 @@ def test_siril_version_reads_first_line(memory_settings, monkeypatch):
     assert siril_finder.siril_version("C:/siril/siril-cli.exe") == "Siril 1.2.1"
 
 
-def test_siril_version_none_on_failure(memory_settings, monkeypatch):
+def test_siril_version_none_on_failure(monkeypatch):
     """Fallo de ejecución (código ≠ 0 o error del sistema) → None, sin excepciones."""
     import subprocess as sp
 

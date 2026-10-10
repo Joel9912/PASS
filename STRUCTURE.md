@@ -36,7 +36,7 @@ Planning-Stacking-Suite/
 │   └── README.md
 │
 ├── stacks/               # Integración SirIL (CLI externa, sin motor propio)
-│   ├── siril_finder.py       # PATH → ruta del usuario (settings.siril_path)
+│   ├── siril_finder.py       # PATH → ruta que aporta la UI (settings en UI)
 │   ├── siril_runner.py       # CLI por stdin, ini, enlaces, cancelación y working
 │   ├── session_parser.py     # Sesiones, alias y cabeceras FITS
 │   ├── calibrator.py         # Calibración cruda → working + calibrated_sessions

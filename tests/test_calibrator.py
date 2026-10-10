@@ -121,21 +121,28 @@ def test_calibrate_session_sesion_completa(siril_falso, sesion_completa):
 
 
 def test_calibrar_en_hilo_con_directorio_global_capturado(
-    siril_falso, sesion_completa, monkeypatch,
+    siril_falso, sesion_completa,
 ):
-    """La calibración no lee settings/SQLite si UI ya pasó la ruta global."""
+    """La calibración no toca settings/SQLite: la ruta global viaja por parámetro.
+
+    Antes el worker leía `get_setting` desde el hilo de trabajo (SQLite
+    prohibe usar la conexión creada en otro hilo, A-03). Ahora la garantía
+    es de construcción: ni `calibrator` ni `siril_finder` importan settings,
+    y el hilo de prueba lo confirma ejecutando de verdad.
+    """
+    import inspect
     from concurrent.futures import ThreadPoolExecutor
 
-    def prohibido(*_args):
-        """Acceder a la conexión SQLite del hilo principal rompería la tarea."""
-        raise AssertionError("get_setting desde el worker")
+    import stacks.calibrator as calibrator_mod
+    import stacks.siril_finder as finder_mod
 
-    monkeypatch.setattr(calibrator, "get_setting", prohibido)
     with ThreadPoolExecutor(max_workers=1) as pool:
         resultado = pool.submit(
             calibrate_session, sesion_completa, global_dir=""
         ).result()
     assert resultado.n_lights == 1
+    assert "db.settings" not in inspect.getsource(calibrator_mod)
+    assert "db.settings" not in inspect.getsource(finder_mod)
 
 
 def test_lights_calibrados_en_carpeta_de_trabajo(siril_falso, sesion_completa):
@@ -411,39 +418,39 @@ def test_opciones_avanzadas_opt_y_cc(tmp_path, siril_falso):
 
 
 # ------------------------------------------------------------ carpeta global
-def test_carpeta_global_de_masters(tmp_path, monkeypatch, siril_falso):
-    """Sesión sin bias/darks + carpeta global con másters → usa los globales."""
+def test_carpeta_global_de_masters(tmp_path, siril_falso):
+    """Sesión sin bias/darks + carpeta global con másters → usa los globales.
+
+    La ruta global viaja por parámetro (la UI la resuelve de settings):
+    el calibrador no lee la BD (A-03).
+    """
     global_dir = tmp_path / "global"
     _fits(global_dir / "master_bias.fits")
     _fits(global_dir / "master_dark.fits")
-    monkeypatch.setattr(
-        calibrator, "get_setting", lambda clave, default="": str(global_dir)
-    )
 
     sesion_dir = tmp_path / "sesion"
     _fits(sesion_dir / "flats" / "flat_0001.fits")
     _fits(sesion_dir / "lights" / "light_0001.fits", EXPOSURE=10.0)
     sesion = parse_session(sesion_dir)
 
-    resultado = calibrate_session(sesion)
+    resultado = calibrate_session(sesion, global_dir=str(global_dir))
     # El global cubrió lo que faltaba (el único aviso posible es la nota
     # de que el dark global ya incluye el bias, que es correcto).
     assert not [a for a in resultado.avisos if a.startswith("Sin ")]
     assert resultado.masters["bias"] == global_dir / "master_bias.fits"
 
 
-def test_carpeta_global_de_frames_apila_una_vez(tmp_path, monkeypatch, siril_falso):
+def test_carpeta_global_de_frames_apila_una_vez(tmp_path, siril_falso):
     """Global con frames sueltos → máster apilado y cacheado en _global_."""
     global_dir = tmp_path / "global"
     for i in range(1, 6):
         _fits(global_dir / "bias" / f"bias_{i:04d}.fits")
-    monkeypatch.setattr(
-        calibrator, "get_setting", lambda clave, default="": str(global_dir)
-    )
 
     sesion_dir = tmp_path / "sesion"
     _fits(sesion_dir / "lights" / "light_0001.fits", EXPOSURE=10.0)
-    resultado = calibrate_session(parse_session(sesion_dir))
+    resultado = calibrate_session(
+        parse_session(sesion_dir), global_dir=str(global_dir)
+    )
     master_global = resultado.masters["bias"]
     assert master_global.exists() and "_global_" in str(master_global)
 
@@ -454,7 +461,7 @@ def test_carpeta_global_de_frames_apila_una_vez(tmp_path, monkeypatch, siril_fal
     )
     sesion2 = tmp_path / "sesion2"
     _fits(sesion2 / "lights" / "light_0001.fits", EXPOSURE=10.0)
-    calibrate_session(parse_session(sesion2))
+    calibrate_session(parse_session(sesion2), global_dir=str(global_dir))
     stacks_despues = sum(
         1 for llamada in siril_falso.llamadas for c in llamada["comandos"]
         if c.startswith("stack") and "bias" in c
@@ -462,11 +469,10 @@ def test_carpeta_global_de_frames_apila_una_vez(tmp_path, monkeypatch, siril_fal
     assert stacks_despues == stacks_antes
 
 
-def test_sin_global_configurado_no_revienta(tmp_path, monkeypatch, siril_falso):
-    """Setting vacío → material global vacío, sin excepción."""
-    monkeypatch.setattr(calibrator, "get_setting", lambda clave, default="": "")
+def test_sin_global_configurado_no_revienta(tmp_path, siril_falso):
+    """Sin carpeta global (ruta vacía o None) → material global vacío, sin excepción."""
     _fits(tmp_path / "lights" / "light_0001.fits", EXPOSURE=10.0)
-    resultado = calibrate_session(parse_session(tmp_path))
+    resultado = calibrate_session(parse_session(tmp_path), global_dir="")
     assert resultado.n_lights == 1
     assert resultado.avisos  # sin nada: todos los avisos
 

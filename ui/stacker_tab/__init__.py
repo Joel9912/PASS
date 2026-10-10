@@ -24,7 +24,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from db.settings import get_setting
+from db.settings import get_setting, set_setting
 from stacks.calibrator import (
     CALIBRATED_DIR,
     SETTING_GLOBAL_DIR,
@@ -43,7 +43,7 @@ from stacks.session_parser import (
     ficha_de_luz,
     parse_sessions,
 )
-from stacks.siril_finder import find_siril, save_user_path, siril_version
+from stacks.siril_finder import SETTINGS_KEY, find_siril, siril_version
 from stacks.siril_runner import (
     WORKING_FOLDER,
     SirilError,
@@ -60,6 +60,15 @@ from .worker import CANCELADO, SirilWorker, arrancar_en_hilo
 
 #: Nombres de los cinco pasos; el orden ES el flujo del asistente.
 PASOS = ("Sesiones", "Calibrar", "Auditar", "Apilar", "Final")
+
+
+def _siril_del_usuario() -> str | None:
+    """SirIL resuelto con la ruta guardada del usuario (A-03).
+
+    ``settings`` se lee aquí, en el hilo de UI, y el valor viaja por
+    parámetro: los módulos de ``stacks/`` no tocan la BD.
+    """
+    return find_siril(get_setting(SETTINGS_KEY) or None)
 
 
 def nombre_por_integracion(frames: list) -> str:
@@ -219,7 +228,7 @@ class StackerPage(QWidget):
         # --- raíz inicial desde Configuración y estado de SirIL
         self._refrescar_calibradas()
         self.panel_sesiones.poner_raiz(get_setting(PROJECT_ROOT_KEY) or "")
-        self.panel_apilar.avisar_siril(find_siril() is None)
+        self.panel_apilar.avisar_siril(_siril_del_usuario() is None)
 
         # Al salir de la aplicación, ninguna tarea ni SirIL se quedan colgados.
         app = QApplication.instance()
@@ -799,7 +808,7 @@ class StackerPage(QWidget):
         if self._worker is not None:
             return False
         if siril:
-            binario = find_siril()
+            binario = _siril_del_usuario()
             if not binario:
                 self._decir("SirIL no está disponible.")
                 return False
@@ -900,7 +909,7 @@ class StackerPage(QWidget):
 
     def _asegurar_siril(self) -> bool:
         """True si SirIL está localizable; si no, pide la ruta y la guarda."""
-        if find_siril():
+        if _siril_del_usuario():
             return True
         ruta, _filtro = QFileDialog.getOpenFileName(
             self,
@@ -914,7 +923,7 @@ class StackerPage(QWidget):
         if not siril_version(ruta):
             self._decir("El ejecutable de SirIL no responde a --version.")
             return False
-        save_user_path(ruta)
+        set_setting(SETTINGS_KEY, ruta)
         self.panel_apilar.avisar_siril(False)
         self._log(f"SirIL (ruta del usuario): {ruta}")
         self._decir(f"SirIL guardado: {ruta}")

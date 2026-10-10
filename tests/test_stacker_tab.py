@@ -122,7 +122,7 @@ def test_final_abre_fits_seleccionado_en_siril_grafico(tmp_path, monkeypatch):
     gui.touch()
     imagen = tmp_path / "final.fit"
     imagen.touch()
-    monkeypatch.setattr(panel_final, "find_siril", lambda: str(tmp_path / "siril-cli.exe"))
+    monkeypatch.setattr(panel_final, "find_siril", lambda _ruta_guardada=None: str(tmp_path / "siril-cli.exe"))
     llamadas = []
     monkeypatch.setattr(panel_final.subprocess, "Popen", lambda args: llamadas.append(args))
     panel = panel_final.PanelFinal()
@@ -323,7 +323,7 @@ def test_escaneo_en_hilo_rellena_y_el_siguiente_avanza(tmp_path, monkeypatch):
 
     sesion = _sesion("noche1", 3, tmp_path)
     monkeypatch.setattr(stacker_tab, "parse_sessions", lambda raiz: [sesion])
-    monkeypatch.setattr(stacker_tab, "find_siril", lambda: "/usr/bin/siril")
+    monkeypatch.setattr(stacker_tab, "find_siril", lambda _ruta_guardada=None: "/usr/bin/siril")
     monkeypatch.setattr(stacker_tab, "list_calibrated", list)
 
     pagina = StackerPage()
@@ -903,7 +903,7 @@ def test_hacer_todo_encadena_las_cuatro_fases(tmp_path, monkeypatch, memory_db):
         return [carpeta / f"{nombre}.fit"]
 
     monkeypatch.setattr(stacker_tab, "parse_sessions", lambda raiz: [sesion])
-    monkeypatch.setattr(stacker_tab, "find_siril", lambda: "/usr/bin/siril")
+    monkeypatch.setattr(stacker_tab, "find_siril", lambda _ruta_guardada=None: "/usr/bin/siril")
     monkeypatch.setattr(stacker_tab, "calibrate_session", calibrar_falso)
     monkeypatch.setattr(stacker_tab, "pool_desde_calibradas", pool_falso)
     monkeypatch.setattr(stacker_tab, "audit_pool", audit_falso)
@@ -972,7 +972,7 @@ def test_apilar_pide_debayer_o_drizzle_segun_la_casilla(tmp_path, monkeypatch):
             frames=list(aceptados or pool_falso.entries),
         )
 
-    monkeypatch.setattr(stacker_tab, "find_siril", lambda: "/usr/bin/siril")
+    monkeypatch.setattr(stacker_tab, "find_siril", lambda _ruta_guardada=None: "/usr/bin/siril")
     monkeypatch.setattr(stacker_tab, "register_pool", registrar_falso)
     monkeypatch.setattr(
         stacker_tab, "apilar_pool",

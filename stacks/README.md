@@ -5,7 +5,7 @@ Integración de SirIL **externo** por CLI. Los originales se leen, nunca se modi
 
 ## Estado actual
 - `session_parser.py` — sesiones, alias de carpetas, FITS/RAW, ficha de cabeceras (CROTA2, elevación del sitio en metros y `OBJCTALT` del objeto en grados, sin confundirlos) y campo angular si la escala o focal/píxel lo permiten.
-- `siril_finder.py` — binario CLI desde PATH o ruta guardada en `settings.siril_path`, versión con `--version`.
+- `siril_finder.py` — binario CLI desde PATH o la ruta que aporta el llamante (settings lo lee la UI, A-03), versión con `--version`.
 - `siril_runner.py` — scripts por stdin, ini aislado, progreso/cancelación, binario capturado en UI por contexto de tarea, enlaces symlink→hardlink y limpieza restringida a `data/working/`. El log visible muestra el guion y omite líneas `HDU` repetitivas y controles ANSI; el resultado conserva la salida íntegra. El borrado explícito valida rutas y desenlaza sin seguir enlaces a originales.
 - `calibrator.py` — másters, calibración cruda por sesión y persistencia en `calibrated_sessions` desde el hilo UI; la carpeta global configurada se pasa al worker como dato. El log identifica procedencia, enlaces y medianas FITS sin atribuir unidades ADU a valores normalizados.
 - `global_pool.py` — referencias a los lights calibrados, sin copias.

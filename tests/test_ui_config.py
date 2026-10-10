@@ -15,7 +15,7 @@ def _config_dialog(monkeypatch, find_path, *, real_probe=False):
     from ui.config_tab import config_dialog as cd
 
     probed: list[str] = []
-    monkeypatch.setattr(cd, "find_siril", lambda: find_path)
+    monkeypatch.setattr(cd, "find_siril", lambda _ruta_guardada=None: find_path)
     monkeypatch.setattr(cd, "get_setting", lambda _key: "")
     monkeypatch.setattr(cd, "load_api_key", lambda _key: "")
     if not real_probe:
@@ -129,7 +129,7 @@ def test_show_settings_keeps_one_dialog(qt_app, monkeypatch):
 
     _app = qt_app
 
-    monkeypatch.setattr(cd, "find_siril", lambda: None)
+    monkeypatch.setattr(cd, "find_siril", lambda _ruta_guardada=None: None)
     monkeypatch.setattr(cd, "get_setting", lambda _key: "")
     monkeypatch.setattr(cd, "load_api_key", lambda _key: "")
 

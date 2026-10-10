@@ -18,7 +18,7 @@ El diálogo **«Configuración General de la Aplicación»** que abre el botón 
 
 ## Qué hacer aquí
 - Tareas típicas: añadir secciones al nav (con su página), nuevos campos de `settings`, validar rutas antes de guardar.
-- **Reglas concretas**: nada de lógica de negocio ni SQL — solo leer con los helpers (`get_setting`, `load_api_key`, `find_siril`) y escribir con (`set_setting`, `save_api_key`, `save_user_path`); las API keys jamás en código ni en el repositorio.
+- **Reglas concretas**: nada de lógica de negocio ni SQL — solo leer con los helpers (`get_setting`, `load_api_key`) y escribir con (`set_setting`, `save_api_key`); la ruta de SirIL se resuelve con `find_siril(get_setting(SETTINGS_KEY))` (el módulo no toca la BD, A-03); las API keys jamás en código ni en el repositorio.
 - **Nunca congelar la interfaz**: lo que ejecuta SirIL va por `_BRIDGE.probe()` / `_EXECUTOR` (hilo aparte), nunca en el hilo de la UI; los avisos de ruta mala sí salen ya mismo porque no hay nada que arrancar.
 - Al modificar la carpeta: actualizar "Estado actual" aquí mismo en la misma tarea.
 - Los textos de estado mientan solo lo comprobado (versión real de SirIL, no «está instalado» sin ejecutarlo).

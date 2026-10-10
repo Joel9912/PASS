@@ -38,7 +38,6 @@ import numpy as np
 from astropy.io import fits
 
 from db.connection import get_connection
-from db.settings import get_setting
 
 from .session_parser import RAW_EXTS, Session, exposure_de, parse_calibration_folder
 from .siril_runner import (
@@ -105,8 +104,9 @@ def calibrate_session(
 
     - Si la sesión trae másters, los usa directamente.
     - Si no, genera los másters con SirIL a partir de flats/darks/bias.
-    - Si le faltan bias/darks, recurre a la carpeta global de calibrado
-      (setting ``stacks_global_calibration_dir``).
+    - Si le faltan bias/darks, recurre a ``global_dir`` (la carpeta global
+      que la UI resuelve del setting ``stacks_global_calibration_dir`` y
+      pasa por parámetro: aquí no se toca la BD).
     - Nunca escribe dentro de ``session.path`` (origen de solo lectura).
 
     Args:
@@ -499,10 +499,13 @@ def _calibrar_lights(
     resultado.exposure_s = exposure_de(calibrados[0])
 
 
-def _material_global(ruta: str | None = None) -> tuple[dict[str, Path], dict[str, list[Path]]]:
-    """(masters, frames) de la carpeta global de calibrado configurada por el usuario."""
-    if ruta is None:
-        ruta = get_setting(SETTING_GLOBAL_DIR, "")
+def _material_global(ruta: str | None) -> tuple[dict[str, Path], dict[str, list[Path]]]:
+    """(masters, frames) de la carpeta global de calibrado del usuario.
+
+    La ruta la resuelve la UI (settings) y la pasa por parámetro: aquí no
+    se lee la BD, porque esta función corre en el hilo de trabajo de SirIL
+    (A-03 de la auditoría). Sin ruta, no hay carpeta global.
+    """
     if not ruta or not Path(ruta).is_dir():
         return {}, {}
     return parse_calibration_folder(Path(ruta))
