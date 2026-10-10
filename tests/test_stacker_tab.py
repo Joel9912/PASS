@@ -738,7 +738,7 @@ def test_entrar_en_calibrar_avisa_solo_una_vez_si_hay_datos(
     assert salida.is_dir()
 
 
-def test_repertir_anchos_reparte_el_ancho_de_la_cabecera():
+def test_repartir_anchos_reparte_el_ancho_de_la_cabecera():
     """El ID ocupa el 44 % y el resto no baja de los mínimos de las otras.
 
     Se prueban anchos dados porque el ancho real del panel depende de la
@@ -751,16 +751,16 @@ def test_repertir_anchos_reparte_el_ancho_de_la_cabecera():
     tabla = panel._tabla
 
     # Panel ancho: el ID manda y las tres numéricas comparten el resto.
-    panel._repertir_anchos(1200)
+    panel._repartir_anchos(1200)
     assert [tabla.columnWidth(c) for c in range(4)] == [528, 203, 237, 232]
     assert sum(tabla.columnWidth(c) for c in range(4)) == 1200
 
     # Estrecho: el 44 % choca con los mínimos de las tres numéricas.
-    panel._repertir_anchos(445)
+    panel._repartir_anchos(445)
     assert [tabla.columnWidth(c) for c in range(4)] == [155, 75, 110, 105]
 
     # Muy estrecho: se conservan los mínimos y Qt ofrece desplazamiento.
-    panel._repertir_anchos(317)
+    panel._repartir_anchos(317)
     assert [tabla.columnWidth(c) for c in range(4)] == [145, 75, 110, 105]
 
 

@@ -968,7 +968,7 @@ class PanelSesiones(QWidget):
                     item.setToolTip(_ayuda_fila(sesion, calibrada, ficha))
                 self._tabla.setItem(fila, columna, item)
             self._tabla.setRowHeight(fila, 30)
-        self._repertir_anchos()
+        self._repartir_anchos()
         if sesiones:
             self._resumen.setText(
                 _banner(len(sesiones), total_lights, _formato_total(total_segundos))
@@ -1183,7 +1183,7 @@ class PanelSesiones(QWidget):
         )
         self._reiniciar.setGeometry(max(0, ancho_v - 105), max(0, alto_v - 36), 95, 26)
 
-    def _repertir_anchos(self, ancho: int | None = None) -> None:
+    def _repartir_anchos(self, ancho: int | None = None) -> None:
         """El ID ocupa el 44 % y el resto reparte entre las tres columnas.
 
         Si el panel es más estrecho que los mínimos, se conservan los mínimos
@@ -1224,8 +1224,8 @@ class PanelSesiones(QWidget):
         """
         if evento.type() == QEvent.Type.Resize:
             if objeto is self._tabla:
-                self._repertir_anchos()
-                QTimer.singleShot(0, self._repertir_anchos)
+                self._repartir_anchos()
+                QTimer.singleShot(0, self._repartir_anchos)
             elif objeto is getattr(self, "_cielo", None):
                 self._colocar_flotantes()
             elif objeto is getattr(self, "_vistas", None):
