@@ -251,7 +251,6 @@ def _preparar_flats(
         return None
 
     trabajo = destino / "flat"
-    master = trabajo / "master_flat.fits"
     if "dark_flat" in masters:
         _exigir_enteros_16bit(frames, "Los flats")
         seq = _enlazar_frames(frames, trabajo, SEQ_POR_TIPO["flat"], log_cb=log_cb)
@@ -266,14 +265,9 @@ def _preparar_flats(
     else:
         seq = _enlazar_frames(frames, trabajo, SEQ_POR_TIPO["flat"], log_cb=log_cb)
 
-    # Con pocos frames el rechazo sigma no tiene muestras: mediana y punto.
-    modo = "rej s 3 3" if len(frames) >= 5 else "med"
-    res = ejecutar_script(
-        [f"stack {seq} {modo} -nonorm -32b -out={master.name}"],
-        cwd=trabajo, log_cb=log_cb,
-    )
-    if not res.ok or not master.exists():
-        raise SirilError(f"No se pudo apilar el máster de flats: {res.motivo}")
+    # Mismo camino de `stack` que el resto de másters (A-08): allí vive la
+    # regla de mediana vs rechazo sigma según el número de frames.
+    master = _apilar_master_en(trabajo, seq, "flat", len(frames), log_cb=log_cb)
     masters["flat"] = master
     return master
 
