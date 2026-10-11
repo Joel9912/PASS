@@ -22,14 +22,12 @@ from PyQt6.QtWidgets import (
     QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
-    QHeaderView,
     QInputDialog,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
     QSpinBox,
-    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -40,6 +38,8 @@ from planners import personal_catalog
 from ..widgets import (
     CATALOG_LABELS,
     _type_label,
+    crear_tabla_filas,
+    fila_seleccionada,
     format_dec,
     format_ra,
     format_size,
@@ -174,18 +174,7 @@ class CatalogoPersonalTab(QWidget):
         title_row.addStretch(1)
         layout.addLayout(title_row)
 
-        self._table = QTableWidget(0, len(COLUMNS))
-        self._table.setHorizontalHeaderLabels(list(COLUMNS))
-        self._table.verticalHeader().setVisible(False)
-        self._table.setAlternatingRowColors(True)
-        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._table.setWordWrap(False)
-        self._table.setMinimumHeight(260)
-        header_view = self._table.horizontalHeader()
-        header_view.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        header_view.setStretchLastSection(True)
+        self._table = crear_tabla_filas(list(COLUMNS), altura_min=260, word_wrap=False)
         self._table.itemSelectionChanged.connect(self._on_selection)
         layout.addWidget(self._table, 1)
 
@@ -286,16 +275,8 @@ class CatalogoPersonalTab(QWidget):
 
     # -- Selección -----------------------------------------------------------
     def _selected(self) -> dict | None:
-        """Dict de la fila seleccionada (``None`` si no hay o está fuera de rango)."""
-        rows = (
-            self._table.selectionModel().selectedRows()
-            if self._table.selectionModel()
-            else []
-        )
-        if not rows:
-            return None
-        index = rows[0].row()
-        return self._rows[index] if 0 <= index < len(self._rows) else None
+        """Dict de la fila seleccionada (``None`` si no hay)."""
+        return fila_seleccionada(self._table, self._rows)
 
     def _on_selection(self) -> None:
         """Activa los botones y emite ``target_selected`` al marcar una fila."""

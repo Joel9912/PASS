@@ -26,9 +26,11 @@ from PyQt6.QtWidgets import (
     QDoubleSpinBox,
     QFrame,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QPushButton,
     QSizePolicy,
+    QTableWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -218,6 +220,61 @@ def _type_label(type_code: str | None) -> str:
 UTC_OFFSETS: tuple[float, ...] = tuple(
     step * 0.5 for step in range(-24, 29)   # -12.0 … +14.0 en pasos de 0.5
 )
+
+
+# --------------------------------------------------------------------------- #
+#                                T A B L A S                                   #
+# --------------------------------------------------------------------------- #
+def crear_tabla_filas(
+    etiquetas: list[str],
+    *,
+    altura_min: int,
+    alto_fila: int | None = None,
+    stretch_ultima: bool = True,
+    word_wrap: bool = True,
+) -> QTableWidget:
+    """Tabla de solo lectura con selección de fila entera (A-16).
+
+    El patrón que las cuatro subpestañas del Planificador repetían: filas
+    enteras seleccionables de una en una, sin edición, header sin números
+    de fila y columnas a ancho de contenido.
+
+    - ``alto_fila``: alto de fila por defecto (solo donde la vista lo pide).
+    - ``stretch_ultima=False``: en Búsqueda el sobrante lo reparte
+      ``_spread_surplus`` a partir de los anchos de contenido.
+    """
+    # Ojo: QTableWidget(filas, 0) + setHorizontalHeaderLabels NO crea
+    # columnas (solo etiqueta las existentes); hay que pasarlas aquí.
+    tabla = QTableWidget(0, len(etiquetas))
+    tabla.setHorizontalHeaderLabels(etiquetas)
+    tabla.verticalHeader().setVisible(False)
+    if alto_fila is not None:
+        tabla.verticalHeader().setDefaultSectionSize(alto_fila)
+    tabla.setAlternatingRowColors(True)
+    tabla.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+    tabla.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+    tabla.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+    tabla.setWordWrap(word_wrap)
+    tabla.setMinimumHeight(altura_min)
+    header = tabla.horizontalHeader()
+    header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+    header.setStretchLastSection(stretch_ultima)
+    return tabla
+
+
+def fila_seleccionada(tabla: QTableWidget, filas: list) -> dict | None:
+    """Dict de la fila seleccionada en ``tabla``; ``None`` si no la hay (A-16).
+
+    ``filas`` es la lista que alimenta la tabla (``_rows``, ``_plan``…).
+    El índice fuera de rango se descarta a mano (defensa contra una
+    selección huérfana tras recargar la tabla).
+    """
+    seleccion = tabla.selectionModel()
+    indices = seleccion.selectedRows() if seleccion else []
+    if not indices:
+        return None
+    indice = indices[0].row()
+    return filas[indice] if 0 <= indice < len(filas) else None
 
 
 class LocationBar(QFrame):

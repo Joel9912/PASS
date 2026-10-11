@@ -35,7 +35,6 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
-    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -59,6 +58,8 @@ from ..widgets import (
     TransitCurve,
     WeatherCards,
     _type_label,
+    crear_tabla_filas,
+    fila_seleccionada,
     format_dec,
     format_ra,
     format_size,
@@ -269,26 +270,17 @@ class BusquedaTab(QWidget):
         header.addWidget(self._add_button)
         layout.addLayout(header)
 
-        # Ojo: QTableWidget(filas, 0) + setHorizontalHeaderLabels NO crea
-        # columnas (solo etiqueta las existentes); hay que pasar las columnas.
-        self._table = QTableWidget(0, len(COLUMNS))
-        self._table.setHorizontalHeaderLabels([label for label, _ in COLUMNS])
-        self._table.verticalHeader().setVisible(False)
-        self._table.verticalHeader().setDefaultSectionSize(self.ROW_HEIGHT)
-        self._table.setAlternatingRowColors(True)
-        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._table.setSortingEnabled(False)
-        self._table.setWordWrap(False)
-        self._table.setMinimumHeight(220)
-
-        header_view = self._table.horizontalHeader()
-        header_view.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        # Sin stretchLast: «Horas >30°» se quedaba con TODO el sobrante
-        # (~366 px para ~75 de contenido). El reparto lo hace
-        # _spread_surplus a partir de los anchos de contenido.
-        header_view.setStretchLastSection(False)
+        # Configuración común de las tablas del Planificador en
+        # widgets.crear_tabla_filas (A-16). Sin stretchLast: «Horas >30°»
+        # se quedaba con TODO el sobrante (~366 px para ~75 de contenido);
+        # el reparto lo hace _spread_surplus con los anchos de contenido.
+        self._table = crear_tabla_filas(
+            [label for label, _ in COLUMNS],
+            altura_min=220,
+            alto_fila=self.ROW_HEIGHT,
+            stretch_ultima=False,
+            word_wrap=False,
+        )
         for index, (_, width) in enumerate(COLUMNS):
             self._table.setColumnWidth(index, int(width))
         # Base estable de reparto: anchos de contenido (los declarados
@@ -585,14 +577,8 @@ class BusquedaTab(QWidget):
 
     # -- Selección -----------------------------------------------------------
     def _selected_row(self) -> dict | None:
-        """Dict de la fila seleccionada en la tabla (``None`` si no hay o está fuera de rango)."""
-        rows = self._table.selectionModel().selectedRows() if self._table.selectionModel() else []
-        if not rows:
-            return None
-        index = rows[0].row()
-        if 0 <= index < len(self._rows):
-            return self._rows[index]
-        return None
+        """Dict de la fila seleccionada en la tabla (``None`` si no hay)."""
+        return fila_seleccionada(self._table, self._rows)
 
     def _on_row_selected(self) -> None:
         """Habilita el ⭐, emite ``object_selected`` y recalcula la curva de la selección."""

@@ -35,7 +35,6 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -43,7 +42,6 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QSpinBox,
     QSplitter,
-    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -57,7 +55,7 @@ from planners.framing import calculate_fov
 from planners.moon_distance import format_hour_range
 from planners.transit import night_curve
 
-from ..widgets import TransitCurve, window_lines
+from ..widgets import TransitCurve, crear_tabla_filas, fila_seleccionada, window_lines
 from .planetario_visual import PlanetarioVisual
 
 #: Etiqueta de "sin encuadre" cuando el equipo no da FOV.
@@ -264,21 +262,7 @@ class PlanificacionTab(QWidget):
         head.addWidget(self._plan_button)
         layout.addLayout(head)
 
-        self._plan_table = QTableWidget(0, len(PLAN_COLUMNS))
-        self._plan_table.setHorizontalHeaderLabels(list(PLAN_COLUMNS))
-        self._plan_table.verticalHeader().setVisible(False)
-        self._plan_table.setAlternatingRowColors(True)
-        self._plan_table.setSelectionBehavior(
-            QTableWidget.SelectionBehavior.SelectRows
-        )
-        self._plan_table.setSelectionMode(
-            QTableWidget.SelectionMode.SingleSelection
-        )
-        self._plan_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._plan_table.setMinimumHeight(150)
-        header_view = self._plan_table.horizontalHeader()
-        header_view.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        header_view.setStretchLastSection(True)
+        self._plan_table = crear_tabla_filas(list(PLAN_COLUMNS), altura_min=150)
         self._plan_table.itemSelectionChanged.connect(self._on_plan_selected)
         layout.addWidget(self._plan_table)
 
@@ -505,10 +489,7 @@ class PlanificacionTab(QWidget):
 
     def _on_planet_object_clicked(self, object_id: str, catalog: str) -> None:
         """Clic en un objeto del cielo → lo coloca como target si está guardado."""
-        for index, row in enumerate(self._targets):
-            if row["object_id"] == object_id and row["catalog"] == catalog:
-                self._target.setCurrentIndex(index)
-                return
+        self.select_target(object_id, catalog)   # misma búsqueda (A-29)
 
     def _copy_from_planetarium(self) -> None:
         """«Actualizar desde planetario»: el centro del cielo pasa al editor de encuadre."""
@@ -657,17 +638,9 @@ class PlanificacionTab(QWidget):
 
     def _on_plan_selected(self) -> None:
         """Fila elegida → desglose de esa noche (noche, luna y ventanas) bajo la tabla."""
-        rows = (
-            self._plan_table.selectionModel().selectedRows()
-            if self._plan_table.selectionModel()
-            else []
-        )
-        if not rows:
+        item = fila_seleccionada(self._plan_table, self._plan)
+        if item is None:
             return
-        index = rows[0].row()
-        if not (0 <= index < len(self._plan)):
-            return
-        item = self._plan[index]
         windows = item.get("windows", {})
         ideal, possible = window_lines(windows)
         self._window_label.setText(

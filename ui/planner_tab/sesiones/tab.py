@@ -20,13 +20,11 @@ from PyQt6.QtWidgets import (
     QDialogButtonBox,
     QFormLayout,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
     QSpinBox,
-    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -34,6 +32,8 @@ from PyQt6.QtWidgets import (
 
 from equipment.manager import list_setups
 from planners import planned_sessions
+
+from ..widgets import crear_tabla_filas, fila_seleccionada
 
 #: Columnas de la tabla (mockup del usuario).
 COLUMNS: tuple[str, ...] = (
@@ -181,17 +181,7 @@ class SesionesTab(QWidget):
         head.addStretch(1)
         layout.addLayout(head)
 
-        self._table = QTableWidget(0, len(COLUMNS))
-        self._table.setHorizontalHeaderLabels(list(COLUMNS))
-        self._table.verticalHeader().setVisible(False)
-        self._table.setAlternatingRowColors(True)
-        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
-        self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._table.setMinimumHeight(280)
-        header_view = self._table.horizontalHeader()
-        header_view.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        header_view.setStretchLastSection(True)
+        self._table = crear_tabla_filas(list(COLUMNS), altura_min=280)
         self._table.itemSelectionChanged.connect(self._on_selection)
         layout.addWidget(self._table, 1)
 
@@ -271,16 +261,8 @@ class SesionesTab(QWidget):
 
     # -- Selección -----------------------------------------------------------
     def _selected(self) -> dict | None:
-        """Fila seleccionada (``None`` si no hay o su índice está fuera de ``_rows``)."""
-        rows = (
-            self._table.selectionModel().selectedRows()
-            if self._table.selectionModel()
-            else []
-        )
-        if not rows:
-            return None
-        index = rows[0].row()
-        return self._rows[index] if 0 <= index < len(self._rows) else None
+        """Fila seleccionada (``None`` si no hay)."""
+        return fila_seleccionada(self._table, self._rows)
 
     def _on_selection(self) -> None:
         """Habilita los botones según la fila: la ya «completada» no se puede completar."""
