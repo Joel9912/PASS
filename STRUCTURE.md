@@ -25,6 +25,7 @@ Planning-Stacking-Suite/
 │   ├── transit.py            # Tránsito, luna, noche astronómica (astropy)
 │   ├── analytical_transit.py # Culminación/altitud sin astropy + local_utc_offset
 │   ├── moon_distance.py      # Umbral lunar y ventanas Captura Ideal/Posible
+│   ├── timefmt.py            # Formateo HH:MM único de todo el programa
 │   ├── capture_plan.py       # Ranking de fechas (plan de captura)
 │   ├── sky_loader.py         # Datos del planetario (estrellas/objetos → UI sin SQL)
 │   ├── framing.py            # FOV del equipo (None si faltan datos)

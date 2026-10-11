@@ -43,6 +43,7 @@ from planners.moon_distance import (
     min_moon_distance,
     unwrap_hours,
 )
+from planners.timefmt import format_hhmm
 from planners.transit import NightCurve, NightInfo, night_info
 from planners.weather import ClearOutside, Meteoblue
 
@@ -76,13 +77,11 @@ CURVE_EMPTY_SUBTITLE = "Tránsito: Sin selección (Máx: 0.0°)"
 #                                H O R A S                                     #
 # --------------------------------------------------------------------------- #
 def fmt_hhmm(hour_decimal: float) -> str:
-    """Decimal de horas (0-24) a ``HH:MM`` local, envuelto en 24 h."""
-    hours = int(hour_decimal) % 24
-    minutes = int(round((hour_decimal % 1) * 60))
-    if minutes == 60:                       # 18:59.9 -> 19:00
-        hours = (hours + 1) % 24
-        minutes = 0
-    return f"{hours:02d}:{minutes:02d}"
+    """Decimal de horas (0-24) a ``HH:MM`` local, envuelto en 24 h.
+
+    Delega en el formateador único `planners.timefmt.format_hhmm` (A-34).
+    """
+    return format_hhmm(hour_decimal)
 
 
 def iso_to_local_hours(

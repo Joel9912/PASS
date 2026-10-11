@@ -13,6 +13,8 @@ from __future__ import annotations
 import math
 from datetime import datetime
 
+from planners.timefmt import format_hhmm
+
 #: Tasa sideral: la hora sidereal avanza 1.0027379 h por hora solar.
 _SIDEREAL_RATE = 1.0027379
 
@@ -170,11 +172,8 @@ def altitude_at_utc(
 
 
 def format_transit_hours(hour_decimal: float) -> str:
-    """18.6 → '18:36' (para la columna Tránsito de la tabla)."""
-    hour_decimal = hour_decimal % 24.0
-    hours = int(hour_decimal)
-    minutes = int(round((hour_decimal - hours) * 60.0))
-    if minutes == 60:
-        hours = (hours + 1) % 24
-        minutes = 0
-    return f"{hours:02d}:{minutes:02d}"
+    """18.6 → '18:36' (para la columna Tránsito de la tabla).
+
+    Delega en el formateador único `planners.timefmt.format_hhmm` (A-34).
+    """
+    return format_hhmm(hour_decimal)

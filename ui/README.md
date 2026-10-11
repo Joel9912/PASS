@@ -34,4 +34,3 @@ Capa de interfaz de usuario (PyQt6). Una subcarpeta por pestaña principal; **so
   - `_transparency`/`phase_name` (reglas de negocio) viven en `widgets.py` en vez de en `planners/`.
   - `WeatherCards.refresh()` llamará la API real en el hilo de UI (hoy mocks; revisar al activar las keys).
   - Dos fechas independientes Búsqueda/Planificación sin sincronizar (¿intencional? documentar).
-  - `fmt_hhmm` vs `_format_hours`: elegir una sola.

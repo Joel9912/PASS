@@ -21,6 +21,8 @@ por una separación angular calculada contra una Luna invisible.
 """
 from __future__ import annotations
 
+from planners.timefmt import format_hhmm
+
 #: Etiquetas de ventana (constantes para que UI y tests no las escriban a mano).
 WINDOW_IDEAL = "ideal"
 WINDOW_POSSIBLE = "possible"
@@ -217,15 +219,4 @@ def _close_range(
 
 def format_hour_range(start: float, end: float) -> str:
     """Formatea un rango de horas decimales como 'HH:MM–HH:MM'."""
-    return f"{_format_hour(start)}–{_format_hour(end)}"
-
-
-def _format_hour(hour_decimal: float) -> str:
-    """18.6 → '18:36'; acepta valores fuera de [0, 24] (módulo 24)."""
-    hour_decimal = hour_decimal % 24.0
-    hours = int(hour_decimal)
-    minutes = int(round((hour_decimal - hours) * 60.0))
-    if minutes == 60:  # redondeo al borde del día
-        hours = (hours + 1) % 24
-        minutes = 0
-    return f"{hours:02d}:{minutes:02d}"
+    return f"{format_hhmm(start)}–{format_hhmm(end)}"

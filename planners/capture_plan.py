@@ -40,6 +40,7 @@ from planners.moon_distance import (
     capture_windows,
     min_moon_distance,
 )
+from planners.timefmt import format_hhmm
 from planners.transit import night_curve, night_info
 
 #: Nº de noches que se evalúan por defecto y nº de fechas devueltas.
@@ -266,24 +267,13 @@ def best_dates(
             item["_illumination_pct"],
         )
         item["windows"] = capture_window_summary(windows, curve.hours_local)
-        item["transit_local"] = _format_hours(
+        item["transit_local"] = format_hhmm(
             local_utc_offset(longitude, utc_offset_hours) + item["transit_utc_hours"]
         )
         item.pop("_illumination_pct", None)
         item.pop("_min_dist", None)
 
     return top
-
-
-def _format_hours(hour_decimal: float) -> str:
-    """18.6 → '18:36' (módulo 24)."""
-    hour_decimal = hour_decimal % 24.0
-    hours = int(hour_decimal)
-    minutes = int(round((hour_decimal - hours) * 60.0))
-    if minutes == 60:
-        hours = (hours + 1) % 24
-        minutes = 0
-    return f"{hours:02d}:{minutes:02d}"
 
 
 def window_hours(windows: dict, kind: str) -> float:
