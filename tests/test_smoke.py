@@ -3,6 +3,8 @@ import sqlite3
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -25,16 +27,15 @@ def test_main_imports_and_tabs():
 
 
 def test_root_docs_exist():
-    """Los documentos de nivel raíz existen."""
-    for doc in (
-        "README.md",
-        "PROGRAM.md",
-        "MEMORY.md",
-        "STRUCTURE.md",
-        "LICENSE",
-        "requirements.txt",
-        ".gitignore",
-    ):
+    """Los documentos públicos de nivel raíz existen; los internos, si están en la copia."""
+    for doc in ("README.md", "LICENSE", "requirements.txt", ".gitignore"):
+        assert (ROOT / doc).exists(), f"Falta {doc}"
+
+    # PROGRAM/MEMORY/STRUCTURE son documentación interna: no van al repo público.
+    internos = ("PROGRAM.md", "MEMORY.md", "STRUCTURE.md")
+    if not any((ROOT / doc).exists() for doc in internos):
+        pytest.skip("Documentación interna ausente (clon público)")
+    for doc in internos:
         assert (ROOT / doc).exists(), f"Falta {doc}"
 
 
@@ -61,9 +62,14 @@ def test_every_code_folder_has_readme():
         "i18n",
         "tests",
     ]
+    # Los README de carpeta son internos: en un clon público no están.
+    faltantes = [f for f in folders if not (ROOT / f / "README.md").exists()]
+    if len(faltantes) == len(folders):
+        pytest.skip("READMEs de carpeta ausentes (clon público)")
+    assert not faltantes, f"Falta README.md en: {', '.join(faltantes)}"
+
     for folder in folders:
         readme = ROOT / folder / "README.md"
-        assert readme.exists(), f"Falta README.md en {folder}/"
         text = readme.read_text(encoding="utf-8")
         for section in ("## Qué es", "## Estado actual", "## Qué hacer aquí", "## Planes futuros"):
             assert section in text, f"{folder}/README.md sin sección {section!r}"

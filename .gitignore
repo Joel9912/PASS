@@ -22,5 +22,13 @@ data/
 .opencode/
 AGENTS.md
 
+# Documentación interna de trabajo (no va al repo público; en un clon faltan)
+MEMORY.md
+PROGRAM.md
+STRUCTURE.md
+BUGS-agentes.md
+**/README.md
+!/README.md
+
 # Documentación histórica interna (port del Apilador, fuera del repo)
 actualizacion apilado/
