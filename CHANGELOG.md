@@ -7,6 +7,7 @@ Cambios relevantes para quienes usan PASS. Los detalles de implementación y cad
 Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado**; se completará cuando se apruebe el lanzamiento.
 
 ### Corregido
+- El Apilador detiene una corrida si no consigue limpiar por completo salidas temporales anteriores, en vez de mezclarlas con resultados nuevos.
 - Un fallo de migración ya no deja una conexión SQLite incompleta reutilizable en el proceso.
 - Un filtro inexistente impide guardar el equipo antes de crear adjuntos o confirmar cambios parciales.
 - Dos adjuntos con el mismo nombre de archivo ya no se sobrescriben al guardarlos en una entidad de Equipo.

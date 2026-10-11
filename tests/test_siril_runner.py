@@ -268,6 +268,20 @@ def test_limpieza_no_puede_borrar_la_raiz_de_trabajo(tmp_path):
     assert centinela.read_bytes() == b"original"
 
 
+def test_limpieza_incompleta_no_reutiliza_restos(tmp_path, monkeypatch):
+    """Si falla el borrado, no se continúa sobre archivos de otra corrida."""
+    raiz = tmp_path / "working"
+    destino = raiz / "calibrados" / "noche"
+    destino.mkdir(parents=True)
+    viejo = destino / "resto.fit"
+    viejo.write_bytes(b"corrida anterior")
+    monkeypatch.setattr(siril_runner.shutil, "rmtree", lambda *_a, **_kw: None)
+
+    with pytest.raises(SirilError, match="limpiar|borrar"):
+        siril_runner.limpiar_trabajo(destino, raiz=raiz)
+    assert viejo.read_bytes() == b"corrida anterior"
+
+
 def test_enlazar_falla_a_hardlink_si_no_hay_symlink(tmp_path, monkeypatch):
     """Sin symlinks (Windows sin privilegios) cae a hardlink: mismo contenido, cero copias."""
     origen = tmp_path / "original.fits"

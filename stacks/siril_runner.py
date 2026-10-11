@@ -279,7 +279,13 @@ def limpiar_trabajo(destino: Path, *, raiz: Path | None = None) -> None:
     base = (raiz or WORKING_FOLDER).resolve()
     if destino.resolve() == base or not destino.resolve().is_relative_to(base):
         raise SirilError(f"No se puede limpiar {destino}: no es una subcarpeta de trabajo.")
-    shutil.rmtree(destino, ignore_errors=True)
+    if destino.exists():
+        try:
+            shutil.rmtree(destino)
+        except OSError as exc:
+            raise SirilError(f"No se pudo limpiar {destino}: {exc}") from exc
+        if destino.exists():
+            raise SirilError(f"No se pudo borrar completamente {destino}.")
     destino.mkdir(parents=True, exist_ok=True)
 
 

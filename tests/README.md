@@ -1,7 +1,7 @@
 # tests/
 
 ## Qué es
-Tests de PASS con **pytest** (447 tests): validan UI, persistencia y lógica de planificación/equipo/apilado.
+Tests de PASS con **pytest** (448 tests): validan UI, persistencia y lógica de planificación/equipo/apilado.
 
 ## Estado actual
 - `test_smoke.py` — arranque y estructura: `main.py` importa, las 6 pestañas, **todos los README con sus 4 secciones** (lista explícita con las 4 subcarpetas del Planificador), esquema SQLite (`catalog`/`stars`) y `MainWindow` offscreen (barra lateral con su orden de filas, contenido y pie con versión).
