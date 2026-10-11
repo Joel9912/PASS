@@ -554,3 +554,38 @@ def test_quitar_objeto_emite_catalog_changed(qt_app, monkeypatch):
     assert conn.execute("SELECT COUNT(*) FROM personal_catalog").fetchone()[0] == 0
     conn.close()
     page.deleteLater()
+
+
+def test_clima_worker_en_pool_sin_bd(qt_app, memory_settings):
+    """Regresión A-32: `WeatherCards.refresh` no toca la BD desde el pool.
+
+    Antes el runnable leía `settings` en un hilo de `QThreadPool` con la
+    conexión creada en el hilo principal → `sqlite3.ProgrammingError`, la
+    señal `listo` nunca llegaba y la app se caía (crashe de la revisión
+    de v0.2). Las keys las lee ahora `refresh` en su hilo y viajan por
+    parámetro: el resultado sí debe llegar con la nota «guardada».
+    """
+    import time
+
+    from planners.weather.base import save_api_key
+    from ui.planner_tab.widgets import WeatherCards
+
+    save_api_key("clear_outside_api_key", "co-demo")
+    save_api_key("meteoblue_api_key", "mb-demo")
+
+    cards = WeatherCards()
+    recibido: list[tuple] = []
+    cards._senal.listo.connect(lambda *args: recibido.append(args))
+    cards.refresh(10.0, -84.0, "2026-10-02")
+
+    limite = time.monotonic() + 5.0
+    while not recibido and time.monotonic() < limite:
+        qt_app.processEvents()
+        time.sleep(0.01)
+
+    assert recibido, "el worker del clima no emitió (¿excepción en el pool?)"
+    _peticion, clear, meteo = recibido[0]
+    # Si la key no viajara por parámetro, la nota sería «Falta la API key».
+    assert "guardada" in clear.note
+    assert "guardada" in meteo.note
+    cards.close()

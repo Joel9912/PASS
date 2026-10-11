@@ -57,7 +57,13 @@ from planners.moon_distance import (
 )
 from planners.timefmt import format_hhmm
 from planners.transit import NightCurve, NightInfo, night_info, phase_name
-from planners.weather import ClearOutside, Meteoblue, WeatherForecast, transparency
+from planners.weather import (
+    ClearOutside,
+    Meteoblue,
+    WeatherForecast,
+    load_api_key,
+    transparency,
+)
 
 from ..style import PALETTE
 
@@ -643,6 +649,11 @@ class _PronosticoRunnable(QRunnable):
 
     Hoy los proveedores son mocks sin red, pero el camino queda listo para
     cuando se activen las API keys: la UI no se congela esperando.
+
+    Las API keys **no se leen aquí**: este código corre en un hilo del pool
+    y SQLite rechazaría la conexión creada en el hilo principal
+    (``ProgrammingError``, la causa del crashe de v0.2-rc). Las lee
+    ``WeatherCards.refresh`` en su hilo y las pasa por parámetro.
     """
 
     def __init__(
@@ -652,23 +663,41 @@ class _PronosticoRunnable(QRunnable):
         latitude: float,
         longitude: float,
         date_iso: str,
+        clave_clear: str | None,
+        clave_meteo: str | None,
     ) -> None:
-        """Guarda la petición y la señal por la que devolverá el resultado."""
+        """Guarda la petición, las API keys ya leídas y la señal de vuelta."""
         super().__init__()
         self._senal = senal
         self._peticion = peticion
         self._latitude = latitude
         self._longitude = longitude
         self._date_iso = date_iso
+        self._clave_clear = clave_clear
+        self._clave_meteo = clave_meteo
 
     def run(self) -> None:
-        """Ejecuta los dos pronósticos y emite el resultado (hilo del pool)."""
-        clear = ClearOutside().forecast(
-            self._latitude, self._longitude, self._date_iso
-        )
-        meteo = Meteoblue().forecast(
-            self._latitude, self._longitude, self._date_iso
-        )
+        """Ejecuta los dos pronósticos y emite el resultado (hilo del pool).
+
+        Ninguna excepción escapa: un error aquí mataría el worker sin
+        avisar y las tarjetas se quedarían colgadas; en su lugar el
+        pronóstico degrada a ``available=False`` con el motivo.
+        """
+        try:
+            clear = ClearOutside().forecast(
+                self._latitude, self._longitude, self._date_iso,
+                api_key=self._clave_clear,
+            )
+            meteo = Meteoblue().forecast(
+                self._latitude, self._longitude, self._date_iso,
+                api_key=self._clave_meteo,
+            )
+        except Exception as exc:  # el worker nunca muere callado: el motivo
+            # viaja en la nota y las tarjetas se pintan como "sin datos".
+            nota = f"Error al consultar el clima: {exc}"
+            vacio = dict(date_iso=self._date_iso, available=False, note=nota)
+            clear = WeatherForecast(provider="clear_outside", **vacio)
+            meteo = WeatherForecast(provider="meteoblue", **vacio)
         self._senal.listo.emit(self._peticion, clear, meteo)
 
 
@@ -724,11 +753,20 @@ class WeatherCards(QWidget):
         global y el resultado vuelve por señal a pintar en el hilo de UI.
         Si antes de que termine llega una petición más nueva, el resultado
         viejo se descarta (manda la última).
+
+        Las API keys se leen **aquí, en el hilo principal**, y viajan al
+        worker por parámetro: el hilo de trabajo no toca la BD en ninguna
+        parte del programa (invariante del Apilador, A-03/A-32).
         """
+        claves = (
+            load_api_key(ClearOutside.settings_key),
+            load_api_key(Meteoblue.settings_key),
+        )
         self._peticion += 1
         QThreadPool.globalInstance().start(
             _PronosticoRunnable(
-                self._senal, self._peticion, latitude, longitude, date_iso
+                self._senal, self._peticion, latitude, longitude, date_iso,
+                *claves,
             )
         )
 

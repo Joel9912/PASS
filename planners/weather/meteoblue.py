@@ -3,22 +3,27 @@
 Requiere API key (se guarda en ``settings`` con la clave ``meteoblue_api_key``).
 Sin key devuelve un pronóstico con ``available=False`` en lugar de fallar.
 """
-from .base import WeatherForecast, WeatherProvider, load_api_key
+from .base import WeatherForecast, WeatherProvider
 
 
 class Meteoblue(WeatherProvider):
-    """Proveedor de seeing."""
+    """Proveedor de seeing (hilo puro: no toca la BD, A-32)."""
 
     settings_key = "meteoblue_api_key"
 
-    def forecast(self, latitude: float, longitude: float, date_iso: str) -> WeatherForecast:
+    def forecast(
+        self,
+        latitude: float,
+        longitude: float,
+        date_iso: str,
+        api_key: str | None = None,
+    ) -> WeatherForecast:
         """Seeing (arcseg) de Meteoblue para ``date_iso``; mismo contrato que Clear Outside.
 
         Sin key —o con la llamada pendiente— devuelve ``available=False`` con
         nota explicativa en vez de fallar.
         """
-        key = load_api_key(self.settings_key)
-        if not key:
+        if not api_key:
             return WeatherForecast(
                 provider="meteoblue",
                 date_iso=date_iso,

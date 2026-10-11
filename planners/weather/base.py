@@ -23,13 +23,27 @@ class WeatherProvider(ABC):
     """Interfaz de un proveedor de datos atmosféricos."""
 
     #: Clave en la tabla ``settings`` donde se guarda la API key (si aplica).
+    #: La **lee la UI en su hilo** y se la pasa a ``forecast`` por parámetro.
     settings_key: str
 
     @abstractmethod
-    def forecast(self, latitude: float, longitude: float, date_iso: str) -> WeatherForecast:
+    def forecast(
+        self,
+        latitude: float,
+        longitude: float,
+        date_iso: str,
+        api_key: str | None = None,
+    ) -> WeatherForecast:
         """Devuelve el pronóstico. Sin API key debe devolver ``available=False``
         con un ``note`` legible, sin lanzar excepciones (decisión: integraciones
-        funcionan como mock hasta que el usuario añada sus keys)."""
+        funcionan como mock hasta que el usuario añada sus keys).
+
+        La key llega **por parámetro**: el proveedor no lee ``settings`` para
+        poder correr en un hilo secundario (el worker de clima, A-32). SQLite
+        exige que la conexión la use el hilo que la creó, así que quien llama
+        la lee en su hilo (la UI, en el principal) y se la pasa — mismo
+        criterio A-03 que ``find_siril``.
+        """
 
 
 def load_api_key(settings_key: str) -> str | None:
