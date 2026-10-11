@@ -152,9 +152,3 @@ def load_ldn() -> int:
     )
     conn.commit()
     return len(rows)
-
-
-def ldn_count() -> int:
-    """Nº de objetos LDN cargados actualmente."""
-    conn = get_connection()
-    return conn.execute("SELECT COUNT(*) FROM catalog WHERE catalog = 'ldn'").fetchone()[0]

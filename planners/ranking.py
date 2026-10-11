@@ -16,9 +16,6 @@ from dataclasses import dataclass, field
 from planners.moon_distance import POSSIBLE_MOON_MARGIN, min_moon_distance
 from planners.transit import NightInfo, TransitInfo
 
-#: Factores climáticos disponibles (cuanto más alto, mejor para observar).
-WEATHER_FACTORS = ("cloud_cover", "transparency", "wind_speed", "humidity")
-
 
 @dataclass
 class RankingWeights:

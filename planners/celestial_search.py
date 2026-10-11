@@ -262,16 +262,3 @@ def get_object(object_id: str) -> dict | None:
         "SELECT * FROM catalog WHERE object_id = ?", (object_id,)
     ).fetchone()
     return dict(row) if row else None
-
-
-def list_constellations() -> list[tuple[str, str]]:
-    """Códigos de constelación presentes en el catálogo → (código, nombre)."""
-    conn = get_connection()
-    codes = [
-        row[0]
-        for row in conn.execute(
-            "SELECT DISTINCT constellation FROM catalog"
-            " WHERE constellation IS NOT NULL ORDER BY constellation"
-        )
-    ]
-    return [(code, CONSTELLATIONS.get(code, code)) for code in codes]

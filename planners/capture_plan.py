@@ -276,15 +276,9 @@ def best_dates(
     return top
 
 
-def window_hours(windows: dict, kind: str) -> float:
-    """Horas acumuladas de una ventana (``ideal``/``possible``) en el resumen."""
-    return float(windows.get(kind, {}).get("hours", 0.0))
-
-
 __all__ = [
     "WINDOW_IDEAL",
     "WINDOW_POSSIBLE",
     "CaptureWeights",
     "best_dates",
-    "window_hours",
 ]
