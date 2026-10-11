@@ -1,6 +1,6 @@
 # PASS — Registro de bugs
 
-Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID único. El detalle de cada caso (fichero afectado, cómo reproducirlo, decisiones abiertas) vive en la documentación interna del proyecto.
+Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID único y su severidad; la referencia de cada arreglo es el commit que se indica en su estado.
 
 ## Cómo leer esta lista
 
@@ -72,9 +72,9 @@ Estado: ✅ 23 corregidos · 🟡 3 contenidos · ⏳ 48 pendientes · 🔎 6 si
 | **E-0005** | `NaN`/infinito y precio o peso negativos no se filtran antes de persistir un setup. | ⏳ |
 | **E-0006** | Bortle/SQM no cambia el color base del disco en la rosacea. | ⏳ |
 | **E-0007** | Una fuente de Claridad de Luz >100 km se trunca en el slider al editar otra propiedad. | ⏳ |
-| **E-0008** | Las claves de FOV no usaban la focal efectiva del reductor. | ✅ auditoría anterior |
-| **E-0009** | Los borrados de piezas no comprobaban usos en sesiones/setups ni sus cascadas. | ✅ auditoría anterior |
-| **E-0010** | Imágenes de equipo con nombre homónimo podían sobrescribirse. | ✅ auditoría anterior |
+| **E-0008** | Las claves de FOV no usaban la focal efectiva del reductor. | ✅ |
+| **E-0009** | Los borrados de piezas no comprobaban usos en sesiones/setups ni sus cascadas. | ✅ |
+| **E-0010** | Imágenes de equipo con nombre homónimo podían sobrescribirse. | ✅ |
 | **P-0003** | El factor lunar se puntúa en el tránsito diurno en vez de dentro de la ventana de captura. | ⏳ |
 | **P-0004** | Cálculo incorrecto en latitudes altas (geometría polar). | ⏳ |
 | **P-0005** | El tránsito se ordena tras el `LIMIT` y desplaza la ventana elegida. | ⏳ |
@@ -109,10 +109,10 @@ Estado: ✅ 23 corregidos · 🟡 3 contenidos · ⏳ 48 pendientes · 🔎 6 si
 | **B-0007** | `_download_tap` referencia `urllib.request` sin import directo: `NameError` latente. | 🔎 sin reproducir |
 | **S-0017** | Las previews de auditoría cargan el FITS entero en el hilo de UI. | 🔎 medir antes de priorizar |
 | **S-0018** | El stdout de SirIL y la terminal crecen sin límite en corridas largas. | 🔎 medir |
-| **S-0019** | Código muerto (símbolos sin consumidores) acumulado en `stacks/` y `ui/`. | ✅ auditoría anterior |
+| **S-0019** | Código muerto (símbolos sin consumidores) acumulado en `stacks/` y `ui/`. | ✅ |
 | **L-0001** | QMenu y paneles efímeros con parent retenidos: posible fuga de widgets. | 🔎 medir hijos tras N ciclos |
-| **L-0002** | Los diálogos acumulaban hijos ocultos al cerrar (fuga medida 20/20). | ✅ auditoría anterior |
-| **U-0006** | El `QDateEdit` de «Editar sesión» no reflejaba la fecha seleccionada. | ✅ auditoría anterior |
+| **L-0002** | Los diálogos acumulaban hijos ocultos al cerrar (fuga medida 20/20). | ✅ |
+| **U-0006** | El `QDateEdit` de «Editar sesión» no reflejaba la fecha seleccionada. | ✅ |
 | **X-0005** | `i18n/` declara traducciones vacías como si fueran válidas. | ⏳ (carpeta aún sin implementar) |
 | **X-0006** | Búsqueda decía «sin datos hasta que haya API key» aunque hubiera claves. | ✅ |
 | **X-0008** | `tests/README.md` atribuía la BD a `siril_finder`. | ⏳ |

@@ -4,13 +4,12 @@
 Uso:
     python scripts/generar_notas.py --desde v0.1-alpha --hasta v0.2
 
-El registro de bugs es la fuente única (R2): este script no copia nada, solo
+El registro de bugs es la fuente única: este script no copia nada, solo
 lee ``BUGS.md``, se queda con los hallazgos en estado ✅ (y con los 🟡
 contenidos en una sección aparte) cuyo commit cae dentro del rango de
 referencias indicado, y escribe el texto entre marcadores
 (``NOTAS:INICIO``/``NOTAS:FIN``), de forma que se puede regenerar sin pisar
-el resto del CHANGELOG. Los corregidos sin commit («auditoría anterior») no
-salen: se curan a mano.
+el resto del CHANGELOG. Los corregidos sin commit no salen: se curan a mano.
 """
 
 import argparse

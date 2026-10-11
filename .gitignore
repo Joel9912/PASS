@@ -22,7 +22,7 @@ data/
 .opencode/
 AGENTS.md
 
-# Documentación interna de trabajo (no va al repo público; en un clon faltan)
+# Documentación de trabajo del proyecto (no se distribuye con el código)
 MEMORY.md
 PROGRAM.md
 STRUCTURE.md

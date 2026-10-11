@@ -1,6 +1,6 @@
 """Rosáceas de la ficha de Ubicación: los 3 discos de entrada y la salida.
 
-Todo QPainter y dueño único de la paleta de CL (R2): los colores
+Todo QPainter y dueño único de la paleta de CL: los colores
 muestreados de las capturas de referencia (barra 19,6–21,8 mag/arcsec²),
 la correspondencia Bortle→SQM y el modelo de campana viven aquí porque
 solo los consume este módulo.

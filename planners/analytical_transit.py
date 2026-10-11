@@ -153,8 +153,8 @@ def altitude_at_utc(
         sin(alt) = sinφ·sinδ + cosφ·cosδ·cos(H),   H = LST − RA
 
     La usa ``best_dates`` para medir la altura de cada noche dentro de su
-    propia ventana (decisión D-2 / M-11): la culminación sola es la misma
-    en las 30 noches y no llega a ordenar nada.
+    propia ventana: la culminación sola es la misma en las 30 noches y no
+    llega a ordenar nada.
     """
     jd = (
         instant.toordinal() + 1721424.5

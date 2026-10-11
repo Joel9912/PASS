@@ -542,8 +542,8 @@ def _material_global(ruta: str | None) -> tuple[dict[str, Path], dict[str, list[
     """(masters, frames) de la carpeta global de calibrado del usuario.
 
     La ruta la resuelve la UI (settings) y la pasa por parámetro: aquí no
-    se lee la BD, porque esta función corre en el hilo de trabajo de SirIL
-    (A-03 de la auditoría). Sin ruta, no hay carpeta global.
+    se lee la BD, porque esta función corre en el hilo de trabajo de SirIL.
+    Sin ruta, no hay carpeta global.
     """
     if not ruta or not Path(ruta).is_dir():
         return {}, {}

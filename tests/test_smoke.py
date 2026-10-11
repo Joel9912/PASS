@@ -27,14 +27,14 @@ def test_main_imports_and_tabs():
 
 
 def test_root_docs_exist():
-    """Los documentos públicos de nivel raíz existen; los internos, si están en la copia."""
+    """Los documentos de nivel raíz están; los de trabajo, si los incluye la copia."""
     for doc in ("README.md", "LICENSE", "requirements.txt", ".gitignore"):
         assert (ROOT / doc).exists(), f"Falta {doc}"
 
-    # PROGRAM/MEMORY/STRUCTURE son documentación interna: no van al repo público.
+    # PROGRAM/MEMORY/STRUCTURE son documentos de trabajo: pueden faltar en una copia.
     internos = ("PROGRAM.md", "MEMORY.md", "STRUCTURE.md")
     if not any((ROOT / doc).exists() for doc in internos):
-        pytest.skip("Documentación interna ausente (clon público)")
+        pytest.skip("Documentos de trabajo ausentes")
     for doc in internos:
         assert (ROOT / doc).exists(), f"Falta {doc}"
 
@@ -62,10 +62,10 @@ def test_every_code_folder_has_readme():
         "i18n",
         "tests",
     ]
-    # Los README de carpeta son internos: en un clon público no están.
+    # Los README de carpeta son documentos de trabajo: pueden faltar en una copia.
     faltantes = [f for f in folders if not (ROOT / f / "README.md").exists()]
     if len(faltantes) == len(folders):
-        pytest.skip("READMEs de carpeta ausentes (clon público)")
+        pytest.skip("READMEs de carpeta ausentes")
     assert not faltantes, f"Falta README.md en: {', '.join(faltantes)}"
 
     for folder in folders:

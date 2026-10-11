@@ -11,7 +11,7 @@ from pathlib import Path
 
 from db.connection import DATA_DIR, get_connection
 
-#: Destino de las copias (decisión D-1 de la auditoría): el programa vive
+#: Destino de las copias: el programa vive
 #: con sus propios datos en `data/` y la ruta persistida no depende de que
 #: el original siga donde el usuario lo eligió. Los tests lo redirigen.
 IMAGES_ROOT = DATA_DIR / "equipment_images"

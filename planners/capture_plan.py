@@ -4,8 +4,8 @@ Una vez elegido el objeto y el lugar, el programa recorre las próximas
 ``date_range_days`` noches y puntúa cada una según:
 
 - **Altura** del objeto **durante la ventana de esa noche**: la
-  culminación es idéntica en todas las noches (decisión D-2 / M-11), así
-  que se puntúa la altura máxima que el objeto alcanza dentro del
+  culminación es idéntica en todas las noches, así que se puntúa la
+  altura máxima que el objeto alcanza dentro del
   [crepúsculo, alba] de cada noche, que sí cambia al desplazarse la
   ventana.
 - **Separación lunar** frente al umbral de la fase de esa noche
@@ -126,7 +126,7 @@ def _night_max_altitude(
     dawn_iso: str | None,
     culmination: float,
 ) -> float:
-    """Altitud máxima del objeto **durante esa noche** (decisión D-2 / M-11).
+    """Altitud máxima del objeto **durante esa noche**.
 
     La culminación es idéntica en las 30 noches del rango (depende solo de
     latitud y declinación), con lo que el factor «Altura» solo escalaba la
@@ -211,7 +211,7 @@ def best_dates(
         )
         illumination_pct = night.moon_illumination * 100.0
         min_dist = min_moon_distance(illumination_pct)
-        # Altura de ESA noche dentro de su ventana (D-2 / M-11): la
+        # Altura de ESA noche dentro de su ventana: la
         # culminación es la misma en las 30 noches y no llega a ordenar.
         night_alt = _night_max_altitude(
             target_ra_hours, target_dec_deg, latitude, longitude,

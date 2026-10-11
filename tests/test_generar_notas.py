@@ -33,7 +33,7 @@ def test_filtra_solo_corregidos_con_commit_en_el_rango(tmp_path):
         "| **S-0002** | Pendiente | `cafe002` | ⏳ |\n"
         "| **S-0003** | Arreglado en otra rama | `cafe003` | ✅ `cafe003` |\n"
         # Fila sin columna de evidencia (3 celdas): el parser debe tolerarla.
-        "| **S-0004** | Corregido sin commit | ✅ auditoría anterior |\n"
+        "| **S-0004** | Corregido sin commit | ✅ sin commit registrado |\n"
         "| **S-0005** | Contenido a medias | `cafe005` | 🟡 `cafe005` |\n",
         encoding="utf-8",
     )
@@ -49,7 +49,7 @@ def test_filtra_solo_corregidos_con_commit_en_el_rango(tmp_path):
     ]
     assert modulo.leer_areas(registro) == {"S": "Apilador"}
     assert next(h for h in hallazgos if h.identificador == "S-0004").estado == (
-        "✅ auditoría anterior"
+        "✅ sin commit registrado"
     )
 
     rango = {("cafe001" * 6)[:40], ("cafe005" * 6)[:40]}

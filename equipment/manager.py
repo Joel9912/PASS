@@ -33,7 +33,7 @@ _SELECT = (
 
 
 def _fila(row) -> dict:
-    """Dict de fila con ``telescope_focal_mm`` en focal **efectiva** (R2).
+    """Dict de fila con ``telescope_focal_mm`` en focal **efectiva**.
 
     El SELECT trae la focal cruda en esa misma clave (la que lee
     ``framing.calculate_fov``) y aquí se sobreescribe con
@@ -164,7 +164,7 @@ def list_setups(category: str | None = None) -> list[dict]:
     """Lista todos los setups (dicts de fila), opcionalmente por categoría.
 
     El contrato real es **dict**, no ``EquipmentSetup``: la UI lee
-    ``setup.get("id")`` y así se anota desde la auditoría (C-2). El dict
+    ``setup.get("id")`` y así se anota. El dict
     trae además ``location_name`` (``LEFT JOIN`` a ``locations``): el nombre
     de la ubicación, o ``None`` si no la tiene —lo que la tabla del plan
     (Equipo paso 2) pinta como «ubicación» (M-17). Sin ubicación o con ella

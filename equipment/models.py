@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 #: Categorías del equipo (enum decidido por el usuario) → etiqueta para la
 #: UI. El orden es el de los combos; ``general`` es el valor por defecto y
 #: sirve de «sin clasificar». Dueño del dato: pinta la pestaña Equipo y
-#: ``planificacion/tab.py`` (R2 — una sola fuente para las etiquetas).
+#: ``planificacion/tab.py`` (una sola fuente para las etiquetas).
 CATEGORIES: dict[str, str] = {
     "paisaje": "Paisaje",
     "campo_amplio": "Campo Amplio",
@@ -75,14 +75,14 @@ FILTER_TYPES: dict[str, str] = {
 }
 
 #: Profundidades de bits de las cámaras (``Camera.bit_depth``): solo existen
-#: estas en sensores. Dueño de la opción (R2) — el combo de la UI y
+#: estas en sensores. Dueño de la opción — el combo de la UI y
 #: ``validar_camara`` leen de aquí; si algún día aparece otra, se añade a la
 #: tupla y nada más hay que tocar.
 BIT_DEPTHS: tuple[int, ...] = (10, 12, 14, 16)
 
 #: Alturas de obstrucción del horizonte (`Location.obstacles`) → etiqueta:
 #: a cuántos grados de elevación llega lo que obstruye cada dirección.
-#: Dueño del dato (R2): el disco de entrada de la rosácea y
+#: Dueño del dato: el disco de entrada de la rosácea y
 #: ``validar_ubicacion`` leen de aquí.
 OBSTRUCTION_ALTITUDES: dict[int, str] = {
     0: "Ninguna (0°)",
@@ -94,7 +94,7 @@ OBSTRUCTION_ALTITUDES: dict[int, str] = {
 
 #: Fuentes de contaminación lumínica (`Location.lp`) → etiqueta; cada
 #: dirección lleva como mucho una, con su distancia en km. Dueño del dato
-#: (R2): los tooltips que describen cada fuente son texto de la UI y viven
+#: los tooltips que describen cada fuente son texto de la UI y viven
 #: en ``ui/equipment_tab/rosaceas.py``, junto al panel que los muestra.
 LP_SOURCES: dict[str, str] = {
     "pueblo": "Pueblo",
@@ -176,8 +176,8 @@ class Camera:
     """Cámara global reutilizable (principal/guía): datos fríos comparables.
 
     ``pixel_size_um``/``width_px``/``height_px`` son los que permiten
-    calcular el FOV y la escala de muestreo (C-1 de la auditoría: el dato
-    estaba sin modelo). No hay campo ``resolution``: la resolución se deriva
+    calcular el FOV y la escala de muestreo (el dato estaba sin modelo).
+    No hay campo ``resolution``: la resolución se deriva
     de ancho × alto al pintarla.
     """
 

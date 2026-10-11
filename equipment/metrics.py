@@ -2,7 +2,7 @@
 
 Funciones puras (sin UI ni BD): la lógica vive en backend y tanto
 ``manager.list_setups`` (focal efectiva del FOV) como el bloque «Cálculos»
-de la ficha del equipo las reutilizan (R2 — una sola regla).
+de la ficha del equipo las reutilizan (una sola regla).
 
 El veredicto de muestreo no impone verdad: usa dos **umbrales
 configurables** (claves de ``settings``: ``sampling_under_ratio`` y
@@ -31,8 +31,8 @@ _DAWES = 116.0
 def umbrales_desde_settings() -> dict[str, float]:
     """Los tres umbrales configurables del muestreo leídos de ``settings``.
 
-    Dueño de las claves de Configuración ``sampling_*`` (A-07 de la
-    auditoría): la UI llama a esto en vez de leer las claves sueltas. El
+    Dueño de las claves de Configuración ``sampling_*``: la UI llama a
+    esto en vez de leer las claves sueltas. El
     import de ``db`` es local para no ensuciar la pureza del resto.
     """
     from db.settings import get_float

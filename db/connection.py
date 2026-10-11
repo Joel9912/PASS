@@ -51,7 +51,7 @@ _MIGRATIONS: dict[str, tuple[str, ...]] = {
         "tiles_x INTEGER",
         "tiles_y INTEGER",
         # Estaba en el esquema y se inserta, pero no en la migración: una
-        # base creada antes no recibía la columna (M-21 de la auditoría).
+        # base creada antes no recibía la columna.
         "notes TEXT",
     ),
     "planned_sessions": (

@@ -63,7 +63,7 @@ NO_FRAMING_TEXT = "Sin encuadre: faltan datos de la cámara o del telescopio"
 
 #: Columnas del plan de captura. «Alt. noche» es la altura máxima que el
 #: objeto alcanza dentro de la ventana de ESA noche: es lo que puntúa
-#: (decisión D-2; la culminación sola sería la misma en todas las filas).
+#: (la culminación sola sería la misma en todas las filas).
 PLAN_COLUMNS: tuple[str, ...] = (
     "#", "Fecha", "Tránsito", "Alt. noche", "Sep. lunar", "Luna", "★ Ideal",
 )
