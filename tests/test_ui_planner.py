@@ -625,3 +625,20 @@ def test_catalogo_personal_reaparece_tras_reabrir(qt_app, tmp_path, monkeypatch)
     assert segunda._table.item(0, 1).text() == "M33"
     segunda.close()
     nueva.close()
+
+
+def test_tarjetas_clima_muestran_pronostico_numerico(qt_app):
+    """Una respuesta con datos no provoca KeyError al formatear las tarjetas."""
+    from planners.weather.base import WeatherForecast
+    from ui.planner_tab.widgets import WeatherCards
+
+    cards = WeatherCards()
+    cards._peticion = 1
+    cards._rellenar(
+        1,
+        WeatherForecast("clear_outside", "2026-10-11", cloud_cover_pct=[20.0]),
+        WeatherForecast("meteoblue", "2026-10-11", seeing_arcsec=[1.5]),
+    )
+    assert "20 %" in cards._cards["cloud"]._value.text()
+    assert '1.5"' in cards._cards["seeing"]._value.text()
+    cards.close()

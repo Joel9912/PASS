@@ -635,7 +635,7 @@ def _metric_text(value: float | None, template: str) -> tuple[str, bool]:
     """``(texto, sin_datos)`` de una métrica opcional; nunca formatea ``None``."""
     if value is None:
         return "Sin datos", True
-    return template.format(value), False
+    return template.format(value=value), False
 
 
 class _PronosticoSignal(QObject):
