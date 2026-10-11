@@ -50,6 +50,7 @@ from equipment import localizations, manager
 from equipment.images import list_images
 from equipment.metrics import calculos, umbrales_desde_settings
 from equipment.models import CATEGORIES, EquipmentSetup
+from ui.style import PALETTE
 
 from .componentes import (
     CameraForm,
@@ -225,8 +226,8 @@ class BarraMuestreo(QWidget):
         # Marcador: línea oscura con el núcleo claro encima.
         if self._posicion is not None:
             x = max(2, min(ancho - 2, int(self._posicion * ancho)))
-            pintor.fillRect(x - 2, 0, 5, alto, QColor("#0d1117"))
-            pintor.fillRect(x - 1, 0, 3, alto, QColor("#e6edf3"))
+            pintor.fillRect(x - 2, 0, 5, alto, QColor(PALETTE["bg"]))
+            pintor.fillRect(x - 1, 0, 3, alto, QColor(PALETTE["text"]))
 
 
 class EquiposTab(QWidget):

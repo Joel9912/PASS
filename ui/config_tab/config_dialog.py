@@ -38,12 +38,13 @@ from PyQt6.QtWidgets import (
 from db.settings import PROJECT_ROOT_KEY, get_float, get_setting, set_setting
 from planners.weather.base import load_api_key, save_api_key
 from stacks.siril_finder import SETTINGS_KEY, find_siril, siril_version
+from ui.style import PALETTE
 
-#: Colores de estado (mismos tonos que las tarjetas de clima).
-_OK = "#22c55e"      # verde: detectado y operativo
-_WARN = "#f59e0b"    # ámbar: falta algo o no responde
-_ERROR = "#f85149"   # rojo: la ruta no existe
-_BUSY = "#94a3b8"    # gris: comprobación en marcha
+#: Colores de estado, tomados de la paleta única (A-28).
+_OK = PALETTE["ok"]        # verde: detectado y operativo
+_WARN = PALETTE["warn"]    # ámbar: falta algo o no responde
+_ERROR = PALETTE["error"]  # rojo: la ruta no existe
+_BUSY = PALETTE["gray"]    # gris: comprobación en marcha
 
 #: Un solo hilo de trabajo para comprobar SirIL. Ejecutar ``siril-cli
 #: --version`` puede costar ~1 s el primer día (el antivirus examina el

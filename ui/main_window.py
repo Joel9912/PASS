@@ -32,6 +32,7 @@ from .planner_tab import (
     SesionesTab,
 )
 from .stacker_tab import StackerPage
+from .style import PALETTE
 
 APP_NAME = "Planning & Astronomical Stacking Suite"
 APP_VERSION = "v0.1"
@@ -65,7 +66,7 @@ def _glyph_icon(glyph: str, size: int = 28) -> QIcon:
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
-    painter.setPen(QColor("#e6edf3"))
+    painter.setPen(QColor(PALETTE["text"]))
     font = QFont("Segoe UI Emoji")
     font.setPixelSize(int(size * 0.7))
     painter.setFont(font)

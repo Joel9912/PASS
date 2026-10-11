@@ -21,6 +21,12 @@ PALETTE = {
     "accentSoft": "rgba(59, 130, 246, 0.25)",
     "accentSoftStrong": "rgba(59, 130, 246, 0.3)",
     "pressed": "#17202b",
+    # Colores semánticos de estado (A-28): la misma familia tailwind que el
+    # resto del tema, con dueño único aquí en vez de literales repartidos.
+    "ok": "#22c55e",          # verde: estado correcto
+    "warn": "#f59e0b",        # ámbar: atención
+    "error": "#ef4444",       # rojo: descarte, límite o error
+    "gray": "#94a3b8",        # gris neutro (día, comprobación en marcha)
 }
 
 FONT_FAMILY = "Segoe UI"

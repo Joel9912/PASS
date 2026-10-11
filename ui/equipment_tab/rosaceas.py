@@ -37,6 +37,7 @@ from PyQt6.QtWidgets import (
 )
 
 from equipment.models import DIRECTIONS, LP_SOURCES, OBSTRUCTION_ALTITUDES
+from ui.style import PALETTE
 
 #: Azimut de cada dirección (grados, desde N hacia E al mirar el cielo).
 _AZIMUT: dict[str, int] = {
@@ -68,8 +69,8 @@ _PARADAS: tuple[tuple[float, QColor], ...] = tuple(
 _NEGRO = QColor("#000000")      # fondo del disco sin datos (las capturas)
 _ARO = QColor("#8f8f8f")        # aro del horizonte
 _REJILLA = QColor("#565d66")    # rejilla punteada de altitud/azimut
-_LETRAS = QColor("#e6edf3")     # letras de dirección y valores
-_DIM = QColor("#8b949e")        # etiquetas secundarias (altitud, km)
+_LETRAS = QColor(PALETTE["text"])    # letras de dirección y valores
+_DIM = QColor(PALETTE["textDim"])     # etiquetas secundarias (altitud, km)
 _ROJO = QColor(226, 63, 55, 170)  # obstrucciones: rojo translúcido
 
 #: Escala de caída con la distancia (km) de la campana: glow ∝ R/(R+km).

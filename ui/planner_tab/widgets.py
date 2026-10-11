@@ -55,13 +55,13 @@ pg.setConfigOptions(antialias=True, background=PALETTE["bg"])
 
 #: Colores de la curva de tránsito (coherentes con el resto del tema).
 COLOR_ALTITUDE = PALETTE["accent"]        # azul: altitud del objeto
-COLOR_MOON = "#94a3b8"                    # gris: altitud de la Luna
-COLOR_LIMIT = "#ef4444"                   # rojo: línea de 30°
+COLOR_MOON = PALETTE["gray"]                   # gris: altitud de la Luna
+COLOR_LIMIT = PALETTE["error"]                 # rojo: línea de 30°
 COLOR_IDEAL = (34, 197, 94, 55)           # verde: ventana ideal
 COLOR_POSSIBLE = (245, 158, 11, 45)       # ámbar: ventana posible
 COLOR_NIGHT = (255, 255, 255, 26)         # gris: noche astronómica
 
-COLOR_DAY = "#94a3b8"                     # barra: día
+COLOR_DAY = PALETTE["gray"]                    # barra: día
 COLOR_TWILIGHT = "#475569"                # barra: crepúsculo
 COLOR_NIGHT_BAR = "#0b1220"               # barra: noche
 
@@ -646,12 +646,12 @@ class WeatherCards(QWidget):
     #: Títulos cortos: en una tarjeta estrecha las frases largas se cortaban.
     #: Cada título con su color para distinguir las tarjetas de un vistazo.
     CARDS = (
-        ("Seeing", "seeing", "#22c55e", "#22c55e"),          # verde
-        ("Nubosidad", "cloud", "#60a5fa", "#60a5fa"),        # azul
-        ("Humedad", "humidity", "#60a5fa", "#22d3ee"),       # cian
-        ("Rocío", "dew", "#f59e0b", "#f59e0b"),              # ámbar
-        ("Viento", "wind", "#60a5fa", "#a78bfa"),            # violeta
-        ("Transparencia", "transparency", "#22c55e", "#2dd4bf"),  # turquesa
+        ("Seeing", "seeing", PALETTE["ok"], PALETTE["ok"]),          # verde
+        ("Nubosidad", "cloud", PALETTE["accentLight"], PALETTE["accentLight"]),  # azul
+        ("Humedad", "humidity", PALETTE["accentLight"], "#22d3ee"),  # cian
+        ("Rocío", "dew", PALETTE["warn"], PALETTE["warn"]),          # ámbar
+        ("Viento", "wind", PALETTE["accentLight"], "#a78bfa"),       # violeta
+        ("Transparencia", "transparency", PALETTE["ok"], "#2dd4bf"), # turquesa
     )
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -698,10 +698,10 @@ class WeatherCards(QWidget):
         # La transparencia cambia de color con su cualitativa.
         if not values["transparency"][1]:
             colors["transparency"] = {
-                "Excelente": "#22c55e",
-                "Buena": "#22c55e",
-                "Regular": "#f59e0b",
-                "Mala": "#ef4444",
+                "Excelente": PALETTE["ok"],
+                "Buena": PALETTE["ok"],
+                "Regular": PALETTE["warn"],
+                "Mala": PALETTE["error"],
             }.get(values["transparency"][0], colors["transparency"])
         for key, (text, unavailable) in values.items():
             self._cards[key].set_value(text, unavailable, colors[key])

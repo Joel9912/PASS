@@ -30,7 +30,6 @@ Capa de interfaz de usuario (PyQt6). Una subcarpeta por pestaña principal; **so
   - Señales emitidas sin consumidor (`object_selected`, `target_changed`, `region_clicked` — rompe su docstring — y `sky_at_center()`): cablearlas o quitarlas.
   - `_on_date_changed` es copia literal de `refresh()`; la búsqueda por `object_id` está duplicada en `select_target` y en el clic del planetario.
   - Patrones repetidos → helpers en `widgets.py`: «fila seleccionada → dict» ×4, bloque de config de `QTableWidget` ×4, mapa `setup_id → nombre` ×2.
-  - Colores de estado escritos a mano pese a `PALETTE` (5 archivos) y `ROW_H = 46` duplicado.
   - `_transparency`/`phase_name` (reglas de negocio) viven en `widgets.py` en vez de en `planners/`.
   - `WeatherCards.refresh()` llamará la API real en el hilo de UI (hoy mocks; revisar al activar las keys).
   - Dos fechas independientes Búsqueda/Planificación sin sincronizar (¿intencional? documentar).

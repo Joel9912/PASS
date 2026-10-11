@@ -33,6 +33,7 @@ from PyQt6.QtWidgets import (
 from equipment.manager import list_setups
 from planners import planned_sessions
 
+from ...style import PALETTE
 from ..widgets import crear_tabla_filas, fila_seleccionada
 
 #: Columnas de la tabla (mockup del usuario).
@@ -40,10 +41,10 @@ COLUMNS: tuple[str, ...] = (
     "#", "Nombre", "Target", "Fecha", "Equipo", "Exp", "Estado",
 )
 
-#: Estado de la fila → color del texto.
+#: Estado de la fila → color del texto (de la paleta única, A-28).
 STATUS_COLORS: dict[str, str] = {
-    "planificada": "#60a5fa",
-    "completada": "#22c55e",
+    "planificada": PALETTE["accentLight"],
+    "completada": PALETTE["ok"],
 }
 
 
@@ -247,7 +248,7 @@ class SesionesTab(QWidget):
                 item = QTableWidgetItem(value)
                 if column == 6:
                     item.setForeground(
-                        _brush(STATUS_COLORS.get(value, "#e6edf3"))
+                        _brush(STATUS_COLORS.get(value, PALETTE["text"]))
                     )
                     item.setTextAlignment(
                         Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter

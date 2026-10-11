@@ -49,8 +49,9 @@ MATERIAL = (
     ("dark_flats", "dflat"),
 )
 
-#: Rojo del veredicto «descartada» (fila y puntos de la gráfica).
-COLOR_DESCARTE = "#ef4444"
+#: Rojo del veredicto «descartada» (fila y puntos de la gráfica), de la
+#: paleta única de estado (A-28).
+COLOR_DESCARTE = PALETTE["error"]
 
 #: Posiciones (fila, columna) de R y B dentro del mosaico Bayer 2×2.
 _BAYER: dict[str, tuple[tuple[int, int], tuple[int, int]]] = {
