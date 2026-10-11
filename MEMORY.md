@@ -4,13 +4,13 @@
 
 | Aspecto | Estado |
 |---------|--------|
-| **Etapa de desarrollo** | `v0.1` (alpha): pestañas Planificador, Equipo y Apilador implementadas; Resumen, Planetario y Planificador de Equipo aún placeholder |
-| **Repositorio público** | ✅ GitHub `Joel9912/PASS`, tag `v0.1-alpha` (10/10/2026); historia conservada desde la primera versión |
+| **Etapa de desarrollo** | `v0.2` (alpha): refactor de auditoría aplicado (34 hallazgos cerrados 10/10/2026); pestañas Planificador, Equipo y Apilador implementadas; Resumen, Planetario y Planificador de Equipo aún placeholder |
+| **Repositorio público** | ✅ GitHub `Joel9912/PASS`, tags `v0.1-alpha` y `v0.2` (10/10/2026); historia conservada desde la primera versión |
 | **Licencia** | ✅ GPL-3.0: libre para usar/modificar/vender, pero las versiones derivadas deben publicar su código (no se puede apropiar ni cerrar) |
 | **Estructura de carpetas** | ✅ Creada: `db/`, `planners/`, `stacks/`, `equipment/`, `planetary/`, `ui/` (6 pestañas), `i18n/`, `tests/`, `data/` |
 | **Docs** | ✅ Raíz: README, PROGRAM, MEMORY, STRUCTURE + LICENSE GPL-3.0 + requirements.txt |
-| **Auditoría de código** | ✅ Tandas A, B y C aplicadas (deuda C cerrada 4/10/2026); pendientes anotados: M-02, D-4, D-7 y bajos (§4 del informe) |
-| **Entry point** | ✅ `main.py` con tema oscuro, barra lateral colapsable, pie `v0.1` y las 6 pestañas; carga catálogos al arrancar; se abre **maximizado** |
+| **Auditoría de código** | ✅ Auditoría v0.2 completa: informe con 34 hallazgos + refactor cerrado en 20 commits pequeños (10/10/2026); deudas con motivo diferido: M-02 (arranque perezoso, medido), D-4 y D-7 |
+| **Entry point** | ✅ `main.py` con tema oscuro, barra lateral colapsable, pie `v0.2` y las 6 pestañas; carga catálogos al arrancar; se abre **maximizado** |
 | **Tests** | ✅ pytest (recuento y lista por módulo en `tests/README`) |
 | **Librerías Python** | Instaladas en venv: PyQt6 6.11, **pyqtgraph 0.14.0**, astropy 8.0, numpy 2.5, PyYAML 6.0, pytest |
 | **Catálogos astronómicos** | ✅ OpenNGC (13 372 objetos) + HYG (41 487 estrellas mag ≤ 8) + **LDN (1 787)** en `data/pass.db` |
@@ -80,8 +80,6 @@
 ## 💡 Próximos Pasos Inmediatos
 *(solo pendientes: lo completado vive en «Situación Actual»)*
 
-1. 🔍 **Auditoría técnica post-v0.1** — recorrer `stacks/`, `ui/`, `planners/` y `equipment/` con el método de auditoría: informe con IDs, deudas y prioridades (código muerto, imports, docstrings, malas prácticas).
-2. 🧹 **Refactor en commits pequeños** — arreglos de la auditoría, uno por tema, cada uno con su test de regresión; `STRUCTURE.md` al día si cambia la estructura.
-3. 🔜 UI de `planner_equip_tab`: comparativa con las métricas que defina el usuario (`RankingWeights`, `CaptureWeights` expuestos)
-4. 🔌 Llamadas reales a Clear Outside/Meteoblue cuando haya API keys
-5. 🔌 i18n (`QTranslator` + `.ts/.qm`) empezando por `planner_tab/`
+1. 🔜 UI de `planner_equip_tab`: comparativa con las métricas que defina el usuario (`RankingWeights`, `CaptureWeights` expuestos)
+2. 🔌 Llamadas reales a Clear Outside/Meteoblue cuando haya API keys
+3. 🔌 i18n (`QTranslator` + `.ts/.qm`) empezando por `planner_tab/`

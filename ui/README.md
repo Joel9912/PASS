@@ -4,7 +4,7 @@
 Capa de interfaz de usuario (PyQt6). Una subcarpeta por pestaña principal; **solo** widgets, layouts y pantallas — sin lógica de negocio ni cálculos astronómicos (eso vive en `planners/`, `stacks/`, `equipment/`, `planetary/`).
 
 ## Estado actual
-- `main_window.py` — `MainWindow` con **barra lateral izquierda colapsable** (iconos por pestaña + texto, ☰ para colapsar, Configuración abajo), `QStackedWidget` de contenido, pie con nombre + versión (`v0.1`) y la constante `TABS`.
+- `main_window.py` — `MainWindow` con **barra lateral izquierda colapsable** (iconos por pestaña + texto, ☰ para colapsar, Configuración abajo), `QStackedWidget` de contenido, pie con nombre + versión (`v0.2`) y la constante `TABS`.
   - Las páginas reales salen de **`_PAGE_BUILDERS`** (dict por clave; sin entrada → placeholder): `planner_tab` → `PlannerPage`, `equipment_tab` → `EquipmentPage` y `stacker_tab` → `StackerPage`; ningún índice mágico de `TABS`.
   - `PlannerPage` es la página del Planificador: **4 subpestañas en el orden Búsqueda → Catálogo Personal → Planificación → Sesiones Planificadas**. La `LocationBar` vive **dentro de Búsqueda** (rejilla 3×2, fila 3 izquierda) y `PlannerPage` la expone como `location_bar` para Planificación. Aquí se concentra el cableado entre subpestañas (ninguna importa a otra).
   - `_wire_equipo()` — Equipo → Planificador: `locations_changed` → `location_bar.reload()` + `reemit()`; `setups_changed` → `planificacion.reload_setups()` + `sesiones.refresh()`.

@@ -35,7 +35,7 @@ from .stacker_tab import StackerPage
 from .style import PALETTE
 
 APP_NAME = "Planning & Astronomical Stacking Suite"
-APP_VERSION = "v0.1"
+APP_VERSION = "v0.2"
 
 #: Orden y etiquetas de las pestañas (español; traducción vía i18n/*.ts)
 TABS: list[tuple[str, str]] = [

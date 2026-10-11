@@ -64,7 +64,7 @@ Planning-Stacking-Suite/
 │   └── README.md
 │
 ├── ui/                   # Interfaz PyQt6 (una carpeta por pestaña)
-│   ├── main_window.py        # MainWindow: sidebar + contenido + pie (v0.1);
+│   ├── main_window.py        # MainWindow: sidebar + contenido + pie (v0.2);
 │   │                         #   páginas por clave (_PAGE_BUILDERS) y
 │   │                         #   _wire_equipo() Equipo → Planificador (LocationBar
 │   │                         #   vive en Búsqueda, fila 3 izquierda, y se comparte
@@ -155,6 +155,8 @@ Planning-Stacking-Suite/
 ## 📏 Convención de README por carpeta (obligatoria)
 
 Cada carpeta con código tiene **un solo** `README.md` con 4 secciones fijas (**Qué es / Estado actual / Qué hacer aquí / Planes futuros**), creado y actualizado en la misma tarea.
+
+- **Idioma (todas las capas)**: `.md`, docstrings y comentarios `#` en **español**; los identificadores de código siguen la práctica existente por capa (módulos y helpers de lógica en inglés, widgets del Planificador en español).
 
 ## 🗂️ Reglas de separación por carpeta
 

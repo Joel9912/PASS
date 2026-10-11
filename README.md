@@ -4,7 +4,7 @@
 
 > La base del programa es la planificación (sesiones y equipo). El planetario y el apilador son añadidos que lo completan.
 
-**Estado: `v0.1` (alpha).** Es software libre en desarrollo activo: funciona sobre capturas reales, pero algunas pestañas siguen en construcción (indicadas abajo).
+**Estado: `v0.2` (alpha).** Es software libre en desarrollo activo: funciona sobre capturas reales, pero algunas pestañas siguen en construcción (indicadas abajo).
 
 ## Pestañas
 
