@@ -1,6 +1,8 @@
 """Fixtures compartidos de los tests de PASS."""
 import os
 import sqlite3
+import tempfile
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -17,6 +19,48 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 #: proceso. El módulo ``conftest`` sobrevive a todos los tests, así que aquí
 #: la referencia vive el tiempo que hace falta (regla del propio test_dialogos).
 _QT_APP = None
+
+_SANDBOX: tempfile.TemporaryDirectory | None = None
+
+
+def pytest_configure() -> None:
+    """Aísla BD, descargas y working antes de importar los módulos de test.
+
+    La base del usuario se abre solo en lectura y se clona a una carpeta
+    temporal. Así los tests que construyen páginas sin ``memory_db`` tampoco
+    migran ni escriben en ``data/pass.db``. Las descargas y el área de SirIL
+    se redirigen incluso si la copia no tenía catálogos.
+    """
+    global _SANDBOX
+    from planners import catalog_loader, ldn_loader
+    from stacks import siril_runner
+
+    _SANDBOX = tempfile.TemporaryDirectory(
+        dir=Path(os.environ.get("LOCALAPPDATA", tempfile.gettempdir())) / "Temp" / "opencode"
+        if os.name == "nt" else None
+    )
+    base = Path(_SANDBOX.name)
+    origen = db_connection.DB_PATH.resolve()
+    if origen.is_file():
+        with (
+            closing(sqlite3.connect(origen.as_uri() + "?mode=ro", uri=True)) as fuente,
+            closing(sqlite3.connect(base / "pass.db")) as destino,
+        ):
+            fuente.backup(destino)
+    db_connection.DATA_DIR = base
+    db_connection.DB_PATH = base / "pass.db"
+    catalog_loader.CACHE_DIR = base / "downloads"
+    ldn_loader.CACHE_DIR = base / "downloads"
+    siril_runner.WORKING_FOLDER = base / "working"
+
+
+def pytest_unconfigure() -> None:
+    """Cierra SQLite para poder retirar la copia temporal también en Windows."""
+    if db_connection._connection is not None:
+        db_connection._connection.close()
+        db_connection._connection = None
+    if _SANDBOX is not None:
+        _SANDBOX.cleanup()
 
 
 @pytest.fixture()

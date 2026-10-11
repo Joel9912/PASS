@@ -1,7 +1,7 @@
 # tests/
 
 ## Qué es
-Tests de PASS con **pytest** (443 tests): validan UI, persistencia y lógica de planificación/equipo/apilado.
+Tests de PASS con **pytest** (444 tests): validan UI, persistencia y lógica de planificación/equipo/apilado.
 
 ## Estado actual
 - `test_smoke.py` — arranque y estructura: `main.py` importa, las 6 pestañas, **todos los README con sus 4 secciones** (lista explícita con las 4 subcarpetas del Planificador), esquema SQLite (`catalog`/`stars`) y `MainWindow` offscreen (barra lateral con su orden de filas, contenido y pie con versión).
@@ -14,7 +14,7 @@ Tests de PASS con **pytest** (443 tests): validan UI, persistencia y lógica de 
 - `test_framing.py` — FOV desde focal/píxel/resolución y `None` si faltan datos.
 - `test_capture_plan.py` — puntuación offline y `best_dates` con astropy (orden, ventanas, sin noche → vacío, `utc_offset_hours`). D-2/M-11: la altura puntúa **por noche** — `_night_max_altitude` dentro/fuera de la ventana, `altitude_at_utc` autocoherente y espía de `_score_date` recibiendo `night_altitude_deg` (variable, no la culminación constante).
 - `test_ldn_loader.py` — parseo de las nebulosas oscuras de Lynds (datos inline, offline).
-- `test_settings.py` — `db.settings` con upsert sobre BD en memoria: roundtrip de API keys (`save_api_key`/`load_api_key`) y `get_float` (clave ausente o texto corrupto → default; lo usan los umbrales de muestreo). La ruta de SirIL se prueba en `test_siril_finder.py`.
+- `test_settings.py` — `db.settings` con upsert sobre BD en memoria: roundtrip de API keys (`save_api_key`/`load_api_key`), `get_float` defensivo y pin de que la BD por defecto en pytest no es `data/pass.db`. La ruta de SirIL se prueba en `test_siril_finder.py`.
 - `test_siril_finder.py` — `stacks/siril_finder` con BD en memoria: PATH del sistema primero y `settings` como fallback (con `which` simulado), ruta vacía contada como «no guardado» y `siril_version` con `subprocess.run` sustituido (primera línea; fallo o `OSError` → None) y la detección real sin SirIL instalado no revienta.
 - `test_weather.py` — proveedores de clima **nunca lanzan y no tocan la BD**: sin key → `available=False` con nota de key; con key pasada por parámetro → nota «llamada real pendiente»; el pronóstico desde un hilo secundario no revienta con `ProgrammingError` (regresión A-32: la key la lee la UI en su hilo) y pin de fuente: ningún proveedor importa `load_api_key`.
 - `test_dialogos.py` — diálogos abiertos por clic (`RegionDialog`, `EditSessionDialog`, `SessionDialog`…): montan y **no acumulan hijos ocultos** al cerrar (fuga medida 20/20, ahora `deleteLater()`, M-14). Corrección `QDateEdit` de «Editar» (N-1).
@@ -25,13 +25,13 @@ Tests de PASS con **pytest** (443 tests): validan UI, persistencia y lógica de 
 - `test_registration.py`, `test_frame_metrics.py`, `test_stacker.py` — auditoría `-2pass`, registro final/drizzle, métricas de `.seq` (incluido fondo real normalizado convertido a ADU/s), pesos/descartes manuales y sintaxis/apilado por canal.
 - `test_stacker_tab.py` — cinco paneles, carta FOV, selección sin modificar originales, columnas legibles, hilo/señales y cadena completa; sesiones homónimas de otras raíces no entran al pool. Maqueta de **Sesiones** y reparto de columnas; el diálogo de limpieza muestra la ruta, conservar o rechazar la confirmación no borra nada y el borrado total no toca originales.
 - `test_codigo_muerto.py` — pin de la auditoría v0.2: los símbolos podados (A-06/A-25/A-27) ya no existen o son internos (`_attach`/`_remove`); si alguien los reaparece sin consumidores, el test avisa.
-- `conftest.py` — fixtures compartidos: `memory_db` (base en memoria con esquema completo y FK activas; parchea la conexión global `db.connection._connection`) y `memory_settings` (alias suyo, para `test_settings.py` y `test_weather.py`).
+- `conftest.py` — antes de recopilar tests redirige BD, descargas y working a un directorio temporal; si existe la BD real, la copia leyendo el origen en modo `ro` (nunca escribe allí). Fixtures compartidos: `memory_db` (esquema completo y FK activas) y `memory_settings` (alias).
 
 ## Qué hacer aquí
-- Ejecutar: `pytest` desde la raíz (con el venv activado). Sin flags: los tests de UI se hacen aparte.
+- Ejecutar: `pytest` desde la raíz (con el venv activado); incluye tests de UI offscreen.
 - Añadir un test por cada módulo que pase de `NotImplementedError` a implementado.
-- Tests de UI: `pytest-qt` cuando haga falta simular clics (añadirlo a `requirements.txt` entonces); el render se prueba con `QT_QPA_PLATFORM=offscreen` fuera de pytest.
-- La BD real solo se consulta: tests que escriben usan `memory_db` o `tmp_path`; nunca limpiar entradas del usuario por nombre fijo (como `M31`).
+- Tests de UI: se ejecutan offscreen dentro de pytest; añadir `pytest-qt` a `requirements.txt` si hace falta simular interacciones más complejas.
+- La BD real solo se abre en modo lectura para hacer una copia temporal; todos los tests escriben en memoria o en rutas temporales. Nunca limpiar entradas del usuario por nombre fijo (como `M31`).
 - Toda corrección de un bug lleva su test de regresión en la misma tarea.
 
 ## Planes futuros

@@ -6,6 +6,13 @@ guardada) viven en su fichero propio, ``test_siril_finder.py``.
 from db import settings as settings_mod
 from planners.weather import base as weather_base
 
+
+def test_pytest_no_usa_base_de_usuario():
+    """La conexión por defecto de las pruebas nunca apunta a data/pass.db."""
+    from db import connection
+
+    assert connection.DB_PATH.resolve() != (connection.ROOT / "data" / "pass.db").resolve()
+
 # El fixture ``memory_settings`` vive en conftest.py (compartido con
 # test_weather.py).
 
@@ -46,4 +53,3 @@ def test_api_key_roundtrip(memory_settings):
 
     # Cada proveedor usa su propia clave: no se pisan.
     assert weather_base.load_api_key("meteoblue_api_key") is None
-
