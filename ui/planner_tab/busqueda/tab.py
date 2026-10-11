@@ -115,6 +115,8 @@ def _number(value: float | None, template: str) -> str:
 class BusquedaTab(QWidget):
     """Filtros + tabla de resultados + efemérides + curva + tarjetas de clima."""
 
+    # API pública prevista (A-14): de momento sin consumidor en el repo;
+    # el Planetario/Resumen se suscribirán cuando crezcan.
     object_selected = pyqtSignal(str, str)   # object_id, catalog
     add_to_personal = pyqtSignal(str, str)   # object_id, catalog
 

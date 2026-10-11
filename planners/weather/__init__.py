@@ -12,7 +12,7 @@ Sin API key guardada (o con error de red) los proveedores devuelven
 ``available=False`` con un ``note`` legible: **nunca lanzan excepción**, para
 que la UI pueda mostrar "Sin datos" sin bloquear el resto del planificador.
 """
-from .base import WeatherForecast, WeatherProvider, load_api_key
+from .base import WeatherForecast, WeatherProvider, load_api_key, transparency
 from .clear_outside import ClearOutside
 from .meteoblue import Meteoblue
 
@@ -22,4 +22,5 @@ __all__ = [
     "WeatherForecast",
     "WeatherProvider",
     "load_api_key",
+    "transparency",
 ]

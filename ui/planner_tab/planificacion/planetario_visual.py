@@ -137,7 +137,8 @@ class PlanetarioVisual(QWidget):
     - ``object_clicked(object_id, catalog)``: clic sobre un objeto → el
       Planificador lo muestra en la búsqueda.
     - ``region_clicked(ra_hours, dec_deg)``: clic sobre cielo vacío →
-      candidato a región de interés.
+      las coordenadas del punto como región de interés (**API prevista**,
+      A-14: sin consumidor hoy; el Resumen/Planetario la usarán).
     - ``view_changed(ra_hours, dec_deg, fov_deg)``: cambia la vista.
     """
 

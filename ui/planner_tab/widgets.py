@@ -14,10 +14,20 @@ Reglas aplicables:
 from __future__ import annotations
 
 import math
+import sqlite3
 from datetime import datetime
 
 import pyqtgraph as pg
-from PyQt6.QtCore import QDate, QPointF, QRectF, Qt, pyqtSignal
+from PyQt6.QtCore import (
+    QDate,
+    QObject,
+    QPointF,
+    QRectF,
+    QRunnable,
+    Qt,
+    QThreadPool,
+    pyqtSignal,
+)
 from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import (
     QAbstractSpinBox,
@@ -46,8 +56,8 @@ from planners.moon_distance import (
     unwrap_hours,
 )
 from planners.timefmt import format_hhmm
-from planners.transit import NightCurve, NightInfo, night_info
-from planners.weather import ClearOutside, Meteoblue
+from planners.transit import NightCurve, NightInfo, night_info, phase_name
+from planners.weather import ClearOutside, Meteoblue, WeatherForecast, transparency
 
 from ..style import PALETTE
 
@@ -459,7 +469,7 @@ class LocationBar(QFrame):
             from equipment.localizations import list_locations
 
             locations = list_locations()
-        except Exception:  # sin tabla o base recién creada: solo manual
+        except sqlite3.Error:  # sin tabla o base recién creada: solo manual
             locations = []
         # Sin ubicaciones guardadas, el propio combo avisa. La etiqueta es
         # corta para no desbordar la columna izquierda.
@@ -615,24 +625,51 @@ def _first(values: list[float]) -> float | None:
     return float(values[0]) if values else None
 
 
-def _transparency(cloud_pct: float | None) -> str:
-    """Transparencia del cielo a partir de la nubosidad (cualitativa)."""
-    if cloud_pct is None:
-        return "--"
-    if cloud_pct <= 10:
-        return "Excelente"
-    if cloud_pct <= 30:
-        return "Buena"
-    if cloud_pct <= 60:
-        return "Regular"
-    return "Mala"
-
-
 def _metric_text(value: float | None, template: str) -> tuple[str, bool]:
     """``(texto, sin_datos)`` de una métrica opcional; nunca formatea ``None``."""
     if value is None:
         return "Sin datos", True
     return template.format(value), False
+
+
+class _PronosticoSignal(QObject):
+    """Señal por la que el hilo del pool devuelve el pronóstico (A-32)."""
+
+    listo = pyqtSignal(int, object, object)  # (petición, clear outside, meteoblue)
+
+
+class _PronosticoRunnable(QRunnable):
+    """Trae Clear Outside y Meteoblue fuera del hilo de UI (A-32).
+
+    Hoy los proveedores son mocks sin red, pero el camino queda listo para
+    cuando se activen las API keys: la UI no se congela esperando.
+    """
+
+    def __init__(
+        self,
+        senal: _PronosticoSignal,
+        peticion: int,
+        latitude: float,
+        longitude: float,
+        date_iso: str,
+    ) -> None:
+        """Guarda la petición y la señal por la que devolverá el resultado."""
+        super().__init__()
+        self._senal = senal
+        self._peticion = peticion
+        self._latitude = latitude
+        self._longitude = longitude
+        self._date_iso = date_iso
+
+    def run(self) -> None:
+        """Ejecuta los dos pronósticos y emite el resultado (hilo del pool)."""
+        clear = ClearOutside().forecast(
+            self._latitude, self._longitude, self._date_iso
+        )
+        meteo = Meteoblue().forecast(
+            self._latitude, self._longitude, self._date_iso
+        )
+        self._senal.listo.emit(self._peticion, clear, meteo)
 
 
 class WeatherCards(QWidget):
@@ -674,10 +711,33 @@ class WeatherCards(QWidget):
         self.note_label.setObjectName("HintLabel")
         self.note_label.hide()
 
+        # El pronóstico vuelve por señal desde el pool (A-32); el contador
+        # invalida los resultados de peticiones anteriores.
+        self._peticion = 0
+        self._senal = _PronosticoSignal()
+        self._senal.listo.connect(self._rellenar)
+
     def refresh(self, latitude: float, longitude: float, date_iso: str) -> None:
-        """Rellena las tarjetas para ``date_iso`` en la ubicación dada."""
-        clear = ClearOutside().forecast(latitude, longitude, date_iso)
-        meteo = Meteoblue().forecast(latitude, longitude, date_iso)
+        """Rellena las tarjetas para ``date_iso`` en la ubicación dada (A-32).
+
+        Asíncrono: la llamada a los proveedores va a un hilo del pool
+        global y el resultado vuelve por señal a pintar en el hilo de UI.
+        Si antes de que termine llega una petición más nueva, el resultado
+        viejo se descarta (manda la última).
+        """
+        self._peticion += 1
+        QThreadPool.globalInstance().start(
+            _PronosticoRunnable(
+                self._senal, self._peticion, latitude, longitude, date_iso
+            )
+        )
+
+    def _rellenar(
+        self, peticion: int, clear: WeatherForecast, meteo: WeatherForecast
+    ) -> None:
+        """Pinta las tarjetas con el pronóstico ya traído (hilo de UI)."""
+        if peticion != self._peticion:
+            return  # resultado de una petición antigua: la más nueva manda
 
         seeing = _first(meteo.seeing_arcsec)
         clouds = _first(clear.cloud_cover_pct)
@@ -692,7 +752,7 @@ class WeatherCards(QWidget):
             "wind": _metric_text(wind, "{value:.0f} km/h"),
             "transparency": ("Sin datos", True)
             if clouds is None
-            else (_transparency(clouds), False),
+            else (transparency(clouds), False),
         }
         colors = {key: color for _title, key, color, _tc in self.CARDS}
         # La transparencia cambia de color con su cualitativa.
@@ -1024,40 +1084,14 @@ class DayNightBar(QWidget):
 # --------------------------------------------------------------------------- #
 #                           E F E M É R I D E S                                #
 # --------------------------------------------------------------------------- #
-#: Nombres de la fase por fracción iluminada, separados por sentido:
-#: la iluminación da la FORMA (creciente → cuarto → gibosa → llena) y el
-#: sentido da si crece o mengua. No se puede deducir una de la otra.
-_PHASE_TABLES: dict[bool, tuple[tuple[float, str], ...]] = {
-    True: (   # creciente (de luna nueva a llena)
-        (0.02, "Luna nueva"),
-        (0.48, "Creciente"),
-        (0.52, "Cuarto creciente"),
-        (0.98, "Gibosa creciente"),
-        (1.01, "Luna llena"),
-    ),
-    False: (  # menguante (de llena a luna nueva)
-        (0.02, "Luna nueva"),
-        (0.48, "Menguante"),
-        (0.52, "Cuarto menguante"),
-        (0.98, "Gibosa menguante"),
-        (1.01, "Luna llena"),
-    ),
-}
-
-
-def phase_name(illumination: float, waxing: bool) -> str:
-    """Nombre de la fase a partir de la fracción iluminada y su sentido."""
-    for limit, name in _PHASE_TABLES[bool(waxing)]:
-        if illumination <= limit:
-            return name
-    return "Luna llena"
-
-
 class EphemerisPanel(QFrame):
     """Panel "Efemérides Sol y Luna": fecha, fase, barra día/noche y horarios.
 
     Emite ``date_changed(date_iso)`` para que quien lo usa recalcule su curva
     de tránsito. El lugar (lat/long) lo aporta quien llama a :meth:`refresh`.
+
+    Su fecha es la de Búsqueda: independiente de la de Planificación a
+    propósito (A-33), cada pantalla se ajusta por su cuenta.
     """
 
     date_changed = pyqtSignal(str)

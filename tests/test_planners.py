@@ -821,3 +821,23 @@ def test_ensure_catalog_revierte_el_delete_si_falla(monkeypatch):
     assert conn.execute("SELECT COUNT(*) FROM catalog").fetchone()[0] == 1
     assert counts["catalog"] == 1
     conn.close()
+
+
+def test_phase_name_y_transparency_son_reglas_de_negocio():
+    """Fases lunares y transparencia cualitativa viven en planners (A-31).
+
+    Antes eran helpers de `ui/planner_tab/widgets.py`; la UI solo importa.
+    """
+    from planners.transit import phase_name
+    from planners.weather.base import transparency
+
+    assert phase_name(0.01, True) == "Luna nueva"
+    assert phase_name(0.5, True) == "Cuarto creciente"
+    assert phase_name(0.5, False) == "Cuarto menguante"
+    assert phase_name(1.0, True) == "Luna llena"
+
+    assert transparency(None) == "--"
+    assert transparency(10) == "Excelente"
+    assert transparency(20) == "Buena"
+    assert transparency(45) == "Regular"
+    assert transparency(90) == "Mala"

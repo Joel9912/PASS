@@ -422,6 +422,39 @@ def night_info(
     )
 
 
+#: Nombres de la fase por fracción iluminada, separados por sentido:
+#: la iluminación da la FORMA (creciente → cuarto → gibosa → llena) y el
+#: sentido da si crece o mengua. No se puede deducir una de la otra.
+_PHASE_TABLES: dict[bool, tuple[tuple[float, str], ...]] = {
+    True: (   # creciente (de luna nueva a llena)
+        (0.02, "Luna nueva"),
+        (0.48, "Creciente"),
+        (0.52, "Cuarto creciente"),
+        (0.98, "Gibosa creciente"),
+        (1.01, "Luna llena"),
+    ),
+    False: (  # menguante (de llena a luna nueva)
+        (0.02, "Luna nueva"),
+        (0.48, "Menguante"),
+        (0.52, "Cuarto menguante"),
+        (0.98, "Gibosa menguante"),
+        (1.01, "Luna llena"),
+    ),
+}
+
+
+def phase_name(illumination: float, waxing: bool) -> str:
+    """Nombre de la fase a partir de la fracción iluminada y su sentido.
+
+    Regla de negocio que antes vivía en la UI (`widgets.py`, A-31): los
+    dos argumentos son los mismos que devuelve ``night_info``.
+    """
+    for limit, name in _PHASE_TABLES[bool(waxing)]:
+        if illumination <= limit:
+            return name
+    return "Luna llena"
+
+
 def transit_info(
     ra_hours: float,
     dec_deg: float,

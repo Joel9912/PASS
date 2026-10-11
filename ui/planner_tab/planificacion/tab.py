@@ -73,6 +73,8 @@ class PlanificacionTab(QWidget):
     """Planetario + encuadre + curva + plan de captura + sesión a guardar."""
 
     session_saved = pyqtSignal(int)          # id de la sesión creada
+    # API pública prevista (A-14): sin consumidor hoy; el Planetario/
+    # Resumen se suscribirán a los cambios de target cuando se implementen.
     target_changed = pyqtSignal(str, str)    # object_id, catalog
 
     #: Noches evaluadas en el plan de captura.
@@ -125,6 +127,9 @@ class PlanificacionTab(QWidget):
         bar.addWidget(self._target)
 
         bar.addWidget(QLabel("Fecha"))
+        # Fecha propia de Planificación: independiente de la de Búsqueda
+        # (efemérides) a propósito (A-33): cada pantalla se ajusta por su
+        # cuenta; sincronizarlas sería una decisión futura.
         self._date = QDateEdit()
         self._date.setCalendarPopup(True)
         self._date.setDisplayFormat("dd/MM/yyyy")

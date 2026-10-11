@@ -9,6 +9,7 @@ señal se llama a :meth:`refresh` para que aparezca la fila nueva.
 """
 from __future__ import annotations
 
+import sqlite3
 from datetime import date
 
 from PyQt6.QtCore import QDate, Qt, pyqtSignal
@@ -52,7 +53,7 @@ def _setup_names() -> dict[int, str]:
     """Mapa ``setup_id`` → nombre (``manager.get`` es stub, se usa el listado)."""
     try:
         setups = list_setups()
-    except Exception:  # tabla vacía o recién creada
+    except sqlite3.Error:  # tabla vacía o recién creada
         return {}
     return {
         int(row["id"]): str(row.get("name") or f"Setup {row['id']}")

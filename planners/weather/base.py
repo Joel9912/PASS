@@ -40,3 +40,20 @@ def load_api_key(settings_key: str) -> str | None:
 def save_api_key(settings_key: str, value: str) -> None:
     """Guarda la API key en la tabla ``settings`` (nunca en código ni en el repo)."""
     set_setting(settings_key, value)
+
+
+def transparency(cloud_pct: float | None) -> str:
+    """Transparencia cualitativa del cielo a partir de la nubosidad (%).
+
+    Regla de negocio que antes vivía en la UI (`widgets.py`, A-31): sin
+    nubosidad no se inventa cualitativa — «--».
+    """
+    if cloud_pct is None:
+        return "--"
+    if cloud_pct <= 10:
+        return "Excelente"
+    if cloud_pct <= 30:
+        return "Buena"
+    if cloud_pct <= 60:
+        return "Regular"
+    return "Mala"
