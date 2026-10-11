@@ -260,12 +260,7 @@ class StackerPage(QWidget):
             )
             chip.setStyleSheet(_chip_style(estado))
         ocupado = self._worker is not None
-        self._atras.setEnabled(not ocupado and indice > 0)
-        self._siguiente.setEnabled(
-            not ocupado and indice < len(PASOS) - 1
-        )
-        self._todo.setEnabled(not ocupado and indice < len(PASOS) - 1)
-        self._limpiar.setEnabled(not ocupado)
+        self._actualizar_navegacion(ocupado, indice)
         if indice == 1 and self.sesiones and not self._aviso_trabajo:
             self._aviso_trabajo = True
             if any(self._carpeta_calibrada(s).exists() for s in self.sesiones):
@@ -871,19 +866,24 @@ class StackerPage(QWidget):
         if al_fallar is not None:
             al_fallar(motivo)
 
+    def _actualizar_navegacion(self, ocupado: bool, indice: int) -> None:
+        """Habilita Atrás/Siguiente/Todo/Limpiar según el paso y la corrida (A-21).
+
+        Mismo criterio en los dos caminos que lo necesitan: cambiar de paso
+        (``_mostrar_paso``) y arrancar/terminar una tarea (``_ocupar``).
+        """
+        self._atras.setEnabled(not ocupado and indice > 0)
+        self._siguiente.setEnabled(not ocupado and indice < len(PASOS) - 1)
+        self._todo.setEnabled(not ocupado and indice < len(PASOS) - 1)
+        self._limpiar.setEnabled(not ocupado)
+
     def _ocupar(self, ocupado: bool) -> None:
         """Estado de «corriendo»: navegación muerta, progreso y Cancelar."""
         self._barra.setVisible(ocupado)
         self._cancelar.setVisible(ocupado)
         if ocupado:
             self._barra.setValue(0)
-        indice = self._paso
-        self._atras.setEnabled(not ocupado and indice > 0)
-        self._siguiente.setEnabled(
-            not ocupado and indice < len(PASOS) - 1
-        )
-        self._todo.setEnabled(not ocupado and indice < len(PASOS) - 1)
-        self._limpiar.setEnabled(not ocupado)
+        self._actualizar_navegacion(ocupado, self._paso)
         for panel in self._paneles_lista:
             panel.bloquear(ocupado)
 
