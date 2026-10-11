@@ -71,14 +71,15 @@ def _borrar_si_propia(path: str) -> None:
         pass  # un fichero que no se puede borrar no debe romper el guardado
 
 
-def attach(entity_kind: str, entity_id: int, path: str, kind: str | None = None) -> int:
-    """Adjunta una imagen a una entidad y devuelve su id.
+def _attach(entity_kind: str, entity_id: int, path: str, kind: str | None = None) -> int:
+    """Adjunta una imagen a una entidad y devuelve su id (interna de ``sync``).
 
     El fichero se **copia** a `data/equipment_images/<entidad>/<id>/` (D-1):
     la imagen guardada sobrevive aunque el usuario mueva o borre el
     original. Si la copia no es posible, se persiste la ruta original.
     ``kind`` por defecto es el de la entidad ('otra', 'chart', 'ganancia',
-    'mapa_lp').
+    'mapa_lp'). Sin consumidor fuera de este módulo: por eso es interna
+    (A-25); la API pública de escritura es ``sync``.
     """
     tabla, fk, kind_defecto = _entidad(entity_kind)
     conn = get_connection()
@@ -100,8 +101,8 @@ def list_images(entity_kind: str, entity_id: int) -> list[dict]:
     return [dict(row) for row in rows]
 
 
-def remove(entity_kind: str, entity_id: int, path: str) -> None:
-    """Quita una imagen de una entidad: borra la fila y su copia propia.
+def _remove(entity_kind: str, entity_id: int, path: str) -> None:
+    """Quita una imagen de una entidad: borra la fila y su copia propia (interna de ``sync``).
 
     Solo se borran ficheros bajo ``IMAGES_ROOT``: los originales del usuario
     no se tocan (semántica D-1).
@@ -118,18 +119,18 @@ def remove(entity_kind: str, entity_id: int, path: str) -> None:
 def sync(entity_kind: str, entity_id: int, paths: list[str]) -> None:
     """Re-sincroniza las imágenes de una entidad con ``paths`` (contrato D-5).
 
-    La lista es la verdad al guardar: primero ``remove`` de las que sobran y
-    luego ``attach`` de las que faltan; las que siguen quedan intactas (con
+    La lista es la verdad al guardar: primero ``_remove`` de las que sobran y
+    luego ``_attach`` de las que faltan; las que siguen quedan intactas (con
     su ``kind``). Parte siempre de la lista que devuelva ``list_images()``:
     no mezcles origen y copia en la misma lista.
     """
     guardadas = [img["path"] for img in list_images(entity_kind, entity_id)]
     for sobra in guardadas:
         if sobra not in paths:
-            remove(entity_kind, entity_id, sobra)
+            _remove(entity_kind, entity_id, sobra)
     for falta in paths:
         if falta not in guardadas:
-            attach(entity_kind, entity_id, falta)
+            _attach(entity_kind, entity_id, falta)
 
 
 def purge(entity_kind: str, entity_id: int) -> None:

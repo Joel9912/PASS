@@ -251,7 +251,7 @@ def test_migra_el_sitio_de_las_ubicaciones(memory_db):
 
 
 def test_attach_copia_la_imagen_a_data(memory_db, monkeypatch, tmp_path):
-    """D-1: `attach()` copia a `data/equipment_images/<entidad>/<id>/`.
+    """D-1: `_attach()` copia a `data/equipment_images/<entidad>/<id>/`.
 
     Antes se persistía la ruta absoluta del `QFileDialog`: si el usuario
     movía o borraba el original, la imagen adjunta se perdía. El layout es
@@ -268,7 +268,7 @@ def test_attach_copia_la_imagen_a_data(memory_db, monkeypatch, tmp_path):
     original.parent.mkdir()
     original.write_bytes(b"contenido de prueba")
 
-    images.attach("setup", 1, str(original), "spot")
+    images._attach("setup", 1, str(original), "spot")
 
     guardada = Path(images.list_images("setup", 1)[0]["path"])
     assert guardada != original                     # la ruta guardada es la copia
@@ -276,17 +276,17 @@ def test_attach_copia_la_imagen_a_data(memory_db, monkeypatch, tmp_path):
     assert guardada.read_bytes() == b"contenido de prueba"
 
     # Re-adjuntar el mismo original: ya está copiado, no revienta
-    images.attach("setup", 1, str(original), "spot")
+    images._attach("setup", 1, str(original), "spot")
     assert len(images.list_images("setup", 1)) == 2
 
     # Original perdido: se persiste la ruta tal cual en vez de fallar
     fantasma = tmp_path / "borrado.png"
-    images.attach("setup", 1, str(fantasma), "otra")
+    images._attach("setup", 1, str(fantasma), "otra")
     assert images.list_images("setup", 1)[2]["path"] == str(fantasma)
 
     # Entidad fuera del mapa cerrado: ValueError, nunca SQL dinámico suelto
     with pytest.raises(ValueError, match="Entidad"):
-        images.attach("banana", 1, str(original))
+        images._attach("banana", 1, str(original))
 
 
 def test_memory_db_dispara_los_on_delete_del_esquema(memory_db):
@@ -760,8 +760,8 @@ def test_imagenes_por_entidad_sync_y_purge(memory_db, monkeypatch, tmp_path):
     ganancia.write_bytes(b"gain")
 
     # kind por defecto por entidad y layout uniforme
-    images.attach("telescope", tid, str(chart))
-    images.attach("camera", cid, str(ganancia))
+    images._attach("telescope", tid, str(chart))
+    images._attach("camera", cid, str(ganancia))
     assert images.list_images("telescope", tid)[0]["kind"] == "chart"
     assert images.list_images("camera", cid)[0]["kind"] == "ganancia"
     copia = Path(images.list_images("telescope", tid)[0]["path"])
@@ -777,7 +777,7 @@ def test_imagenes_por_entidad_sync_y_purge(memory_db, monkeypatch, tmp_path):
     assert not copia.exists()  # la copia propia se fue con el remove
 
     # purge: al borrar el padre no quedan ficheros huérfanos (D-1)
-    images.attach("telescope", tid, str(chart))
+    images._attach("telescope", tid, str(chart))
     carpeta = tmp_path / "equipment_images" / "telescope" / str(tid)
     assert carpeta.exists()
     components.delete_telescope(tid)
