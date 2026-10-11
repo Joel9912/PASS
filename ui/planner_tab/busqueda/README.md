@@ -34,7 +34,7 @@ Primer paso del flujo de PASS: filtrar el catálogo (OpenNGC + HYG + LDN) y ver,
 ├────────────────────────┼──────────────────────────────────────┤
 │ 📍 Ubicación           │ Condiciones meteorológicas          │
 │ combo guardadas/Manual │ 6 tarjetas clima/seeing (mock →     │
-│ Lat ◀▶ · Lon ◀▶ ·      │ «Sin datos» hasta que haya API key) │
+│ Lat ◀▶ · Lon ◀▶ ·      │ «Sin datos»; API real pendiente)     │
 │ Huso Auto              │                                      │
 │ fila 2 · mín 99 px     │ fila 2 (misma celda)                │
 └────────────────────────┴──────────────────────────────────────┘

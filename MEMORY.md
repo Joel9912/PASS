@@ -66,17 +66,6 @@
 | **Descuidar la planificación por el apilado** | PASS se vuelve "otro procesador de imágenes" | Enfocarse en roadmap: planificación primero, procesamiento segundo |
 | **Estructura de MDs inconsistente** | Agentes pierden contexto, tiempo perdido en adivinar | MDs por carpeta obligatorios, formato estandarizado |
 
-## 📊 Roadmap Visual
-
-```
-  MES 1-3                      MES 4-6                      MES 7-12
-│ Estructura base              │ UI funcional                │ Feature avanzadas
-│ MDs por carpeta              │ Navegación tabs             │ Comparativas completas
-│ Gestión equipos              │ Búsquedas básicas           │ Inteligencia artificial
-│ APIs astronómicas            │ Planetario básico           │ Integración SirIL profunda
-│                              │                             │ Recomendaciones automáticas
-```
-
 ## 💡 Próximos Pasos Inmediatos
 *(solo pendientes: lo completado vive en «Situación Actual»)*
 

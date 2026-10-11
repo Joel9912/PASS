@@ -181,9 +181,9 @@ ui/ (PyQt6)  →  planners/ | stacks/ | planetary/ (lógica)  →  db/ (SQLite e
       └───── señales/respuestas ←┘
 ```
 
-- Planificador escribe `planned_sessions` → Resumen la lee.
-- Apilador calcula tiempo de exposición total → Resumen lo muestra.
-- Datos de `equipment/` alimentan Planificador y Planificador de Equipo.
+- Planificador escribe `planned_sessions`; Resumen podrá leerla cuando deje de ser placeholder.
+- Apilador guarda referencias y exposiciones; Resumen podrá calcular y mostrar el total.
+- Datos de `equipment/` alimentan Planificador; Planificador de Equipo sigue pendiente.
 
 ## 📦 Dependencias y configuración
 - Instaladas en `.venv`: PyQt6 6.11, **pyqtgraph 0.14.0** (gráficas del Planificador), astropy 8.0, numpy 2.5, PyYAML 6.0 (+ pytest).

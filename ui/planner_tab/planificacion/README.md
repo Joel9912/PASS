@@ -37,7 +37,7 @@ El corazón de la subpestaña: mirar el target en el planetario, ajustar el encu
 - **Clic en el planetario** → cambia el target solo si el objeto está en el Catálogo Personal.
 - **Encuadre** desde el equipo seleccionado (`planners/framing.calculate_fov`); sin datos de la cámara, el editor lo indica y no se activa.
 - **La región no aparece en el planetario**: aquí solo como encuadre de referencia.
-- Una sola conversación UTC → hora local: `planners.analytical_transit.local_utc_offset`.
+- Una sola conversión UTC → hora local: `planners.analytical_transit.local_utc_offset`.
 - «💾 Guardar sesión» escribe con `planners.planned_sessions` y avisa a Sesiones por señal (`session_saved`).
 
 ## Planes futuros
