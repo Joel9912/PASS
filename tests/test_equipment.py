@@ -766,6 +766,26 @@ def test_ubicaciones_roundtrip_del_sitio(memory_db):
     assert fila["lp"] == {d: {"fuente": None, "km": 0.0} for d in DIRECTIONS}
 
 
+def test_adjuntos_homonimos_no_sobrescriben(memory_db, monkeypatch, tmp_path):
+    """Dos imágenes con igual nombre preservan ambos contenidos y rutas."""
+    from equipment import components, images
+
+    monkeypatch.setattr(images, "IMAGES_ROOT", tmp_path / "adjuntos")
+    tid = components.create_telescope(Telescope(name="ED80"))
+    uno = tmp_path / "uno" / "chart.png"
+    dos = tmp_path / "dos" / "chart.png"
+    uno.parent.mkdir()
+    dos.parent.mkdir()
+    uno.write_bytes(b"primero")
+    dos.write_bytes(b"segundo")
+
+    images.sync("telescope", tid, [str(uno), str(dos)])
+    rutas = [Path(row["path"]) for row in images.list_images("telescope", tid)]
+    assert len(rutas) == 2
+    assert rutas[0] != rutas[1]
+    assert [ruta.read_bytes() for ruta in rutas] == [b"primero", b"segundo"]
+
+
 def test_imagenes_por_entidad_sync_y_purge(memory_db, monkeypatch, tmp_path):
     """API generalizada: kinds por defecto, sync D-5, purge y cascada de filas."""
     from equipment import components, images, localizations

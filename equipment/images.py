@@ -41,9 +41,9 @@ def _copy_to_data(entity_kind: str, entity_id: int, path: str) -> str:
     """Copia ``path`` a ``IMAGES_ROOT/<entity_kind>/<entity_id>/``.
 
     Devuelve la ruta a guardar. Si el original ya está en el destino
-    (re-adjuntar) no se copia; si el original falta o la copia falla, se
-    devuelve la ruta tal cual — mejor una ruta frágil que no poder adjuntar
-    la imagen.
+    (re-adjuntar) no se copia. Si ya existe otra imagen con el mismo nombre,
+    se elige un sufijo libre en lugar de sobrescribirla. Si el original falta
+    o la copia falla, se devuelve la ruta tal cual.
     """
     origin = Path(path)
     target_dir = IMAGES_ROOT / entity_kind / str(entity_id)
@@ -51,6 +51,10 @@ def _copy_to_data(entity_kind: str, entity_id: int, path: str) -> str:
         target = target_dir / origin.name
         if origin.resolve() != target.resolve():
             target_dir.mkdir(parents=True, exist_ok=True)
+            indice = 2
+            while target.exists():
+                target = target_dir / f"{origin.stem}-{indice}{origin.suffix}"
+                indice += 1
             shutil.copy2(origin, target)
         return str(target)
     except OSError:
@@ -128,7 +132,7 @@ def sync(entity_kind: str, entity_id: int, paths: list[str]) -> None:
     for sobra in guardadas:
         if sobra not in paths:
             _remove(entity_kind, entity_id, sobra)
-    for falta in paths:
+    for falta in dict.fromkeys(paths):
         if falta not in guardadas:
             _attach(entity_kind, entity_id, falta)
 
