@@ -5,7 +5,7 @@
 | Aspecto | Estado |
 |---------|--------|
 | **Etapa de desarrollo** | `v0.2` (alpha): refactor de auditoría aplicado (34 hallazgos cerrados 10/10/2026); pestañas Planificador, Equipo y Apilador implementadas; Resumen, Planetario y Planificador de Equipo aún placeholder |
-| **Repositorio público** | ✅ GitHub `Joel9912/PASS`, tags `v0.1-alpha` y `v0.2` (10/10/2026); historia conservada desde la primera versión |
+| **Repositorio público** | GitHub `Joel9912/PASS`; tag publicado `v0.1-alpha`. Los commits de preparación de `v0.2` se suben a `master`, pero el tag y la versión esperan autorización del usuario. Cambios entre versiones en `CHANGELOG.md`. |
 | **Licencia** | ✅ GPL-3.0: libre para usar/modificar/vender, pero las versiones derivadas deben publicar su código (no se puede apropiar ni cerrar) |
 | **Estructura de carpetas** | ✅ Creada: `db/`, `planners/`, `stacks/`, `equipment/`, `planetary/`, `ui/` (6 pestañas), `i18n/`, `tests/`, `data/` |
 | **Docs** | ✅ Raíz: README, PROGRAM, MEMORY, STRUCTURE + LICENSE GPL-3.0 + requirements.txt |

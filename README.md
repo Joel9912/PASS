@@ -52,7 +52,7 @@ pytest
 
 ```
 Planning Stacking Suite/
-├── README.md / PROGRAM.md / MEMORY.md / STRUCTURE.md
+├── README.md / CHANGELOG.md / PROGRAM.md / MEMORY.md / STRUCTURE.md
 ├── main.py            # Entry point (PyQt6)
 ├── db/                # Capa SQLite (conexión y esquema)
 ├── planners/          # Búsqueda, tránsito, ranking, clima/seeing
@@ -69,6 +69,7 @@ Detalles de cada carpeta: ver `STRUCTURE.md`.
 
 ## Documentación
 
+- `CHANGELOG.md` — cambios entre versiones (v0.2 todavía sin publicar)
 - `PROGRAM.md` — filosofía y diseño de cada pestaña
 - `MEMORY.md` — estado actual y roadmap
 - `STRUCTURE.md` — árbol de carpetas y convenciones

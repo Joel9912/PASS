@@ -4,7 +4,7 @@
 
 ```
 Planning-Stacking-Suite/
-├── README.md / PROGRAM.md / MEMORY.md / STRUCTURE.md
+├── README.md / CHANGELOG.md / PROGRAM.md / MEMORY.md / STRUCTURE.md
 ├── LICENSE               # GPL-3.0
 ├── requirements.txt      # PyQt6, pyqtgraph, astropy, numpy, PyYAML, pytest
 ├── .gitignore
