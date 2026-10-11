@@ -43,14 +43,6 @@ DESCARTES_ALIAS = ("descarte", "descartes", "descartado", "descartados",
 FITS_EXTS = {".fit", ".fits", ".fts"}
 RAW_EXTS = {".cr2", ".cr3", ".nef", ".arw", ".dng", ".orf", ".rw2", ".pef"}
 
-#: Tipos de másters (claves del dict ``masters``), en orden de detección:
-#: «darkflat» debe casar antes que «dark» y «flat» («master_dark_flat»
-#: contiene los dos textos).
-MASTER_KINDS = ("bias", "dark_flat", "dark", "flat")
-
-#: Tipos de sesión que el usuario puede forzar a mano en la UI.
-KINDS = ("mono", "osc", "filtros", "desconocido")
-
 
 @dataclass
 class Session:
@@ -60,7 +52,7 @@ class Session:
     frames: dict[str, list[Path]] = field(default_factory=dict)  # tipo -> ficheros
     masters: dict[str, Path] = field(default_factory=dict)       # tipo -> fichero maestro
     filters: dict[str, list[Path]] = field(default_factory=dict)  # filtro -> lights
-    kind: str = "desconocido"  # 'mono' | 'osc' | 'filtros' | 'desconocido' (KINDS)
+    kind: str = "desconocido"  # 'mono' | 'osc' | 'filtros' | 'desconocido'
 
     @property
     def n_lights(self) -> int:
