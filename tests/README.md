@@ -1,7 +1,7 @@
 # tests/
 
 ## Qué es
-Tests de PASS con **pytest** (446 tests): validan UI, persistencia y lógica de planificación/equipo/apilado.
+Tests de PASS con **pytest** (447 tests): validan UI, persistencia y lógica de planificación/equipo/apilado.
 
 ## Estado actual
 - `test_smoke.py` — arranque y estructura: `main.py` importa, las 6 pestañas, **todos los README con sus 4 secciones** (lista explícita con las 4 subcarpetas del Planificador), esquema SQLite (`catalog`/`stars`) y `MainWindow` offscreen (barra lateral con su orden de filas, contenido y pie con versión).
@@ -14,7 +14,7 @@ Tests de PASS con **pytest** (446 tests): validan UI, persistencia y lógica de 
 - `test_framing.py` — FOV desde focal/píxel/resolución y `None` si faltan datos.
 - `test_capture_plan.py` — puntuación offline y `best_dates` con astropy (orden, ventanas, sin noche → vacío, `utc_offset_hours`). D-2/M-11: la altura puntúa **por noche** — `_night_max_altitude` dentro/fuera de la ventana, `altitude_at_utc` autocoherente y espía de `_score_date` recibiendo `night_altitude_deg` (variable, no la culminación constante).
 - `test_ldn_loader.py` — parseo de las nebulosas oscuras de Lynds (datos inline, offline).
-- `test_settings.py` — `db.settings` con upsert sobre BD en memoria: roundtrip de API keys (`save_api_key`/`load_api_key`), `get_float` defensivo y pin de que la BD por defecto en pytest no es `data/pass.db`. La ruta de SirIL se prueba en `test_siril_finder.py`.
+- `test_settings.py` — `db.settings` con upsert sobre BD en memoria: roundtrip de API keys (`save_api_key`/`load_api_key`), `get_float` defensivo, BD por defecto de pytest fuera de `data/` y conexión fallida cerrada antes de reintentar. La ruta de SirIL se prueba en `test_siril_finder.py`.
 - `test_siril_finder.py` — `stacks/siril_finder` con BD en memoria: PATH del sistema primero y `settings` como fallback (con `which` simulado), ruta vacía contada como «no guardado» y `siril_version` con `subprocess.run` sustituido (primera línea; fallo o `OSError` → None) y la detección real sin SirIL instalado no revienta.
 - `test_weather.py` — proveedores de clima **nunca lanzan y no tocan la BD**: sin key → `available=False` con nota de key; con key pasada por parámetro → nota «llamada real pendiente»; el pronóstico desde un hilo secundario no revienta con `ProgrammingError` (regresión A-32: la key la lee la UI en su hilo) y pin de fuente: ningún proveedor importa `load_api_key`.
 - `test_dialogos.py` — diálogos abiertos por clic (`RegionDialog`, `EditSessionDialog`, `SessionDialog`…): montan y **no acumulan hijos ocultos** al cerrar (fuga medida 20/20, ahora `deleteLater()`, M-14). Corrección `QDateEdit` de «Editar» (N-1).

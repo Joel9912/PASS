@@ -94,10 +94,16 @@ def get_connection() -> sqlite3.Connection:
     global _connection
     if _connection is None:
         DATA_DIR.mkdir(exist_ok=True)
-        _connection = sqlite3.connect(DB_PATH)
-        _connection.row_factory = sqlite3.Row
-        _connection.execute("PRAGMA foreign_keys = ON")
-        _apply_schema(_connection)
+        conn = sqlite3.connect(DB_PATH)
+        try:
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA foreign_keys = ON")
+            _apply_schema(conn)
+        except Exception:
+            conn.rollback()
+            conn.close()
+            raise
+        _connection = conn
     return _connection
 
 

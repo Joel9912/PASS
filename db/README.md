@@ -4,7 +4,7 @@
 Capa de persistencia de PASS: conexión única a **SQLite** (módulo `sqlite3` de la librería estándar, sin dependencias externas) y esquema en SQL.
 
 ## Estado actual
-- `connection.py` — conexión única (`get_connection`; aplica `schema.sql` completo en la primera conexión, idempotente) y `init_db()`. Base en `data/pass.db` (no versionada).
+- `connection.py` — conexión única (`get_connection`; aplica `schema.sql` completo en la primera conexión, idempotente) y `init_db()`. Base en `data/pass.db` (no versionada); un fallo de esquema cierra la conexión sin publicarla globalmente.
   - Si una base v1 aún tiene valores en las columnas embebidas de `equipment_setups`, detiene la migración **antes** de modificar el esquema; esos datos requieren una migración acordada, nunca se borran por `DROP COLUMN` silenciosamente.
   - **`_MIGRATIONS`**: dict `tabla → columnas` que se aplica con `PRAGMA table_info` + `ALTER TABLE` (SQLite no admite `ADD COLUMN IF NOT EXISTS`). Hoy cubre `locations`, `equipment_setups`, `personal_catalog`, `planned_sessions` y las 4 piezas (`telescopes`, `cameras`, `mounts`, `filters` — precio/peso por pieza).
 - `settings.py` — helpers `get_setting(key, default)` / `set_setting(key, value)` sobre la tabla `settings` (upsert + commit). Punto único para la configuración persistente: API keys del clima, ruta de SirIL (`siril_path`), carpeta base de proyectos, etc.

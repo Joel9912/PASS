@@ -13,6 +13,37 @@ def test_pytest_no_usa_base_de_usuario():
 
     assert connection.DB_PATH.resolve() != (connection.ROOT / "data" / "pass.db").resolve()
 
+
+def test_conexion_fallida_no_se_reutiliza(tmp_path, monkeypatch):
+    """Una migración fallida no publica una conexión SQLite a medio iniciar."""
+    import sqlite3
+
+    import pytest
+
+    from db import connection
+
+    previa = connection._connection
+    monkeypatch.setattr(connection, "_connection", None)
+    monkeypatch.setattr(connection, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(connection, "DB_PATH", tmp_path / "prueba.db")
+    aplicar = connection._apply_schema
+
+    def fallar(_conn):
+        """Simula un error de esquema antes de confirmar la conexión."""
+        raise sqlite3.DatabaseError("migración simulada")
+
+    monkeypatch.setattr(connection, "_apply_schema", fallar)
+    try:
+        with pytest.raises(sqlite3.DatabaseError, match="simulada"):
+            connection.get_connection()
+        assert connection._connection is None
+        monkeypatch.setattr(connection, "_apply_schema", aplicar)
+        nueva = connection.get_connection()
+        assert nueva.execute("SELECT count(*) FROM settings").fetchone()[0] == 0
+        nueva.close()
+    finally:
+        connection._connection = previa
+
 # El fixture ``memory_settings`` vive en conftest.py (compartido con
 # test_weather.py).
 
