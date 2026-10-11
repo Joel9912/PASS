@@ -4,9 +4,9 @@
 Los cinco paneles (pasos) del asistente de apilado: widgets puro-presentación, uno por módulo.
 
 ## Estado actual
-- `sesiones.py` — paso 1: banner, tabla de tomas (con reparto de anchos propio) y fichas FITS de solo lectura; cartas FOV/estrellado con rotación.
-- `calibrar.py` — paso 2: material disponible por sesión y acceso al calibrado.
-- `auditar.py` — paso 3: pesos, tabla de métricas, gráfica pyqtgraph y visor FITS con autoestirado moderado (solo pantalla).
+- `sesiones.py` — paso 1: banner, tabla de tomas (con reparto de anchos propio) y fichas FITS de solo lectura; cartas FOV/estrellado con rotación. Estado, exposiciones y fichas se piden por `clave_sesion` (la ruta), no por nombre.
+- `calibrar.py` — paso 2: material disponible por sesión y acceso al calibrado; los avisos de la corrida también se buscan por `clave_sesion`.
+- `auditar.py` — paso 3: pesos, tabla de métricas, gráfica pyqtgraph y visor FITS con autoestirado moderado (solo pantalla). La columna Sesión pinta el nombre de la carpeta y la ruta completa en la ayuda.
 - `apilar.py` — paso 4: integración, norma, ponderación, rechazo y salida.
 - `final.py` — paso 5: resumen del apilado y apertura del FITS en SirIL gráfico.
 - `__init__.py` — re-exporta los 5 paneles: la API es `from ui.stacker_tab.paneles import PanelSesiones, …`.

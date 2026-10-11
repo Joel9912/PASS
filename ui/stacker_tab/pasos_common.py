@@ -376,6 +376,16 @@ def _formato_ficha(fichas: dict[str, FichaFITS]) -> str:
     return " · ".join(partes) or "Sin cabeceras FITS legibles en las sesiones."
 
 
+def clave_sesion(sesion: Session) -> str:
+    """Identidad de una sesión en los diccionarios y conjuntos de la pestaña.
+
+    Es su **ruta absoluta**, nunca el nombre: un escaneo puede traer dos
+    carpetas homónimas de raíces distintas y entonces el nombre solo fundiría
+    sus exposiciones, sus fichas y su estado de calibrado.
+    """
+    return str(sesion.path.resolve())
+
+
 def _ayuda_fila(sesion: Session, calibrada: bool, ficha: FichaFITS | None) -> str:
     """Tooltip de la fila: ruta, estado del calibrado, región y ficha FITS.
 

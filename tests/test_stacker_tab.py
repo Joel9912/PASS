@@ -206,6 +206,70 @@ def test_calibrada_de_otra_raiz_no_entra_en_el_pool(tmp_path, memory_db):
     assert pagina._filas_calibradas_actuales() == []
 
 
+def test_homonima_escaneada_junta_no_hereda_el_calibrado(tmp_path, memory_db):
+    """Con las dos homónimas en pantalla, solo la que tiene fila está calibrada.
+
+    Antes se comparaba por nombre (``noche``): la pendiente salía marcada como
+    calibrada y ``calibrar()`` la saltaba sin tocarla jamás.
+    """
+    from ui.stacker_tab import StackerPage
+    from ui.stacker_tab.pasos_common import clave_sesion
+
+    calibrada = _sesion("noche", 1, tmp_path / "a")
+    pendiente = _sesion("noche", 1, tmp_path / "b")
+    salida = tmp_path / "working" / "calibrados" / "noche"
+    salida.mkdir(parents=True)
+    memory_db.execute(
+        "INSERT INTO calibrated_sessions(session_dir, calibrated_dir, n_frames)"
+        " VALUES (?, ?, ?)", (str(calibrada.path), str(salida), 1),
+    )
+    pagina = StackerPage()
+    pagina.sesiones = [calibrada, pendiente]
+    pagina._refrescar_calibradas()
+
+    assert clave_sesion(calibrada) in pagina._calibradas
+    assert clave_sesion(pendiente) not in pagina._calibradas
+    assert [
+        s for s in pagina.sesiones
+        if not pagina._salida_atribuida(s).exists()
+    ] == [pendiente]
+
+    pagina.panel_calibrar.mostrar_pendientes(pagina.sesiones, pagina._calibradas)
+    tabla = pagina.panel_calibrar._tabla
+    assert [tabla.item(fila, 3).text() for fila in range(tabla.rowCount())] == [
+        "Calibrada ✓", "Pendiente",
+    ]
+
+
+def test_salida_legacy_ajena_no_marca_calibrada_ni_se_limpia(
+    tmp_path, memory_db, monkeypatch,
+):
+    """La UI preserva legacy ajeno y exige recalibración manual del homónimo."""
+    from ui import stacker_tab
+
+    raiz = tmp_path / "working"
+    monkeypatch.setattr(stacker_tab, "WORKING_FOLDER", raiz)
+    ajena = _sesion("noche", 1, tmp_path / "a")
+    actual = _sesion("noche", 1, tmp_path / "b")
+    antigua = raiz / "calibrados" / "noche"
+    antigua.mkdir(parents=True)
+    (antigua / "test.fit").write_bytes(b"antiguo")
+    memory_db.execute(
+        "INSERT INTO calibrated_sessions(session_dir, calibrated_dir, n_frames)"
+        " VALUES (?, ?, ?)", (str(ajena.path), str(antigua), 1),
+    )
+    pagina = stacker_tab.StackerPage()
+    pagina.sesiones = [actual]
+    pagina._refrescar_calibradas()
+    assert pagina._calibradas == set()
+    assert pagina._carpeta_calibrada(actual) != antigua
+    monkeypatch.setattr(pagina, "_asegurar_siril", lambda: True)
+    monkeypatch.setattr(pagina, "_lanzar", lambda *a, **k: pytest.fail("No debe arrancar"))
+    pagina.calibrar(siguiente=lambda: pytest.fail("No debe encadenar"))
+    assert "explícitamente" in pagina._estado.text()
+    assert (antigua / "test.fit").read_bytes() == b"antiguo"
+
+
 def test_auditoria_no_recorta_la_cabecera_frame():
     """La casilla es corta y Frame conserva un mínimo sin scroll lateral."""
     from ui.stacker_tab import StackerPage
@@ -356,7 +420,8 @@ def test_tabla_sesiones_duracion_total_y_colores():
     sesion = Session(path=Path("/x/noche1"))
     sesion.kind = "osc"
     sesion.frames["lights"] = [Path("a.fits")] * 28  # 28 × 60 s
-    panel.mostrar([sesion], set(), {"noche1": [60.0] * 28})
+    # exposiciones y fichas se indexan por la ruta de origen, no por el nombre
+    panel.mostrar([sesion], set(), {str(sesion.path.resolve()): [60.0] * 28})
 
     tabla = panel._tabla
     assert [tabla.horizontalHeaderItem(c).text() for c in range(4)] == [
@@ -379,13 +444,17 @@ def test_tabla_sesiones_duracion_total_y_colores():
 
     # hora y pico: 79 frames × 60 s = 4740 s → «1 h 19 min»
     sesion.frames["lights"] = [Path("a.fits")] * 79
-    panel.mostrar([sesion], {"noche1"}, {"noche1": [60.0] * 79})
+    # el conjunto de calibradas lleva rutas de origen, no nombres
+    panel.mostrar(
+        [sesion], {str(sesion.path.resolve())},
+        {str(sesion.path.resolve()): [60.0] * 79},
+    )
     assert tabla.item(0, 3).text() == "1 h 19 min"
     assert "Calibrada ✓" in tabla.item(0, 0).toolTip()
 
     # los segundos de integración no se pierden al combinar sesiones
     sesion.frames["lights"] = [Path("a.fits")] * 14
-    panel.mostrar([sesion], set(), {"noche1": [45.0] * 14})
+    panel.mostrar([sesion], set(), {str(sesion.path.resolve()): [45.0] * 14})
     assert tabla.item(0, 3).text() == "10 min 30 s"
     assert "Integración: 10 min 30 s" in panel._resumen.text()
 
@@ -412,7 +481,8 @@ def test_tabla_sesiones_region_y_ficha_fits():
     panel = pagina.panel_sesiones
     sesion = Session(path=Path("/x/noche1"))
     sesion.frames["lights"] = [Path("a.fits")]
-    panel.mostrar([sesion], set(), {"noche1": [45.0]}, {"noche1": ficha})
+    clave = str(sesion.path.resolve())
+    panel.mostrar([sesion], set(), {clave: [45.0]}, {clave: ficha})
     tabla = panel._tabla
     assert "0h47m, +41,3°" in tabla.item(0, 0).toolTip()
     assert "0h47m, +41,3°" in panel._detalle_sitio.text()
@@ -460,7 +530,7 @@ def test_visor_sesiones_usa_fits_y_seleccion_sin_modificar_originales(tmp_path):
             sesion.frames["lights"].insert(0, ruta.with_suffix(".cr2"))
         sesiones.append(sesion)
         from stacks.session_parser import ficha_de_luz
-        fichas[nombre] = ficha_de_luz(ruta)
+        fichas[str(sesion.path.resolve())] = ficha_de_luz(ruta)
 
     panel = PanelSesiones()
     panel.mostrar(sesiones, set(), {}, fichas)
@@ -776,7 +846,7 @@ def test_tabla_sesiones_anchos_sigue_al_widget():
     panel = PanelSesiones()  # sin padre: su resize manda sobre sus hijos
     sesion = Session(path=Path("/x/noche1"))
     sesion.frames["lights"] = [Path("a.fits")]
-    panel.mostrar([sesion], set(), {"noche1": [60.0]})
+    panel.mostrar([sesion], set(), {str(sesion.path.resolve()): [60.0]})
     tabla = panel._tabla
 
     panel.resize(1200, 500)

@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 from astropy.io import fits
 
+from stacks.calibrator import output_dir_for
 from stacks.global_pool import GlobalPool, pool_desde_calibradas
 
 
@@ -88,5 +89,22 @@ def test_pool_desde_calibradas_ignora_lo_borrado(tmp_path):
     ]
 
     pool = pool_desde_calibradas(filas, root=raiz)
-    assert [ref.sesion for ref in pool.entries] == ["noche1"]
+    assert [ref.sesion for ref in pool.entries] == [str(Path("/origen/noche1").resolve())]
     assert pool.entries[0].exposicion_s == 300.0
+
+
+def test_pool_ignora_salida_ajena_y_legacy_ambiguo(tmp_path):
+    """Una fila mal atribuida o dos filas en el mismo legacy no contaminan el pool."""
+    raiz = tmp_path / "calibrados"
+    a, b = tmp_path / "a" / "noche", tmp_path / "b" / "noche"
+    nueva = output_dir_for(a, root=raiz)
+    antigua = raiz / "noche"
+    _fit(nueva / "light" / "pp_1.fit")
+    _fit(antigua / "light" / "pp_2.fit")
+    filas = [
+        {"session_dir": str(b), "calibrated_dir": str(nueva)},
+        {"session_dir": str(a), "calibrated_dir": str(antigua)},
+        {"session_dir": str(b), "calibrated_dir": str(antigua)},
+    ]
+    assert pool_desde_calibradas(filas, root=raiz).entries == []
+    assert len(pool_desde_calibradas(filas[1:2], root=raiz).entries) == 1

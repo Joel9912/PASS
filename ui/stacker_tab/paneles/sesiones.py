@@ -57,6 +57,7 @@ from ..pasos_common import (
     _sitio,
     _spin_dato,
     _texto_region,
+    clave_sesion,
 )
 from ..visor_sesiones import CieloCapturado, VisorSesiones
 
@@ -311,7 +312,9 @@ class PanelSesiones(QWidget):
         lista vacía si no hay dato): de ahí salen «Exposición» (por frame) y
         «Tiempo» (acumulado). ``fichas`` son las cabeceras FITS del primer
         light de cada sesión (región apuntada y ficha del equipo); sin ella
-        la región no sale y la ficha avisa de que no hay cabeceras.
+        la región no sale y la ficha avisa de que no hay cabeceras. Ambos
+        diccionarios se identifican con :func:`clave_sesion` (su ruta), no
+        con el nombre.
         """
         fichas = fichas or {}
         self._sesiones_actuales = list(sesiones)
@@ -326,12 +329,12 @@ class PanelSesiones(QWidget):
             fila = self._tabla.rowCount()
             self._tabla.insertRow(fila)
             lights = sesion.n_lights
-            duraciones = exposiciones.get(sesion.path.name, [])
+            duraciones = exposiciones.get(clave_sesion(sesion), [])
             total = sum(duraciones)
             total_lights += lights
             total_segundos += total
-            calibrada = sesion.path.name in calibradas
-            ficha = fichas.get(sesion.path.name)
+            calibrada = clave_sesion(sesion) in calibradas
+            ficha = fichas.get(clave_sesion(sesion))
             # ID en azul y en negrita, tomas en blanco, exposición en azul
             # claro y tiempo en verde: el color codifica la columna.
             celdas = (
@@ -369,7 +372,7 @@ class PanelSesiones(QWidget):
         if not 0 <= indice < len(self._sesiones_actuales):
             return
         sesion = self._sesiones_actuales[indice]
-        ficha = self._fichas_actuales.get(sesion.path.name)
+        ficha = self._fichas_actuales.get(clave_sesion(sesion))
         lights = sesion.frames.get("lights", [])
         primer_fits = next(
             (f for f in lights if f.suffix.lower() in (".fit", ".fits", ".fts")),

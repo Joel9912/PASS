@@ -31,6 +31,7 @@ from stacks.calibrator import (
     calibrate_session,
     delete_calibrated,
     list_calibrated,
+    output_dir_for,
     save_calibration,
 )
 from stacks.frame_metrics import FrameMetrics, extract_metrics
@@ -60,7 +61,7 @@ from stacks.stacker import APILADOS_DIR, apilar_pool, exportar_apilados
 from ui.style import PALETTE
 
 from .paneles import PanelApilar, PanelAuditar, PanelCalibrar, PanelFinal, PanelSesiones
-from .pasos_common import configurar_pyqtgraph
+from .pasos_common import clave_sesion, configurar_pyqtgraph
 from .worker import CANCELADO, SirilWorker, arrancar_en_hilo
 
 #: Nombres de los cinco pasos; el orden ES el flujo del asistente.
@@ -221,7 +222,7 @@ class StackerPage(QWidget):
 
         # --- los paneles hablan con la página por señales
         self.panel_sesiones.escanear.connect(lambda: self.escanear())
-        self.panel_calibrar.calibrar.connect(lambda: self.calibrar())
+        self.panel_calibrar.calibrar.connect(lambda: self.calibrar(explicita=True))
         self.panel_auditar.auditar.connect(lambda: self.auditar())
         self.panel_auditar.descartar.connect(self.descartar_recomendados)
         self.panel_apilar.apilar.connect(lambda: self.apilar())
@@ -266,17 +267,41 @@ class StackerPage(QWidget):
             if any(self._carpeta_calibrada(s).exists() for s in self.sesiones):
                 self._preguntar_trabajo()
 
+    def _salida_atribuida(self, sesion: Session) -> Path:
+        """Salida que corresponde a esta sesión: la registrada o la nueva única.
+
+        La identidad es la **ruta de origen completa**: una homónima de otra
+        raíz no hereda la salida ajena, y una sesión sin fila propia apunta a
+        su destino nuevo ``<nombre>-<hash>`` (nunca a un legado ambiguo).
+        """
+        for fila in self._filas_calibradas_actuales():
+            if Path(fila["session_dir"]).resolve() == sesion.path.resolve():
+                return Path(fila["calibrated_dir"])
+        return output_dir_for(sesion.path, root=WORKING_FOLDER / CALIBRATED_DIR)
+
     def _carpeta_calibrada(self, sesion: Session) -> Path:
-        """Ruta de salida de una sesión, calculada sin tocar la fuente."""
-        return WORKING_FOLDER / CALIBRATED_DIR / sesion.path.name
+        """Carpeta de trabajo existente de esta sesión (para avisar y limpiar).
+
+        Prefiere la salida atribuida; si no existe, ofrece el legado
+        ``calibrados/<nombre>`` **salvo** que otra fila lo reclame como suyo:
+        ese pertenece a una homónima y no se toca.
+        """
+        salida = self._salida_atribuida(sesion)
+        if salida.exists():
+            return salida
+        legado = WORKING_FOLDER / CALIBRATED_DIR / sesion.path.name
+        reclamado = any(
+            Path(fila["session_dir"]).resolve() != sesion.path.resolve()
+            for fila in list_calibrated()
+            if Path(fila["calibrated_dir"]).resolve() == legado.resolve()
+        )
+        return legado if legado.exists() and not reclamado else salida
 
     def _preguntar_trabajo(self) -> None:
         """Ofrece conservar, limpiar estas sesiones o todo working con rutas visibles."""
         if self._worker is not None:
             return
-        candidatas = [
-            s for s in self.sesiones if self._carpeta_calibrada(s).is_dir()
-        ]
+        candidatas = [s for s in self.sesiones if self._carpeta_calibrada(s).is_dir()]
         dialogo = QMessageBox(self)
         dialogo.setWindowTitle("Datos de trabajo existentes")
         dialogo.setText("No se eliminará nada sin tu confirmación.")
@@ -454,7 +479,7 @@ class StackerPage(QWidget):
                     f"· {sesion.path.name}: {sesion.n_lights} lights, "
                     f"tipo {sesion.kind}"
                 )
-                exposiciones[sesion.path.name] = [
+                exposiciones[clave_sesion(sesion)] = [
                     exposure_de(f) or 0.0
                     for f in sesion.frames.get("lights", [])
                 ]
@@ -465,7 +490,7 @@ class StackerPage(QWidget):
                     (f for f in lights if f.suffix.lower() in (".fit", ".fits", ".fts")),
                     None,
                 )
-                fichas[sesion.path.name] = (
+                fichas[clave_sesion(sesion)] = (
                     ficha_de_luz(primer_fits) if primer_fits else FichaFITS()
                 )
                 progress_cb((i + 1) / len(encontradas))
@@ -479,9 +504,9 @@ class StackerPage(QWidget):
             self._exposiciones = exposiciones
             self._fichas = fichas
             self._refrescar_calibradas()
-            nombres = {s.path.name for s in sesiones}
+            claves = {clave_sesion(s) for s in sesiones}
             # Si el escaneo encuentra TODO calibrado, esa fase queda hecha.
-            self._calibrado = bool(nombres) and nombres <= self._calibradas
+            self._calibrado = bool(claves) and claves <= self._calibradas
             self.panel_sesiones.mostrar(
                 sesiones, self._calibradas, exposiciones, fichas
             )
@@ -499,6 +524,7 @@ class StackerPage(QWidget):
         *,
         ir_a: int | None = None,
         siguiente: Callable[[], None] | None = None,
+        explicita: bool = False,
     ) -> None:
         """Calibra todas las sesiones escaneadas con SirIL (una tras otra)."""
         if not self.sesiones:
@@ -508,11 +534,20 @@ class StackerPage(QWidget):
             return
         opciones = self.panel_calibrar.opciones()
         sesiones = [
-            s for s in self.sesiones if not self._carpeta_calibrada(s).exists()
+            s for s in self.sesiones if not self._salida_atribuida(s).exists()
         ]
+        if not explicita and any(
+            (WORKING_FOLDER / CALIBRATED_DIR / s.path.name).exists()
+            for s in sesiones
+        ):
+            self._decir(
+                "Hay una salida antigua sin origen atribuible. Consérvala y pulsa "
+                "«Calibrar» explícitamente para generar una salida nueva."
+            )
+            return
         if not sesiones:
             self._calibrado = all(
-                s.path.name in self._calibradas for s in self.sesiones
+                clave_sesion(s) in self._calibradas for s in self.sesiones
             )
             self._decir(
                 "Hay datos anteriores; no se sobrescriben. "
@@ -552,10 +587,10 @@ class StackerPage(QWidget):
             self._invalidar_aguas_abajo()
             self._refrescar_calibradas()
             self._calibrado = all(
-                s.path.name in self._calibradas for s in self.sesiones
+                clave_sesion(s) in self._calibradas for s in self.sesiones
             )
             avisos = {
-                r.session.path.name: r.avisos for r in resultados
+                clave_sesion(r.session): r.avisos for r in resultados
             }
             self.panel_calibrar.mostrar_resultados(resultados, avisos)
             self.panel_sesiones.mostrar(
@@ -935,9 +970,13 @@ class StackerPage(QWidget):
         return True
 
     def _refrescar_calibradas(self) -> None:
-        """Relee las sesiones actuales con salida real, no homónimas de otra raíz."""
+        """Sesiones con salida propia, identificadas por ruta de origen.
+
+        No se usa el nombre: dos raíces distintas pueden tener una carpeta
+        homónima y solo una de ellas está calibrada.
+        """
         self._calibradas = {
-            Path(fila["calibrated_dir"]).name
+            str(Path(fila["session_dir"]).resolve())
             for fila in self._filas_calibradas_actuales()
         }
 

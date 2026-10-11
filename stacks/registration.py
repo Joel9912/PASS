@@ -38,7 +38,7 @@ import json
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from .global_pool import GlobalPool, LightRef
+from .global_pool import GlobalPool, LightRef, nombre_sesion
 from .session_parser import necesita_debayer
 from .siril_runner import (
     WORKING_FOLDER,
@@ -222,7 +222,10 @@ def _preparar_secuencia(
     dentro antes).
     """
     for indice, ref in enumerate(refs, start=1):
-        enlazar(ref.ruta, destino / f"{indice:04d}_{ref.sesion}_{ref.ruta.name}")
+        enlazar(
+            ref.ruta,
+            destino / f"{indice:04d}_{nombre_sesion(ref)}_{ref.ruta.name}",
+        )
     res = ejecutar_script([f"link {SEQ_BASE}"], cwd=destino, log_cb=log_cb)
     if not res.ok:
         raise SirilError(f"No se pudo crear la secuencia de registro: {res.motivo}")
@@ -304,7 +307,10 @@ def _debayerizar(
     sub.mkdir(parents=True, exist_ok=True)
     for numero, i in enumerate(indices_cfa, start=1):
         ref = refs[i]
-        enlazar(ref.ruta, sub / f"{numero:04d}_{ref.sesion}_{ref.ruta.name}")
+        enlazar(
+            ref.ruta,
+            sub / f"{numero:04d}_{nombre_sesion(ref)}_{ref.ruta.name}",
+        )
     res = ejecutar_script(["link d", "calibrate d_ -debayer"], cwd=sub,
                           progress_cb=progress_cb, log_cb=log_cb)
     if not res.ok:

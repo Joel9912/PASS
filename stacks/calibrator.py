@@ -3,7 +3,8 @@
 Flujo: para cada sesión, calibra sus lights usando sus propios flats/darks/bias
 (o los másters si la sesión los trae, o la carpeta global de calibrado que el
 usuario haya configurado) y escribe la salida en la CARPETA DE TRABAJO:
-``working_folder/calibrados/<sesion>/``.
+``working_folder/calibrados/<sesion>-<hash>/`` (el hash de la ruta de origen
+garantiza destinos únicos aunque dos proyectos tengan una carpeta homónima).
 
 Los originales NUNCA se tocan: la calibración produce ficheros nuevos en la
 carpeta de trabajo (salida controlada de SirIL, no una copia redundante) y
@@ -32,6 +33,7 @@ Gotchas de SirIL 1.4.4 (validados con el binario real, ver ``stacks/README.md``)
   son ruido no fatal: el éxito lo decide el runner (exit + marcadores + salida).
 """
 from dataclasses import dataclass, field
+from hashlib import sha256
 from pathlib import Path
 
 import numpy as np
@@ -77,16 +79,44 @@ class CalibrationResult:
     """Resultado de calibrar una sesión."""
 
     session: Session
-    dir: Path                          # data/working/calibrados/<sesion>
+    dir: Path                          # working/calibrados/<sesion>-<hash>
     n_lights: int = 0                  # ficheros pp_light_* generados
     exposure_s: float | None = None    # exposición por frame (cabecera FITS)
     masters: dict[str, Path] = field(default_factory=dict)  # tipo -> máster usado
     avisos: list[str] = field(default_factory=list)         # p. ej. «sin flat»
 
 
+def output_dir_for(source: Path, *, root: Path | None = None) -> Path:
+    """Destino único y estable de una sesión, derivado de su ruta absoluta.
+
+    El sufijo ``-<hash>`` (12 hex, de la ruta de origen) hace que dos sesiones
+    homónimas de raíces distintas no compartan carpeta ni se limpien la una a
+    la otra, y que una salida antigua sin atribuir nunca coincida con un
+    destino nuevo.
+    """
+    resolved = source.resolve()
+    digest = sha256(str(resolved).encode("utf-8")).hexdigest()[:12]
+    base = root if root is not None else WORKING_FOLDER / CALIBRATED_DIR
+    return base / f"{resolved.name}-{digest}"
+
+
+def output_matches_source(source: Path, output: Path, *, root: Path) -> bool:
+    """Reconoce la salida nueva o una antigua atribuida por BD a ese origen.
+
+    Solo se aceptan hijos directos de ``root`` con nombre nuevo o con el
+    nombre propio del origen: una fila rara no puede meter en el pool una
+    carpeta arbitraria.
+    """
+    output = output.resolve()
+    base = root.resolve()
+    return output.parent == base and output in (
+        output_dir_for(source, root=base), base / source.resolve().name
+    )
+
+
 def calibrated_dir_for(session: Session) -> Path:
-    """Devuelve la subcarpeta de calibrados de esa sesión (y la crea si falta)."""
-    target = WORKING_FOLDER / CALIBRATED_DIR / session.path.name
+    """Crea únicamente la salida nueva identificada por la ruta del origen."""
+    target = output_dir_for(session.path)
     target.mkdir(parents=True, exist_ok=True)
     return target
 
@@ -119,7 +149,7 @@ def calibrate_session(
             (la fase larga). El log detalla cada paso intermedio.
         log_cb: recibe cada línea del log de SirIL (terminal de la UI).
     """
-    destino = WORKING_FOLDER / CALIBRATED_DIR / session.path.name
+    destino = output_dir_for(session.path)
     origen = session.path.resolve()
     salida = destino.resolve()
     entradas = (

@@ -18,6 +18,7 @@ from ..pasos_common import (
     _pista,
     _tabla,
     _titulo,
+    clave_sesion,
 )
 
 
@@ -74,23 +75,32 @@ class PanelCalibrar(QWidget):
         }
 
     def mostrar_pendientes(self, sesiones: list[Session], calibradas: set[str]) -> None:
-        """Estado inicial: material, másters y qué sesiones ya están en la BD."""
+        """Estado inicial: material, másters y qué sesiones ya están en la BD.
+
+        ``calibradas`` contiene **rutas de origen**: el nombre no basta para
+        distinguir dos sesiones homónimas de raíces distintas.
+        """
         self._tabla.setRowCount(0)
         for sesion in sesiones:
             self._poner_fila(
                 sesion.path.name,
                 _material(sesion),
                 ", ".join(sorted(sesion.masters)) or "—",
-                "Calibrada ✓" if sesion.path.name in calibradas else "Pendiente",
+                "Calibrada ✓" if clave_sesion(sesion) in calibradas
+                else "Pendiente",
                 "",
             )
 
     def mostrar_resultados(self, resultados: list, avisos: dict[str, list[str]]) -> None:
-        """Estado tras la corrida: hecha/error por sesión y sus avisos."""
+        """Estado tras la corrida: hecha/error por sesión y sus avisos.
+
+        ``avisos`` está indexado con :func:`clave_sesion`: dos sesiones con el
+        mismo nombre no pueden quedarse con los avisos la una de la otra.
+        """
         self._tabla.setRowCount(0)
         for resultado in resultados:
             sesion = resultado.session
-            texto_avisos = " · ".join(avisos.get(sesion.path.name, [])) or "—"
+            texto_avisos = " · ".join(avisos.get(clave_sesion(sesion), [])) or "—"
             self._poner_fila(
                 sesion.path.name,
                 _material(sesion),

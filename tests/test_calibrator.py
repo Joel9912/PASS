@@ -99,15 +99,38 @@ def sesion_completa(tmp_path):
 
 
 # ---------------------------------------------------------------- flujo feliz
-def test_calibrar_rechaza_origen_solapado_con_salida(tmp_path, monkeypatch):
-    """Nunca limpia una salida que coincide con la sesión ni con sus FITS."""
+def test_calibrar_conserva_el_origen_vivo_bajo_calibrados(
+    tmp_path, siril_falso, monkeypatch,
+):
+    """Calibrar una sesión dentro de ``working/calibrados`` no la borra.
+
+    Regresión de C-DAT-01: la carpeta de salida era la misma que la de
+    origen, así que limpiar el área de trabajo borraba las tomas originales.
+    """
+    working = tmp_path / "working"
+    monkeypatch.setattr(calibrator, "WORKING_FOLDER", working)
+    origen = working / "calibrados" / "noche"
+    light = _fits(origen / "lights" / "original.fits", EXPOSURE=30.0)
+    sesion = parse_session(origen)
+
+    resultado = calibrate_session(sesion)
+
+    assert light.exists()                    # el original sigue intacto
+    assert resultado.dir != origen           # destino nuevo y único
+    assert resultado.dir.parent == working / "calibrados"
+    assert resultado.dir.name.startswith("noche-")
+
+
+def test_calibrar_rechaza_si_el_destino_coincide_con_el_origen(tmp_path, monkeypatch):
+    """Si el destino llegara a ser el origen, se rinde antes de limpiar nada."""
     working = tmp_path / "working"
     monkeypatch.setattr(calibrator, "WORKING_FOLDER", working)
     origen = working / "calibrados" / "noche"
     light = _fits(origen / "lights" / "original.fits")
     sesion = parse_session(origen)
+    monkeypatch.setattr(calibrator, "output_dir_for", lambda *_a, **_k: origen)
 
-    with pytest.raises(ValueError, match="coincide|solapa"):
+    with pytest.raises(ValueError, match="solapan"):
         calibrate_session(sesion)
     assert light.exists()
 
@@ -182,6 +205,30 @@ def test_recalibrar_no_acumula_salidas(siril_falso, sesion_completa):
     segunda = calibrate_session(sesion_completa)
     n_despues = len(list((segunda.dir / "light").glob("pp_*.fit")))
     assert n_antes == n_despues == 1
+
+
+def test_homonimas_no_comparten_salida_ni_borran_la_ajena(
+    tmp_path, siril_falso, memory_db,
+):
+    """Dos raíces con nombre igual producen destinos estables y disjuntos."""
+    sesiones = []
+    for raiz in ("a", "b"):
+        origen = tmp_path / raiz / "noche"
+        _fits(origen / "lights" / "luz.fits", EXPOSURE=30.0)
+        sesiones.append(parse_session(origen))
+    primera = calibrate_session(sesiones[0])
+    save_calibration(primera)
+    luz = primera.dir / "light" / "pp_light_00001.fit"
+    contenido = luz.read_bytes()
+    segunda = calibrate_session(sesiones[1])
+    save_calibration(segunda)
+    assert primera.dir != segunda.dir
+    assert luz.read_bytes() == contenido
+    assert {fila["calibrated_dir"] for fila in list_calibrated()} == {
+        str(primera.dir), str(segunda.dir)
+    }
+    assert calibrator.output_dir_for(sesiones[0].path) == primera.dir
+    assert not (primera.dir.parent / "noche").exists()
 
 
 # ----------------------------------------------------------- másters y avisas

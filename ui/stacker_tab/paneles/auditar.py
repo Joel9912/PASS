@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
 )
 
 from stacks.frame_metrics import Evaluacion, FrameMetrics, Pesos, evaluar
+from stacks.global_pool import nombre_sesion
 from stacks.registration import Registro
 from ui.style import PALETTE
 
@@ -371,7 +372,8 @@ class PanelAuditar(QWidget):
         nombre.setToolTip(str(ref.ruta))
         nombre.setData(Qt.ItemDataRole.UserRole, str(ref.ruta))
         self._tabla.setItem(fila, 1, nombre)
-        sesion = QTableWidgetItem(ref.sesion)
+        # La sesión se guarda como ruta (identidad) y se pinta solo su nombre.
+        sesion = QTableWidgetItem(nombre_sesion(ref))
         sesion.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         sesion.setToolTip(ref.sesion)
         self._tabla.setItem(fila, 2, sesion)
