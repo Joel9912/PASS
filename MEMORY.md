@@ -13,11 +13,11 @@
 | **Entry point** | ✅ `main.py` con tema oscuro, barra lateral colapsable, pie `v0.2` y las 6 pestañas; carga catálogos al arrancar; se abre **maximizado** |
 | **Tests** | ✅ pytest (recuento y lista por módulo en `tests/README`) |
 | **Librerías Python** | Instaladas en venv: PyQt6 6.11, **pyqtgraph 0.14.0**, astropy 8.0, numpy 2.5, PyYAML 6.0, pytest |
-| **Catálogos astronómicos** | ✅ OpenNGC (13 372 objetos) + HYG (41 487 estrellas mag ≤ 8) + **LDN (1 787)** en `data/pass.db` |
+| **Catálogos astronómicos** | OpenNGC, HYG y LDN; detalles y recuentos en `planners/README.md`. |
 | **Pestaña Planificador** | ✅ `ui/planner_tab/`: Búsqueda → Catálogo Personal → Planificación → Sesiones Planificadas, planetario QPainter, curva de tránsito PyQtGraph (un eje), plan de captura, barra de ubicación compartida |
 | **Pestaña Equipo** | ✅ `ui/equipment_tab/` (4/10/2026): equipos con componentes globales (Telescopio/Cámara/Montura/Filtros) y bloque «Cálculos» con umbrales configurables; ubicaciones v2 con rosácea de 3 discos (orientación/obstrucciones/CL) y esquemático de horizonte; backend `equipment/` CRUD completo + validaciones + `metrics.py`; cableado Equipo → Planificador en `main_window.py` |
 | **Integración SirIL** | Flujo de cinco pasos en `stacks/` + `ui/stacker_tab/`; probado con SirIL CLI 1.4.4 Windows sobre FITS sintéticos mono, CFA sin/con drizzle ×2 y R/G/B con `rgbcomp` (originales intactos). |
-| **APIs clima/seeing** | Clear Outside + Meteoblue con mocks (sin API keys todavía) → tarjetas "Sin datos" |
+| **APIs clima/seeing** | Clear Outside + Meteoblue en modo mock: las tarjetas muestran «Sin datos» incluso con claves guardadas; las consultas reales están pendientes. |
 | **Persistencia** | ✅ SQLite (stdlib) con esquema completo + migración de columnas (`_MIGRATIONS` en `db/connection.py`) |
 | **i18n** | Estructura `i18n/es.ts` + `en.ts` creada; sin integrar en `main.py` |
 

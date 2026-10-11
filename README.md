@@ -14,7 +14,7 @@
 | **Planetario** | Planetario con imágenes DSS2: esfera de fondo + esfera de objetos (Messier, NGC, IC, LDN) | 🔶 placeholder |
 | **Equipo** | Setups y localizaciones del equipo con datos fríos y adjuntos visuales | ✅ |
 | **Planificador de Equipo** | Comparativas de equipo por características comparables y presupuesto | 🔶 placeholder |
-| **Planificador** ⭐ | Búsqueda con filtros, tránsito/luna/noche astronómica, ranking de recomendaciones, catálogo personal y sesiones planificadas | ✅ |
+| **Planificador** ⭐ | Búsqueda con filtros, tránsito/luna/noche astronómica, selección de fechas para captura, catálogo personal y sesiones planificadas | ✅ |
 | **Apilador** | Escaneo de sesiones, calibración automática, auditoría con métricas de SirIL y apilado (drizzle, rechazo, ponderación, RGB) | ✅ |
 
 ## Requisitos
@@ -33,7 +33,7 @@ pip install -r requirements.txt
 
 ## Primer arranque
 
-- **La primera ejecución descarga los catálogos astronómicos** (~18 MB: OpenNGC, HYG y LDN) desde internet. Sin conexión el programa abre igualmente, pero las pestañas Planificador y Planetario quedarán vacías.
+- **La primera ejecución descarga los catálogos astronómicos** (~18 MB: OpenNGC, HYG y LDN) desde internet. Sin conexión el programa abre igualmente, pero la búsqueda del Planificador no tendrá catálogo hasta completar la descarga; Planetario sigue en construcción.
 - **SirIL solo es necesario para la pestaña Apilador.** El resto del programa (Planificador, Equipo, etc.) funciona sin él.
 
 ## Ejecución
@@ -53,7 +53,7 @@ pytest
 ```
 Planning Stacking Suite/
 ├── README.md / CHANGELOG.md / PROGRAM.md / MEMORY.md / STRUCTURE.md
-├── main.py            # Entry point (PyQt6)
+├── main.py            # Punto de entrada (PyQt6)
 ├── db/                # Capa SQLite (conexión y esquema)
 ├── planners/          # Búsqueda, tránsito, ranking, clima/seeing
 ├── stacks/            # Integración SirIL (calibrado, pool, auditoría, apilado)
@@ -76,4 +76,4 @@ Detalles de cada carpeta: ver `STRUCTURE.md`.
 
 ## Licencia
 
-[GPL-3.0](LICENSE) — el programa es gratuito y de libre uso: cualquiera puede descargarlo, usarlo, modificarlo y compartirlo. Lo que no puede hacerse es apropiarse de él: quien distribuya una versión derivada debe publicar también su código fuente y no puede venderlo ni ofrecerlo como producto cerrado.
+[GPL-3.0](LICENSE) — se permite usar, modificar, distribuir y **vender copias**. Quien distribuya una versión derivada debe cumplir las condiciones de la GPL, incluido facilitar el código fuente correspondiente y conservar las libertades de sus destinatarios; no puede convertir esa versión distribuida en software privativo.
