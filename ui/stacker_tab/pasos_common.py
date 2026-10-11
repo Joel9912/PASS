@@ -95,7 +95,7 @@ def _estirar(canales: list[np.ndarray]) -> list[np.ndarray]:
         referencia = medianas[1]  # el verde como balance
         trabajados = [
             c * (referencia / med) if med > 0 and referencia > 0 else c
-            for c, med in zip(canales, medianas)
+            for c, med in zip(canales, medianas, strict=True)
         ]
     else:
         trabajados = list(canales)

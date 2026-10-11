@@ -1033,7 +1033,7 @@ def test_barra_arcoiris_fija_y_marcador_sigue_el_veredicto(qt_app, memory_db):
     # El marcador cae SIEMPRE en el quinto de su veredicto (mismo mapeo
     # que la barra: índice 0 = violeta … 4 = naranja).
     quintos = {clave: i for i, clave in enumerate(_ARCOIRIS)}
-    for escala, posicion in zip(escalas, posiciones):
+    for escala, posicion in zip(escalas, posiciones, strict=True):
         veredicto = veredicto_muestreo(escala, 1.0)
         assert veredicto is not None
         assert min(4, int(posicion * 5)) == quintos[veredicto], (

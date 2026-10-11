@@ -142,7 +142,8 @@ class NightCurve:
     @property
     def min_separation_moon_deg(self) -> float:
         """Menor separación objeto-Luna mientras el objeto está visible."""
-        visible = [sep for alt, sep in zip(self.altitudes, self.moon_separations)
+        visible = [sep for alt, sep in zip(self.altitudes, self.moon_separations,
+                                           strict=True)
                    if alt > 0.0]
         return min(visible) if visible else 0.0
 

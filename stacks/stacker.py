@@ -57,8 +57,8 @@ class StackOptions:
     """Opciones de apilado expuestas al usuario (las de SirIL, tal cual).
 
     Por defecto manda SirIL: integración ``mean`` con rechazo ``winsorized``
-    a 3σ y salida a 32 bits (la precisión acumulada lo merece). Lo que
-    Otras opciones avanzadas (feather, maximize…) pasan por ``extra_args``.
+    a 3σ y salida a 32 bits (la precisión acumulada lo merece). Otras
+    opciones avanzadas (feather, maximize…) pasan por ``extra_args``.
     """
 
     integration: str = "mean"        # sum | min | max | med | mean
@@ -208,7 +208,7 @@ def exportar_apilados(salidas: list[Path], carpeta: Path) -> list[Path]:
         raise SirilError("Ya existe una salida con ese nombre en la carpeta madre; no se reemplazó.")
     creados = []
     try:
-        for origen, destino in zip(salidas, destinos):
+        for origen, destino in zip(salidas, destinos, strict=True):
             with origen.open("rb") as entrada, destino.open("xb") as salida:
                 creados.append(destino)
                 shutil.copyfileobj(entrada, salida)

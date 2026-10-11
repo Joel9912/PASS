@@ -369,7 +369,7 @@ def test_progress_y_log_por_etapas(siril_falso, sesion_completa):
     assert fracciones[0] == 0.0
     assert fracciones[-1] == 1.0
     assert 0.5 in fracciones  # fin de la fase de másters y flats
-    assert all(a <= b for a, b in zip(fracciones, fracciones[1:]))  # monótono
+    assert all(a <= b for a, b in zip(fracciones, fracciones[1:], strict=False))  # monótono
     assert any("stack" in linea for linea in lineas)    # másters
     assert any("calibrate" in linea for linea in lineas)  # lights
 

@@ -37,7 +37,7 @@ def test_min_moon_distance_reference_values():
 def test_min_moon_distance_is_monotonic_and_clamped():
     """Más luna → más distancia exigida; fuera de [0,100] se recorta."""
     values = [min_moon_distance(p) for p in range(101)]
-    assert all(b > a for a, b in zip(values, values[1:]))
+    assert all(b > a for a, b in zip(values, values[1:], strict=False))
     assert min_moon_distance(-20) == min_moon_distance(0)
     assert min_moon_distance(150) == min_moon_distance(100)
 
