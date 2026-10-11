@@ -229,6 +229,28 @@ def test_migra_las_referencias_y_quita_las_columnas_de_la_v1(memory_db):
     conn.close()
 
 
+def test_migracion_no_descarta_datos_embebidos_de_equipo_v1():
+    """Una BD v1 con datos debe rechazarse sin perder las piezas embebidas."""
+    from db import connection as db_conn
+
+    conn = sqlite3.connect(":memory:")
+    conn.execute(
+        "CREATE TABLE equipment_setups (id INTEGER PRIMARY KEY,"
+        " name TEXT NOT NULL, telescope_name TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO equipment_setups (name, telescope_name) VALUES (?, ?)",
+        ("Equipo antiguo", "Telescopio propio"),
+    )
+    with pytest.raises(sqlite3.DatabaseError, match="datos de equipo"):
+        db_conn.init_db(conn)
+    assert conn.execute(
+        "SELECT telescope_name FROM equipment_setups WHERE name = ?",
+        ("Equipo antiguo",),
+    ).fetchone()[0] == "Telescopio propio"
+    conn.close()
+
+
 def test_migra_el_sitio_de_las_ubicaciones(memory_db):
     """Una base antigua recibe las columnas de sitio (y el seeing)."""
     from db import connection as db_conn

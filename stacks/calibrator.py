@@ -119,6 +119,21 @@ def calibrate_session(
             (la fase larga). El log detalla cada paso intermedio.
         log_cb: recibe cada línea del log de SirIL (terminal de la UI).
     """
+    destino = WORKING_FOLDER / CALIBRATED_DIR / session.path.name
+    origen = session.path.resolve()
+    salida = destino.resolve()
+    entradas = (
+        path.resolve()
+        for paths in session.frames.values()
+        for path in paths
+    )
+    if (
+        origen.is_relative_to(salida)
+        or salida.is_relative_to(origen)
+        or any(path.is_relative_to(salida) for path in entradas)
+        or any(path.resolve().is_relative_to(salida) for path in session.masters.values())
+    ):
+        raise ValueError("La sesión o sus tomas se solapan con la salida de calibración.")
     destino = calibrated_dir_for(session)
     limpiar_trabajo(destino, raiz=WORKING_FOLDER / CALIBRATED_DIR)
 

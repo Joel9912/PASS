@@ -99,6 +99,19 @@ def sesion_completa(tmp_path):
 
 
 # ---------------------------------------------------------------- flujo feliz
+def test_calibrar_rechaza_origen_solapado_con_salida(tmp_path, monkeypatch):
+    """Nunca limpia una salida que coincide con la sesión ni con sus FITS."""
+    working = tmp_path / "working"
+    monkeypatch.setattr(calibrator, "WORKING_FOLDER", working)
+    origen = working / "calibrados" / "noche"
+    light = _fits(origen / "lights" / "original.fits")
+    sesion = parse_session(origen)
+
+    with pytest.raises(ValueError, match="coincide|solapa"):
+        calibrate_session(sesion)
+    assert light.exists()
+
+
 def test_calibrate_session_sesion_completa(siril_falso, sesion_completa):
     """Sesión con todo: másters generados, calibrado y resultado completo.
 

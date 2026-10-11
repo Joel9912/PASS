@@ -108,6 +108,7 @@ def _apply_schema(conn: sqlite3.Connection) -> None:
     las columnas añadidas a tablas ya existentes se migran después y las
     obsoletas de la v1 se quitan (``_drop_legacy_columns``).
     """
+    _check_legacy_data(conn)
     conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
     _migrate_columns(conn)
     _drop_legacy_columns(conn)
@@ -147,6 +148,23 @@ _LEGACY_SETUP_COLUMNS = (
     "camera_height_px",
     "mount_name",
 )
+
+
+def _check_legacy_data(conn: sqlite3.Connection) -> None:
+    """Impide borrar componentes v1 poblados sin una migración de datos acordada.
+
+    Se ejecuta antes de aplicar el esquema: abrir una BD antigua con valores
+    embebidos no debe descartarlos silenciosamente al hacer ``DROP COLUMN``.
+    """
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(equipment_setups)")}
+    for name in _LEGACY_SETUP_COLUMNS:
+        if name in existing and conn.execute(
+            f'SELECT 1 FROM equipment_setups WHERE "{name}" IS NOT NULL LIMIT 1'
+        ).fetchone():
+            raise sqlite3.DatabaseError(
+                "La base contiene datos de equipo v1 sin migrar; se conservan "
+                "sin abrir hasta definir su migración."
+            )
 
 
 def _drop_legacy_columns(conn: sqlite3.Connection) -> None:
