@@ -282,8 +282,8 @@ def test_migra_notes_en_personal_catalog():
     conn.close()
 
 
-def test_planned_session_parameters_roundtrip():
-    """Una sesión guarda encuadre y notas, y update_session los modifica."""
+def test_planned_session_parameters_roundtrip(memory_db):
+    """Guarda y actualiza una sesión en memoria sin tocar planes del usuario."""
     from planners import planned_sessions
 
     session_id = planned_sessions.add(
