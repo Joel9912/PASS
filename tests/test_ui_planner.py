@@ -589,3 +589,39 @@ def test_clima_worker_en_pool_sin_bd(qt_app, memory_settings):
     assert "guardada" in clear.note
     assert "guardada" in meteo.note
     cards.close()
+
+
+def test_catalogo_personal_reaparece_tras_reabrir(qt_app, tmp_path, monkeypatch):
+    """Los objetos añadidos desde Búsqueda vuelven al abrir con una conexión nueva.
+
+    Usa una BD temporal y no la de ``data/``: tanto el INSERT como la
+    lectura inicial de la nueva pestaña deben pasar por la misma ruta.
+    """
+    from db import connection as db_connection
+    from ui.planner_tab.catalogo_personal.tab import CatalogoPersonalTab
+
+    ruta = tmp_path / "pass.db"
+    conn = sqlite3.connect(ruta)
+    conn.row_factory = sqlite3.Row
+    conn.executescript((ROOT / "db" / "schema.sql").read_text(encoding="utf-8"))
+    conn.execute(
+        "INSERT INTO catalog (object_id, catalog, messier_num) VALUES (?, ?, ?)",
+        ("M33", "messier", 33),
+    )
+    conn.commit()
+    monkeypatch.setattr(db_connection, "_connection", conn)
+
+    primera = CatalogoPersonalTab()
+    primera.add_object("M33", "messier")
+    assert primera._table.rowCount() == 1
+    primera.close()
+    conn.close()
+
+    nueva = sqlite3.connect(ruta)
+    nueva.row_factory = sqlite3.Row
+    monkeypatch.setattr(db_connection, "_connection", nueva)
+    segunda = CatalogoPersonalTab()
+    assert segunda._table.rowCount() == 1
+    assert segunda._table.item(0, 1).text() == "M33"
+    segunda.close()
+    nueva.close()

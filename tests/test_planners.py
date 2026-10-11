@@ -183,11 +183,15 @@ def test_search_ra_dec_window(loaded_db):
         assert -10.0 <= row["dec_deg"] <= 0.0
 
 
-def test_get_object_and_personal_catalog_roundtrip(loaded_db):
-    """get_object trae el objeto; el catálogo personal persiste con JOIN."""
+def test_get_object_and_personal_catalog_roundtrip(memory_db):
+    """El catálogo personal persiste con JOIN sin tocar entradas del usuario."""
     from planners import personal_catalog
     from planners.celestial_search import get_object
 
+    memory_db.execute(
+        "INSERT INTO catalog (object_id, catalog, messier_num, magnitude)"
+        " VALUES (?, ?, ?, ?)", ("M31", "messier", 31, 3.44),
+    )
     obj = get_object("M31")
     assert obj is not None and obj["messier_num"] == 31
 
@@ -203,8 +207,8 @@ def test_get_object_and_personal_catalog_roundtrip(loaded_db):
                for o in personal_catalog.list_objects())
 
 
-def test_personal_catalog_regions():
-    """Las regiones guardan centro/encuadre y no se confunden con objetos."""
+def test_personal_catalog_regions(memory_db):
+    """Las regiones guardan centro/encuadre en una BD aislada."""
     from planners import personal_catalog
 
     name = "Mosaico test"
@@ -228,10 +232,14 @@ def test_personal_catalog_regions():
     assert all(o["object_id"] != name for o in personal_catalog.list_objects())
 
 
-def test_personal_catalog_object_and_region_same_name_do_not_clash():
-    """Un objeto 'M31' y una región 'M31' conviven (catalog distinto)."""
+def test_personal_catalog_object_and_region_same_name_do_not_clash(memory_db):
+    """Objeto y región con el mismo nombre conviven en una BD aislada."""
     from planners import personal_catalog
 
+    memory_db.execute(
+        "INSERT INTO catalog (object_id, catalog, magnitude) VALUES (?, ?, ?)",
+        ("M31", "messier", 3.44),
+    )
     personal_catalog.add("M31", "messier", "objeto")
     personal_catalog.add_region("M31", ra_hours=1.0, dec_deg=2.0)
     try:
