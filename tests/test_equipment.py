@@ -786,6 +786,31 @@ def test_adjuntos_homonimos_no_sobrescriben(memory_db, monkeypatch, tmp_path):
     assert [ruta.read_bytes() for ruta in rutas] == [b"primero", b"segundo"]
 
 
+def test_filtro_inexistente_no_guarda_equipo_ni_imagen(memory_db, monkeypatch, tmp_path):
+    """Un filtro inválido no confirma el equipo ni copia adjuntos parciales."""
+    from equipment import images, manager
+
+    monkeypatch.setattr(images, "IMAGES_ROOT", tmp_path / "adjuntos")
+    original = tmp_path / "chart.png"
+    original.write_bytes(b"chart")
+    equipo = EquipmentSetup(name="Nuevo", filter_ids=[123456], images=[str(original)])
+
+    with pytest.raises(ValueError, match="filtro"):
+        manager.create(equipo)
+    assert memory_db.execute("SELECT count(*) FROM equipment_setups").fetchone()[0] == 0
+    assert not (tmp_path / "adjuntos").exists()
+
+    actual = EquipmentSetup(name="Existente")
+    manager.create(actual)
+    actual.name = "Alterado"
+    actual.filter_ids = [123456]
+    actual.images = [str(original)]
+    with pytest.raises(ValueError, match="filtro"):
+        manager.update(actual)
+    assert manager.get(actual.id)["name"] == "Existente"
+    assert not (tmp_path / "adjuntos").exists()
+
+
 def test_imagenes_por_entidad_sync_y_purge(memory_db, monkeypatch, tmp_path):
     """API generalizada: kinds por defecto, sync D-5, purge y cascada de filas."""
     from equipment import components, images, localizations

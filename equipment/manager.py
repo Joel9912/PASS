@@ -59,6 +59,7 @@ def create(setup: EquipmentSetup) -> int:
     """
     validar_setup(setup)
     conn = get_connection()
+    _validar_filtros(conn, setup.filter_ids)
     cur = conn.execute(
         "INSERT INTO equipment_setups (name, category, location_id, telescope_id,"
         " guide_telescope_id, camera_id, guide_camera_id, mount_id, price_eur,"
@@ -97,6 +98,7 @@ def update(setup: EquipmentSetup) -> None:
         raise ValueError("Equipo: falta el id (crea antes de actualizar).")
     validar_setup(setup)
     conn = get_connection()
+    _validar_filtros(conn, setup.filter_ids)
     conn.execute(
         "UPDATE equipment_setups SET name = ?, category = ?, location_id = ?,"
         " telescope_id = ?, guide_telescope_id = ?, camera_id = ?,"
@@ -224,6 +226,17 @@ def count_setups_using(kind: str, entity_id: int) -> int:
     params = (entity_id, entity_id) if kind in ("telescope", "camera") else (entity_id,)
     row = get_connection().execute(consultas[kind], params).fetchone()
     return int(row[0])
+
+
+def _validar_filtros(conn, filter_ids: list[int]) -> None:
+    """Comprueba todas las referencias antes de guardar equipo o adjuntos.
+
+    Si un filtro ya no existe, fallar después de ``images.sync`` dejaría
+    tanto la fila del equipo como sus copias de imagen confirmadas.
+    """
+    for filter_id in set(filter_ids):
+        if conn.execute("SELECT 1 FROM filters WHERE id = ?", (filter_id,)).fetchone() is None:
+            raise ValueError(f"El filtro {filter_id} no existe; equipo sin guardar.")
 
 
 def _sync_filters(setup_id: int, filter_ids: list[int]) -> None:
