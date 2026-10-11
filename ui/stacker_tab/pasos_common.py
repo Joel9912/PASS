@@ -464,13 +464,13 @@ class _DatoFITS(QDoubleSpinBox):
         event.ignore()
 
 
-def _spin_dato(minimo: float, maximo: float, *, decimales: int, paso: float,
-               solo_lectura: bool = False) -> QDoubleSpinBox:
-    """Spin de campo FITS que arranca en «--» (sin dato) con su rango real.
+def _spin_dato(minimo: float, maximo: float, *, decimales: int, paso: float) -> QDoubleSpinBox:
+    """Spin de campo FITS, de solo lectura, que arranca en «--» (sin dato).
 
-    ``solo_lectura`` marca los campos que solo informan (sitio): el usuario
-    los mira pero no los edita, para que la configuración no se cambie sin
-    querer desde la ficha de una sesión.
+    Todos los campos de la ficha informan pero no se editan desde la
+    sesión: el usuario los mira pero la configuración no se cambia sin
+    querer desde la ficha de una sesión (antes era un parámetro; todos
+    eran de solo lectura, A-06).
     """
     spin = _DatoFITS()
     spin.setDecimals(decimales)

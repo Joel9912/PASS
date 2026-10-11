@@ -251,13 +251,13 @@ class PanelSesiones(QWidget):
         grid_sitio.setColumnStretch(3, 2)
 
         self._sitio_campos_0 = _spin_dato(
-            -90.0, 90.0, decimales=5, paso=0.01, solo_lectura=True
+            -90.0, 90.0, decimales=5, paso=0.01
         )
         self._sitio_campos_1 = _spin_dato(
-            -180.0, 180.0, decimales=5, paso=0.01, solo_lectura=True
+            -180.0, 180.0, decimales=5, paso=0.01
         )
         self._sitio_campos_2 = _spin_dato(
-            -90.0, 90.0, decimales=1, paso=1.0, solo_lectura=True
+            -90.0, 90.0, decimales=1, paso=1.0
         )
         self._sitio_campos_2.setToolTip(
             "Altura del objeto sobre el horizonte (OBJCTALT del primer light)."
