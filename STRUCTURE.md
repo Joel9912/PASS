@@ -138,6 +138,7 @@ Planning-Stacking-Suite/
 │   ├── test_calibrator.py / test_global_pool.py
 │   ├── test_registration.py / test_frame_metrics.py
 │   ├── test_stacker.py / test_stacker_tab.py
+│   ├── test_codigo_muerto.py
 │   ├── conftest.py
 │   └── README.md
 │

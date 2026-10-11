@@ -45,9 +45,9 @@
 ### 5. **Planificador** ⭐ (Corazón del programa) — 4 subpestañas
 | Subpestaña | Qué hace |
 |---|---|
-| **Búsqueda** | Filtros → tabla del catálogo. Al seleccionar un objeto: gráfica de **tránsito** del día, separación con la **luna**, fase lunar y horas de **noche astronómica**. |
-| **Planificación** | Compara los objetos seleccionados → **ranking con recomendaciones**: cuál conviene más y buenas fechas (incluye clima/seeing). |
+| **Búsqueda** | Filtros → tabla del catálogo. Al seleccionar un objeto: gráfica de **tránsito** del día, separación con la **luna**, fase lunar, horas de **noche astronómica** y tarjetas de **clima/seeing**. |
 | **Catálogo personal** | El usuario guarda objetos que le interesan para usarlos en planificación. |
+| **Planificación** | Compara los objetos seleccionados → **ranking con recomendaciones**: cuál conviene más y buenas fechas. |
 | **Sesiones planificadas** | Sesiones concretadas, guardadas en datos; **Resumen las lee** para saber en qué sesión está el usuario. |
 
 ### 6. **Apilador**

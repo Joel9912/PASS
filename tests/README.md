@@ -1,7 +1,7 @@
 # tests/
 
 ## Qué es
-Tests de PASS con **pytest** (430 tests): validan UI, persistencia y lógica de planificación/equipo/apilado.
+Tests de PASS con **pytest** (436 tests): validan UI, persistencia y lógica de planificación/equipo/apilado.
 
 ## Estado actual
 - `test_smoke.py` — arranque y estructura: `main.py` importa, las 6 pestañas, **todos los README con sus 4 secciones** (lista explícita con las 4 subcarpetas del Planificador), esquema SQLite (`catalog`/`stars`) y `MainWindow` offscreen (barra lateral con su orden de filas, contenido y pie con versión).
@@ -24,6 +24,7 @@ Tests de PASS con **pytest** (430 tests): validan UI, persistencia y lógica de 
 - `test_calibrator.py`, `test_global_pool.py` — materiales, másters, calibración cruda, persistencia y migración idempotente; pool por referencias. La calibración en hilo usa la ruta global capturada sin consultar SQLite.
 - `test_registration.py`, `test_frame_metrics.py`, `test_stacker.py` — auditoría `-2pass`, registro final/drizzle, métricas de `.seq` (incluido fondo real normalizado convertido a ADU/s), pesos/descartes manuales y sintaxis/apilado por canal.
 - `test_stacker_tab.py` — cinco paneles, carta FOV, selección sin modificar originales, columnas legibles, hilo/señales y cadena completa; sesiones homónimas de otras raíces no entran al pool. Maqueta de **Sesiones** y reparto de columnas; el diálogo de limpieza muestra la ruta, conservar o rechazar la confirmación no borra nada y el borrado total no toca originales.
+- `test_codigo_muerto.py` — pin de la auditoría v0.2: los símbolos podados (A-06/A-25/A-27) ya no existen o son internos (`_attach`/`_remove`); si alguien los reaparece sin consumidores, el test avisa.
 - `conftest.py` — fixtures compartidos: `memory_db` (base en memoria con esquema completo y FK activas; parchea la conexión global `db.connection._connection`) y `memory_settings` (alias suyo, para `test_settings.py` y `test_weather.py`).
 
 ## Qué hacer aquí
@@ -34,7 +35,7 @@ Tests de PASS con **pytest** (430 tests): validan UI, persistencia y lógica de 
 - Toda corrección de un bug lleva su test de regresión en la misma tarea.
 
 ## Planes futuros
-1. Tests de `stacks/` y `planetary/` cuando salgan de `NotImplementedError`.
+1. Tests de `planetary/` cuando salga de `NotImplementedError` (`stacks/` ya está implementado y cubierto).
 2. Tests de UI con `pytest-qt`.
-3. Cobertura de `ui/planner_tab/` (helpers puros como `fmt_hhmm`, `phase_name`, `window_lines` se pueden testear ya sin Qt).
+3. Cobertura de `ui/planner_tab/` (helpers puros como `fmt_hhmm` y `window_lines` se pueden testear ya sin Qt; `phase_name`/`transparency` ya tienen test en `test_planners.py`).
 4. **Bajo de la auditoría**: `widget(4)` mágico en 3 tests de `test_smoke.py` — si cambia el orden de `TABS`, hay que tocarlos (`test_main_window_layout` verifica ese orden a propósito).
