@@ -647,7 +647,72 @@ class PartEditor(QWidget):
         self.changed.emit()
 
 
-class TelescopeForm(QFrame):
+class _ImagenesMixin:
+    """Fila «Imágenes» y sus 4 métodos, idénticos en TelescopeForm y CameraForm (A-09).
+
+    La clase anfitriona crea ``self._imagenes`` con ``_montar_fila_imagenes``
+    y expone la señal ``changed`` (de su propia clase); el mixin solo añade
+    y quita filas en memoria — la persistencia sigue siendo del formulario.
+    """
+
+    #: Título del diálogo «Adjuntar…» (lo fija cada formulario).
+    _TITULO_ADJUNTAR = "Seleccionar imágenes"
+
+    def _montar_fila_imagenes(self, rejilla: QGridLayout, fila: int) -> None:
+        """Coloca la fila «Imágenes» en ``rejilla`` y crea ``self._imagenes``.
+
+        La lista va en la columna de campos 1 y los dos botones en paralelo
+        en la 2-3 (apilados sumaban 56 px de fila).
+        """
+        self._imagenes = QListWidget()
+        self._imagenes.setMaximumHeight(44)  # 1,5 filas: el alto sobra menos que el ancho
+        rejilla.addWidget(QLabel("Imágenes"), fila, 0)
+        rejilla.addWidget(self._imagenes, fila, 1)
+        botones = QHBoxLayout()
+        botones.setSpacing(6)
+        boton_anadir = QPushButton("➕ Adjuntar…")
+        boton_anadir.clicked.connect(self._anadir_imagenes)
+        botones.addWidget(boton_anadir)
+        boton_quitar = QPushButton("Quitar")
+        boton_quitar.clicked.connect(self._quitar_imagenes)
+        botones.addWidget(boton_quitar)
+        rejilla.addLayout(botones, fila, 2, 1, 2)
+
+    def _anadir_imagenes(self) -> None:
+        """Adjunta imágenes nuevas a la lista en memoria (sin tocar la base)."""
+        rutas, _ = QFileDialog.getOpenFileNames(
+            self, self._TITULO_ADJUNTAR, "", _FILTRO_IMAGENES
+        )
+        for ruta in rutas:
+            self._anadir_fila(ruta)
+        if rutas:
+            self.changed.emit()
+
+    def _quitar_imagenes(self) -> None:
+        """Quita de la lista lo seleccionado (la base se toca al guardar)."""
+        for item in self._imagenes.selectedItems():
+            self._imagenes.takeItem(self._imagenes.row(item))
+        self.changed.emit()
+
+    def _anadir_fila(self, ruta: str) -> None:
+        """Añade la ruta si no estaba ya (nombre visible, ruta en el dato)."""
+        if ruta in self._rutas():
+            return
+        nombre, ruta = _etiqueta_archivo(ruta)
+        item = QListWidgetItem(nombre)
+        item.setData(Qt.ItemDataRole.UserRole, ruta)
+        item.setToolTip(ruta)
+        self._imagenes.addItem(item)
+
+    def _rutas(self) -> list[str]:
+        """Rutas completas de las imágenes listadas (su verdad en memoria)."""
+        return [
+            self._imagenes.item(i).data(Qt.ItemDataRole.UserRole)
+            for i in range(self._imagenes.count())
+        ]
+
+
+class TelescopeForm(_ImagenesMixin, QFrame):
     """Formulario de una óptica: rejilla de 4 columnas, reductor e imágenes.
 
     Los datos van en **una sola `QGridLayout` como la cabecera de Equipo**
@@ -663,6 +728,9 @@ class TelescopeForm(QFrame):
     """
 
     changed = pyqtSignal()
+
+    #: Título del diálogo «Adjuntar…»: aquí se adjuntan charts.
+    _TITULO_ADJUNTAR = "Seleccionar charts"
 
     def __init__(self, parent: QWidget | None = None) -> None:
         """Campos del telescopio + lecturas vivas y la lista de charts."""
@@ -751,20 +819,8 @@ class TelescopeForm(QFrame):
         rejilla.addWidget(self._notas, 5, 0, 1, 4)
 
         # Imágenes: la lista en la columna de campos 1 y los dos botones
-        # en paralelo en la 2-3 (apilados sumaban 56 px de fila).
-        rejilla.addWidget(QLabel("Imágenes"), 6, 0)
-        self._imagenes = QListWidget()
-        self._imagenes.setMaximumHeight(44)  # 1,5 filas: el alto sobra menos que el ancho
-        rejilla.addWidget(self._imagenes, 6, 1)
-        botones = QHBoxLayout()
-        botones.setSpacing(6)
-        boton_anadir = QPushButton("➕ Adjuntar…")
-        boton_anadir.clicked.connect(self._anadir_imagenes)
-        botones.addWidget(boton_anadir)
-        boton_quitar = QPushButton("Quitar")
-        boton_quitar.clicked.connect(self._quitar_imagenes)
-        botones.addWidget(boton_quitar)
-        rejilla.addLayout(botones, 6, 2, 1, 2)
+        # en paralelo en la 2-3 (patrón del mixin, A-09).
+        self._montar_fila_imagenes(rejilla, 6)
 
         rejilla.setColumnStretch(1, 1)
         rejilla.setColumnStretch(3, 1)
@@ -836,41 +892,6 @@ class TelescopeForm(QFrame):
             images=self._rutas(),
         )
 
-    # -- imágenes ----------------------------------------------------------
-
-    def _anadir_imagenes(self) -> None:
-        """Adjunta charts nuevos a la lista en memoria (sin tocar la base)."""
-        rutas, _ = QFileDialog.getOpenFileNames(
-            self, "Seleccionar charts", "", _FILTRO_IMAGENES
-        )
-        for ruta in rutas:
-            self._anadir_fila(ruta)
-        if rutas:
-            self.changed.emit()
-
-    def _quitar_imagenes(self) -> None:
-        """Quita de la lista lo seleccionado (la base se toca al guardar)."""
-        for item in self._imagenes.selectedItems():
-            self._imagenes.takeItem(self._imagenes.row(item))
-        self.changed.emit()
-
-    def _anadir_fila(self, ruta: str) -> None:
-        """Añade la ruta si no estaba ya (nombre visible, ruta en el dato)."""
-        if ruta in self._rutas():
-            return
-        nombre, ruta = _etiqueta_archivo(ruta)
-        item = QListWidgetItem(nombre)
-        item.setData(Qt.ItemDataRole.UserRole, ruta)
-        item.setToolTip(ruta)
-        self._imagenes.addItem(item)
-
-    def _rutas(self) -> list[str]:
-        """Rutas completas de las imágenes listadas (su verdad en memoria)."""
-        return [
-            self._imagenes.item(i).data(Qt.ItemDataRole.UserRole)
-            for i in range(self._imagenes.count())
-        ]
-
     # -- lecturas vivas ----------------------------------------------------
 
     def _subtipos(self) -> None:
@@ -911,7 +932,7 @@ class TelescopeForm(QFrame):
         self._reductor.toggled.connect(self._factor.setEnabled)
 
 
-class CameraForm(QFrame):
+class CameraForm(_ImagenesMixin, QFrame):
     """Formulario de una cámara: rejilla de 4 columnas, sensor e imágenes.
 
     Misma rejilla que `TelescopeForm` y que la cabecera de Equipo —etiquetas
@@ -928,6 +949,9 @@ class CameraForm(QFrame):
     """
 
     changed = pyqtSignal()
+
+    #: Título del diálogo «Adjuntar…»: aquí se adjuntan curvas de ganancia.
+    _TITULO_ADJUNTAR = "Seleccionar curvas de ganancia"
 
     def __init__(self, parent: QWidget | None = None) -> None:
         """Campos de la cámara + la lectura derivada de resolución."""
@@ -1016,20 +1040,8 @@ class CameraForm(QFrame):
         rejilla.addWidget(self._notas, 6, 0, 1, 4)
 
         # Imágenes: la lista en la columna de campos 1 y los dos botones
-        # en paralelo en la 2-3 (apilados sumaban 56 px de fila).
-        rejilla.addWidget(QLabel("Imágenes"), 7, 0)
-        self._imagenes = QListWidget()
-        self._imagenes.setMaximumHeight(44)  # 1,5 filas: el alto sobra menos que el ancho
-        rejilla.addWidget(self._imagenes, 7, 1)
-        botones = QHBoxLayout()
-        botones.setSpacing(6)
-        boton_anadir = QPushButton("➕ Adjuntar…")
-        boton_anadir.clicked.connect(self._anadir_imagenes)
-        botones.addWidget(boton_anadir)
-        boton_quitar = QPushButton("Quitar")
-        boton_quitar.clicked.connect(self._quitar_imagenes)
-        botones.addWidget(boton_quitar)
-        rejilla.addLayout(botones, 7, 2, 1, 2)
+        # en paralelo en la 2-3 (patrón del mixin, A-09).
+        self._montar_fila_imagenes(rejilla, 7)
 
         rejilla.setColumnStretch(1, 1)
         rejilla.setColumnStretch(3, 1)
@@ -1096,41 +1108,6 @@ class CameraForm(QFrame):
             notes=self._notas.text().strip(),
             images=self._rutas(),
         )
-
-    # -- imágenes ----------------------------------------------------------
-
-    def _anadir_imagenes(self) -> None:
-        """Adjunta curvas nuevas a la lista en memoria (sin tocar la base)."""
-        rutas, _ = QFileDialog.getOpenFileNames(
-            self, "Seleccionar curvas de ganancia", "", _FILTRO_IMAGENES
-        )
-        for ruta in rutas:
-            self._anadir_fila(ruta)
-        if rutas:
-            self.changed.emit()
-
-    def _quitar_imagenes(self) -> None:
-        """Quita de la lista lo seleccionado (la base se toca al guardar)."""
-        for item in self._imagenes.selectedItems():
-            self._imagenes.takeItem(self._imagenes.row(item))
-        self.changed.emit()
-
-    def _anadir_fila(self, ruta: str) -> None:
-        """Añade la ruta si no estaba ya (nombre visible, ruta en el dato)."""
-        if ruta in self._rutas():
-            return
-        nombre, ruta = _etiqueta_archivo(ruta)
-        item = QListWidgetItem(nombre)
-        item.setData(Qt.ItemDataRole.UserRole, ruta)
-        item.setToolTip(ruta)
-        self._imagenes.addItem(item)
-
-    def _rutas(self) -> list[str]:
-        """Rutas completas de las imágenes listadas (su verdad en memoria)."""
-        return [
-            self._imagenes.item(i).data(Qt.ItemDataRole.UserRole)
-            for i in range(self._imagenes.count())
-        ]
 
     # -- lecturas vivas ----------------------------------------------------
 
