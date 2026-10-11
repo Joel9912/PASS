@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from equipment.metrics import escala_imagen
 from stacks.session_parser import FichaFITS, Session
 from ui.style import FONT_FAMILY
 
@@ -443,13 +444,18 @@ class PanelSesiones(QWidget):
         self._recalcular_escala()
 
     def _escala_de_spins(self) -> float | None:
-        """Escala derivada de focal, píxel y binning (los que traiga el FITS)."""
+        """Escala derivada de focal, píxel y binning (los que traiga el FITS).
+
+        Delega la fórmula en ``equipment.metrics.escala_imagen`` (fuente
+        única de la constante 206,265, A-10); el píxel efectivo incluye el
+        binning.
+        """
         focal = self._optica_campos_0.value()
         pixel = self._optica_campos_1.value()
         if focal <= 0 or pixel <= 0:
             return None
         binning = self._ficha_actual.binning if self._ficha_actual else None
-        return 206.265 * pixel * (binning or 1) / focal
+        return escala_imagen(focal, pixel * (binning or 1))
 
     def _recalcular_escala(self) -> None:
         """Etiqueta de escala de placa, reencuadre de la carta y panel de rotación.

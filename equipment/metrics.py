@@ -20,8 +20,9 @@ from .models import Camera, Telescope
 
 #: Segundos de arco por radián (180·3600/π ≈ 206264,806) en unidades de
 #: µm/mm: ``píxel/focal`` ya sale en radianes (mm/mm), por eso el factor es
-#: 206,265 y no 206264.
-_ARCSEC_POR_RADIAN = 206.264806
+#: 206,265 y no 206264. **Única fuente** (A-10): la usan `escala_imagen`,
+#: `stacks/session_parser.campo_vision` y el panel Sesiones del Apilador.
+ARCSEC_POR_RADIAN = 206.264806
 
 #: Fórmula de Dawes: resolución resoluble en ″ ≈ 116 / apertura(mm).
 _DAWES = 116.0
@@ -69,7 +70,7 @@ def escala_imagen(focal_efectiva_mm: float | None, pixel_um: float | None) -> fl
         return None
     if pixel_um is None or pixel_um <= 0:
         return None
-    return _ARCSEC_POR_RADIAN * pixel_um / focal_efectiva_mm
+    return ARCSEC_POR_RADIAN * pixel_um / focal_efectiva_mm
 
 
 def limite_dawes(aperture_mm: float | None) -> float | None:

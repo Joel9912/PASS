@@ -1,5 +1,6 @@
 """session_parser: detección de sesiones, másters, filtros y tipo de sesión."""
 import numpy as np
+import pytest
 from astropy.io import fits
 
 from stacks import session_parser
@@ -306,7 +307,7 @@ def test_campo_vision_usa_escala_o_focal_sin_inventar():
     assert session_parser.campo_vision(session_parser.FichaFITS(px_x=3600)) is None
     assert session_parser.campo_vision(session_parser.FichaFITS(
         px_x=3600, px_y=1800, focal_mm=206.265, pix_um=1,
-    )) == (1, 0.5)
+    )) == pytest.approx((1, 0.5), rel=1e-5)   # constante única 206,264806 (A-10)
     assert session_parser.campo_vision(session_parser.FichaFITS(
         px_x=3600, px_y=1800, escala_as_px=-1,
     )) is None

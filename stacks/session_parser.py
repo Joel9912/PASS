@@ -17,6 +17,8 @@ from pathlib import Path
 
 from astropy.io import fits
 
+from equipment.metrics import escala_imagen
+
 #: Subcarpetas de frames que reconoce el programa.
 FRAME_KINDS = ("lights", "flats", "darks", "bias", "dark_flats")
 
@@ -105,8 +107,10 @@ def campo_vision(ficha: FichaFITS) -> tuple[float, float] | None:
     if not (ficha.px_x and ficha.px_y and ficha.px_x > 0 and ficha.px_y > 0):
         return None
     escala = ficha.escala_as_px
-    if escala is None and ficha.pix_um and ficha.focal_mm and ficha.focal_mm > 0:
-        escala = 206.265 * ficha.pix_um * (ficha.binning or 1) / ficha.focal_mm
+    if escala is None and ficha.pix_um:
+        # Píxel efectivo (µm × binning); la fórmula y su constante viven en
+        # equipment/metrics (fuente única, A-10). Sin focal → None → sin FOV.
+        escala = escala_imagen(ficha.focal_mm, ficha.pix_um * (ficha.binning or 1))
     if escala is None or not math.isfinite(escala) or escala <= 0:
         return None
     return ficha.px_x * escala / 3600, ficha.px_y * escala / 3600
