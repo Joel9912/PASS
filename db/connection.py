@@ -170,11 +170,3 @@ def _drop_legacy_columns(conn: sqlite3.Connection) -> None:
 def init_db(conn: sqlite3.Connection | None = None) -> None:
     """Aplica el esquema de `schema.sql` (idempotente)."""
     _apply_schema(conn if conn is not None else get_connection())
-
-
-def close_connection() -> None:
-    """Cierra la conexión global si existe."""
-    global _connection
-    if _connection is not None:
-        _connection.close()
-        _connection = None
