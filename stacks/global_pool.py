@@ -61,28 +61,6 @@ class GlobalPool:
         self.entries.extend(referencias)
         return len(referencias)
 
-    def total_exposure_s(self, exposure_per_frame_s: float | None = None) -> float:
-        """Tiempo de exposición total del pool (lo consume la pestaña Resumen).
-
-        Con ``exposure_per_frame_s`` se multiplica el nº de frames (tiempo
-        planificado); sin él se suman los EXPOSURE de las cabeceras (los
-        frames sin cabecera no aportan tiempo).
-        """
-        if exposure_per_frame_s is not None:
-            return len(self.entries) * exposure_per_frame_s
-        return sum(ref.exposicion_s or 0.0 for ref in self.entries)
-
-    def por_filtro(self) -> dict[str | None, list[LightRef]]:
-        """Agrupa las referencias por filtro (lo consume el apilado por canal).
-
-        Sesiones mono+filtros: una pila por clave y después ``rgbcomp``;
-        en OSC todo cae en un grupo (None si el FITS no trae FILTER).
-        """
-        grupos: dict[str | None, list[LightRef]] = {}
-        for ref in self.entries:
-            grupos.setdefault(ref.filtro, []).append(ref)
-        return grupos
-
 
 def pool_desde_calibradas(
     calibradas: list[dict] | None = None, *, root: Path | None = None

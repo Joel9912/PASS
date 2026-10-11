@@ -75,35 +75,6 @@ def test_fuera_de_la_carpeta_de_trabajo_se_rechaza(pool, tmp_path):
     assert pool.entries == []
 
 
-def test_total_exposure(pool):
-    """Suma los EXPOSURE reales, o frames × tiempo planificado."""
-    carpeta = pool.root / "noche1" / "light"
-    _fit(carpeta / "pp_light_00001.fit", EXPOSURE=300.0)
-    _fit(carpeta / "pp_light_00002.fit", EXPOSURE=300.0)
-    _fit(carpeta / "pp_light_00003.fit")  # sin cabecera: no aporta tiempo
-    pool.add_session("noche1", carpeta)
-
-    assert pool.total_exposure_s() == 600.0
-    assert pool.total_exposure_s(exposure_per_frame_s=120.0) == 360.0
-
-
-def test_por_filtro_agrupa_por_canal(pool):
-    """El apilado por canal consume un grupo por filtro (en OSC, None)."""
-    carpeta = pool.root / "noche1" / "light"
-    _fit(carpeta / "pp_light_00001.fit", FILTER="R", EXPOSURE=60.0)
-    _fit(carpeta / "pp_light_00002.fit", FILTER="R", EXPOSURE=60.0)
-    _fit(carpeta / "pp_light_00003.fit", FILTER="G", EXPOSURE=60.0)
-    _fit(carpeta / "pp_light_00004.fit", EXPOSURE=60.0)  # sin filtro
-    pool.add_session("noche1", carpeta)
-
-    grupos = pool.por_filtro()
-    assert sorted(g for g in grupos if g) == ["G", "R"]
-    assert [ref.ruta.name for ref in grupos["R"]] == [
-        "pp_light_00001.fit", "pp_light_00002.fit",
-    ]
-    assert [ref.ruta.name for ref in grupos[None]] == ["pp_light_00004.fit"]
-
-
 def test_pool_desde_calibradas_ignora_lo_borrado(tmp_path):
     """Se reconstruye desde la BD; las carpetas ya borradas se ignoran."""
     raiz = tmp_path / "calibrados"
