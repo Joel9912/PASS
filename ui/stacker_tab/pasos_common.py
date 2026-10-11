@@ -268,17 +268,27 @@ def _numero(valor: float, decimales: int = 1) -> str:
     return texto.replace(".", ",")
 
 
-def _formato_region(ficha: FichaFITS | None) -> str:
-    """Encuadre legible de la sesión: «0h47m, +41,3°» («—» sin FITS)."""
-    if ficha is None or ficha.ra_deg is None or ficha.dec_deg is None:
-        return "—"
-    horas = (ficha.ra_deg % 360.0) / 15.0
+def _hm_de_ra(ra_deg: float) -> tuple[int, int]:
+    """(hora, minuto) sexagesimales de una RA en grados, con vuelta al 60→00."""
+    horas = (ra_deg % 360.0) / 15.0
     hora = int(horas)
     minutos = int(round((horas - hora) * 60.0))
     if minutos == 60:  # el redondeo da 60 justo en el borde: sube la hora
         hora, minutos = (hora + 1) % 24, 0
-    dec = f"{ficha.dec_deg:+.1f}".replace(".", ",")
-    return f"{hora}h{minutos:02d}m, {dec}°"
+    return hora, minutos
+
+
+def _dec_coma(dec_deg: float) -> str:
+    """Dec con signo y coma decimal: +41,3 (así se escribe en toda la UI)."""
+    return f"{dec_deg:+.1f}".replace(".", ",")
+
+
+def _formato_region(ficha: FichaFITS | None) -> str:
+    """Encuadre legible de la sesión: «0h47m, +41,3°» («—» sin FITS)."""
+    if ficha is None or ficha.ra_deg is None or ficha.dec_deg is None:
+        return "—"
+    hora, minutos = _hm_de_ra(ficha.ra_deg)
+    return f"{hora}h{minutos:02d}m, {_dec_coma(ficha.dec_deg)}°"
 
 
 def _texto_region(ficha: FichaFITS | None) -> str | None:

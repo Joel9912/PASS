@@ -23,6 +23,8 @@ from ui.planner_tab.planificacion.planetario_visual import (
 )
 from ui.style import PALETTE
 
+from .pasos_common import _dec_coma, _hm_de_ra
+
 _EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="fits-sesiones")
 
 #: Catálogos de la leyenda (etiqueta tal y como la pinta la referencia).
@@ -207,15 +209,14 @@ class CieloCapturado(PlanetarioVisual):
         painter.end()
 
     def _coordenadas_vista(self) -> str:
-        """«RA 00h47m | Dec +41,3°» del centro mirado ahora (coma decimal)."""
+        """«RA 00h47m | Dec +41,3°» del centro mirado ahora (coma decimal).
+
+        Comparte el cálculo sexagesimal con el resto del asistente
+        (`pasos_common._hm_de_ra` / `_dec_coma`, A-20).
+        """
         ra_deg, dec_deg = self.center_deg
-        ra_h = (ra_deg / 15.0) % 24.0
-        horas = int(ra_h)
-        minutos = int(round((ra_h - horas) * 60.0))
-        if minutos == 60:
-            horas, minutos = (horas + 1) % 24, 0
-        dec = f"{dec_deg:+.1f}".replace(".", ",")
-        return f"RA {horas:02d}h{minutos:02d}m | Dec {dec}°"
+        hora, minutos = _hm_de_ra(ra_deg)
+        return f"RA {hora:02d}h{minutos:02d}m | Dec {_dec_coma(dec_deg)}°"
 
     def reset_view(self) -> None:
         """Restaura centro y campo de la captura, no el origen genérico (0°,0°)."""
