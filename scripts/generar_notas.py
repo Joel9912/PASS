@@ -3,6 +3,7 @@
 
 Uso:
     python scripts/generar_notas.py --desde v0.1-alpha --hasta v0.2
+    python scripts/generar_notas.py --desde v0.1-alpha --salida CHANGELOG.md
 
 El registro de bugs es la fuente única: este script no copia nada, solo
 lee ``BUGS.md``, se queda con los hallazgos en estado ✅ (y con los 🟡
