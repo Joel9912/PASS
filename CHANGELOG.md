@@ -13,6 +13,7 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 - Captura Ideal reserva al menos cinco minutos dentro de ambos extremos de la noche astronómica; los márgenes válidos quedan como Posible.
 
 ### Corregido
+- Cancelar una tarea del Apilador que no usa SirIL (escaneo, auditoría) la corta en su siguiente paso de progreso o log, en vez de dejarla correr hasta el final mientras el cierre esperaba (S-0012).
 - El Apilador ya no suelta la referencia a su hilo de trabajo al recibir el resultado: la libera cuando Qt confirma que terminó, evitando que el cierre de la app destruya un QThread aún corriendo (S-0011).
 - La exportación del apilado solo copia ficheros generados por PASS dentro de su carpeta de trabajo; un origen ajeno o un enlace que escapa no se copia (S-0016).
 - La comprobación de 16 bits revisa todos los FITS de la secuencia, no solo el primero, e identifica el fichero incompatible antes de calibrarlo (S-0014).
