@@ -642,3 +642,23 @@ def test_tarjetas_clima_muestran_pronostico_numerico(qt_app):
     assert "20 %" in cards._cards["cloud"]._value.text()
     assert '1.5"' in cards._cards["seeing"]._value.text()
     cards.close()
+def test_bandas_de_captura_coinciden_con_resumen_redondeado(qt_app, monkeypatch):
+    """Las bandas pintan los mismos cortes y restos que las horas del resumen."""
+    from types import SimpleNamespace
+
+    from ui.planner_tab import widgets
+
+    curva = widgets.TransitCurve()
+    horas = [20 + 2 / 60, 21 + 8 / 60, 22.0]
+    datos = SimpleNamespace(
+        hours_local=horas, altitudes=[60, 35, 0], moon_altitudes=[-5, -5, -5],
+        moon_separations=[90, 90, 90], astro_night=[True, True, False],
+        moon_illumination=0.5, transit_index=0,
+    )
+    bandas = {}
+    monkeypatch.setattr(curva._ideal_band, "set_spans", lambda spans: bandas.update(ideal=spans))
+    monkeypatch.setattr(curva._possible_band, "set_spans", lambda spans: bandas.update(possible=spans))
+    resumen = curva.show_curve(datos)
+    assert bandas["ideal"] == [h for tramo in resumen["ideal"]["ranges"] for h in tramo]
+    assert bandas["possible"] == [h for tramo in resumen["possible"]["ranges"] for h in tramo]
+    curva.deleteLater()

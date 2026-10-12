@@ -1568,10 +1568,10 @@ class TransitCurve(QWidget):
         # --- Bandas
         self._night_band.set_spans(_contiguous_spans(hours, curve.astro_night))
         self._possible_band.set_spans(
-            _contiguous_spans(hours, [w == WINDOW_POSSIBLE for w in windows])
+            [h for tramo in summary.get(WINDOW_POSSIBLE, {}).get("ranges", []) for h in tramo]
         )
         self._ideal_band.set_spans(
-            _contiguous_spans(hours, [w == WINDOW_IDEAL for w in windows])
+            [h for tramo in summary.get(WINDOW_IDEAL, {}).get("ranges", []) for h in tramo]
         )
         self._limit_line.show()          # límite de 30° (oculto en clear())
 

@@ -21,6 +21,8 @@ por una separación angular calculada contra una Luna invisible.
 """
 from __future__ import annotations
 
+import math
+
 from planners.timefmt import format_hhmm
 
 #: Etiquetas de ventana (constantes para que UI y tests no las escriban a mano).
@@ -146,11 +148,10 @@ def capture_window_summary(
             ...
         }
 
-    Un rango va de la primera muestra de la ventana a la muestra posterior a
-    la última (cada instante cubre el intervalo hasta el siguiente), de modo
-    que los rangos de la noche casillan la línea del tiempo sin huecos ni
-    solapes. Así una ventana de una sola muestra dura un paso de muestreo,
-    no cero.
+    Cada muestra cubre hasta la siguiente; la última cierra la malla y no
+    aporta duración. Ideal cuenta solo bloques completos de cinco minutos
+    alineados al reloj. Sus restos pasan a Posible y se unen a sus tramos
+    contiguos, con límites exactos, sin rellenar intervalos no capturables.
 
     Las horas se desenvuelven antes de agrupar (ver :func:`unwrap_hours`),
     así que una ventana que cruza la medianoche (21:50 → 05:50) se devuelve
@@ -158,22 +159,30 @@ def capture_window_summary(
     ``format_hour_range`` los deja ya en HH:MM.
     """
     hours = unwrap_hours(hours)
-    summary: dict[str, dict] = {}
-    step = _sample_step(hours)
-    current_kind: str | None = None
-    range_start = 0.0
-
-    for index, (kind, hour) in enumerate(zip(windows, hours, strict=True)):
-        if kind != current_kind:
-            # Cerramos el rango anterior si existía y era nocturno
-            if current_kind is not None:
-                _close_range(summary, current_kind, range_start, hours[index - 1], step)
-            current_kind = kind
-            range_start = hour
-
-    if current_kind is not None:
-        _close_range(summary, current_kind, range_start, hours[-1], step)
-
+    if len(windows) != len(hours):
+        raise ValueError("Las ventanas y las horas deben tener la misma longitud.")
+    if any(not math.isfinite(h) for h in hours) or any(b <= a for a, b in zip(hours, hours[1:])):
+        raise ValueError("La malla horaria debe ser finita y estrictamente creciente.")
+    summary = {kind: {"hours": 0.0, "ranges": []} for kind in windows}
+    inicio = 0
+    while inicio < len(hours) - 1:
+        fin = inicio + 1
+        kind = windows[inicio]
+        while fin < len(hours) - 1 and windows[fin] == kind:
+            fin += 1
+        start, end = hours[inicio], hours[fin]
+        if kind == WINDOW_IDEAL:
+            ideal_start = math.ceil(round(start * 12, 9)) / 12
+            ideal_end = math.floor(round(end * 12, 9)) / 12
+            if ideal_end > ideal_start:
+                _close_range(summary, WINDOW_POSSIBLE, start, ideal_start)
+                _close_range(summary, WINDOW_IDEAL, ideal_start, ideal_end)
+                _close_range(summary, WINDOW_POSSIBLE, ideal_end, end)
+            else:
+                _close_range(summary, WINDOW_POSSIBLE, start, end)
+        else:
+            _close_range(summary, kind, start, end)
+        inicio = fin
     return summary
 
 
@@ -200,20 +209,17 @@ def unwrap_hours(hours: list[float]) -> list[float]:
     return unwrapped
 
 
-def _sample_step(hours: list[float]) -> float:
-    """Paso de muestreo de la malla (menor delta positivo entre horas)."""
-    deltas = [b - a for a, b in zip(hours, hours[1:], strict=False) if b > a]
-    return min(deltas) if deltas else 0.0
-
-
 def _close_range(
-    summary: dict[str, dict], kind: str, start: float, last: float, step: float
+    summary: dict[str, dict], kind: str, start: float, end: float
 ) -> None:
-    """Acumula el rango [start, last + step) en la ventana ``kind``."""
-    entry = summary.setdefault(kind, {"hours": 0.0, "ranges": []})
-    end = last + step
+    """Acumula un rango exacto, uniendo los contiguos de una misma categoría."""
     if end > start:
-        entry["ranges"].append((start, end))
+        entry = summary.setdefault(kind, {"hours": 0.0, "ranges": []})
+        if entry["ranges"] and math.isclose(entry["ranges"][-1][1], start, rel_tol=0, abs_tol=1e-9):
+            anterior, _ = entry["ranges"][-1]
+            entry["ranges"][-1] = (anterior, end)
+        else:
+            entry["ranges"].append((start, end))
         entry["hours"] += end - start
 
 

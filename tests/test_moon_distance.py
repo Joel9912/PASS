@@ -121,25 +121,55 @@ def test_capture_windows_rejects_mismatched_lengths():
         capture_windows([1.0], [1.0, 2.0], [1.0], [True], 50.0)
 
 
+def test_ideal_redondeado_cede_restos_a_posible_sin_huecos():
+    """Los cortes ideales se ajustan hacia dentro y Posible recoge los restos."""
+    summary = capture_window_summary(
+        [WINDOW_POSSIBLE, WINDOW_IDEAL, WINDOW_POSSIBLE, WINDOW_NO_POSSIBLE],
+        [19 + 5 / 60, 20 + 47 / 60, 21 + 8 / 60, 22.0],
+    )
+    assert summary[WINDOW_IDEAL]["ranges"] == [(20 + 50 / 60, 21 + 5 / 60)]
+    assert summary[WINDOW_IDEAL]["hours"] == pytest.approx(15 / 60)
+    assert summary[WINDOW_POSSIBLE]["ranges"] == [
+        (19 + 5 / 60, 20 + 50 / 60), (21 + 5 / 60, 22.0),
+    ]
+    assert sum(v["hours"] for v in summary.values()) == pytest.approx(22 - (19 + 5 / 60))
+
+
+def test_ideal_menor_de_cinco_minutos_pasa_a_posible():
+    """Sin bloques completos ideales el tramo sigue siendo captura posible."""
+    summary = capture_window_summary([WINDOW_IDEAL, WINDOW_NO_POSSIBLE], [20.02, 20.06])
+    assert summary[WINDOW_IDEAL]["hours"] == 0
+    assert summary[WINDOW_POSSIBLE]["ranges"] == [(20.02, 20.06)]
+
+
+def test_resumen_no_rellena_huecos_reales():
+    """La captura imposible no puede desaparecer por el redondeo ideal."""
+    summary = capture_window_summary(
+        [WINDOW_IDEAL, WINDOW_NO_POSSIBLE, WINDOW_IDEAL, WINDOW_NO_POSSIBLE],
+        [20.02, 20.2, 20.3, 20.49],
+    )
+    assert summary[WINDOW_NO_POSSIBLE]["ranges"] == [(20.2, 20.3)]
+    assert all(not (a < 20.3 and b > 20.2) for a, b in summary[WINDOW_POSSIBLE]["ranges"])
+
+
 def test_capture_window_summary_groups_ranges_and_hours():
     """Agrupa instantes consecutivos; cada muestra cubre hasta la siguiente.
 
     Con paso 0.5 h: Ideal en 18.0-18.5 ⇒ [18.0, 19.0); Possible en 19.0 ⇒
-    [19.0, 19.5); Ideal de nuevo en 19.5 ⇒ [19.5, 20.0). Los rangos casillan
-    la línea del tiempo sin huecos ni solapes.
+    [19.0, 19.5); la muestra final de 19.5 solo cierra la malla.
     """
     summary = capture_window_summary(
         windows=[WINDOW_IDEAL, WINDOW_IDEAL, WINDOW_POSSIBLE, WINDOW_IDEAL],
         hours=[18.0, 18.5, 19.0, 19.5],
     )
-    assert summary[WINDOW_IDEAL]["hours"] == pytest.approx(1.5)  # 1.0 + 0.5
+    assert summary[WINDOW_IDEAL]["hours"] == pytest.approx(1.0)
     assert summary[WINDOW_POSSIBLE]["hours"] == pytest.approx(0.5)
-    assert summary[WINDOW_IDEAL]["ranges"] == [(18.0, 19.0), (19.5, 20.0)]
+    assert summary[WINDOW_IDEAL]["ranges"] == [(18.0, 19.0)]
     assert summary[WINDOW_POSSIBLE]["ranges"] == [(19.0, 19.5)]
 
 
-def test_capture_window_summary_single_sample_lasts_one_step():
-    """Una ventana de una sola muestra dura un paso de muestreo, no cero."""
+def test_capture_window_summary_ultima_muestra_no_extiende_malla():
+    """La muestra final no aporta tiempo fuera de la gráfica."""
     summary = capture_window_summary(
         windows=[WINDOW_POSSIBLE],
         hours=[21.0],
@@ -149,9 +179,9 @@ def test_capture_window_summary_single_sample_lasts_one_step():
 
     summary = capture_window_summary(
         windows=[WINDOW_IDEAL, WINDOW_IDEAL, WINDOW_POSSIBLE],
-        hours=[20.0, 20.1667, 20.3333],   # paso de 10 min
+        hours=[20.0, 20 + 1 / 6, 20 + 1 / 3],
     )
-    assert summary[WINDOW_POSSIBLE]["hours"] == pytest.approx(0.1667, abs=0.01)
+    assert summary[WINDOW_POSSIBLE]["hours"] == 0.0
 
 
 def test_format_hour_range():
@@ -175,23 +205,23 @@ def test_capture_window_summary_keeps_range_across_midnight():
     """Regresión: la ventana Ideal que cruza las 00:00 no se pierde.
 
     Antes de desenvolver las horas, ``end < start`` descartaba el rango y la
-    noche se resumía como "sin ventana" aunque hubo 5 h de captura ideal.
+    noche se resumía como "sin ventana" aunque hubo captura ideal.
     """
     hours = [21.5, 22.0, 23.5, 0.5, 1.0, 2.0]
     summary = capture_window_summary(
         windows=[WINDOW_IDEAL] * len(hours),
         hours=hours,
     )
-    assert summary[WINDOW_IDEAL]["ranges"] == [(21.5, 26.5)]
-    assert summary[WINDOW_IDEAL]["hours"] == pytest.approx(5.0)
-    assert format_hour_range(*summary[WINDOW_IDEAL]["ranges"][0]) == "21:30–02:30"
+    assert summary[WINDOW_IDEAL]["ranges"] == [(21.5, 26.0)]
+    assert summary[WINDOW_IDEAL]["hours"] == pytest.approx(4.5)
+    assert format_hour_range(*summary[WINDOW_IDEAL]["ranges"][0]) == "21:30–02:00"
 
 
 def test_capture_window_summary_wraps_windows_around_midnight():
     """Ideal entre dos tramos de Possible repartidos a ambos lados de 00:00.
 
     Malla de 30 min en una noche de 21:30 a 01:30: Possible 21:30-22:00,
-    Ideal 22:00-01:30 y Possible 01:30-02:00. Los tres rangos son crecientes
+    Ideal 22:00-01:30; el punto de 01:30 solo cierra la malla. Los rangos son crecientes
     (25.5 > 22.0), no se parten en dos al cruzar la medianoche.
     """
     hours = [21.5, 22.0, 23.5, 0.5, 1.0, 1.5]
@@ -202,5 +232,18 @@ def test_capture_window_summary_wraps_windows_around_midnight():
     summary = capture_window_summary(windows, hours)
     assert summary[WINDOW_IDEAL]["ranges"] == [(22.0, 25.5)]
     assert summary[WINDOW_IDEAL]["hours"] == pytest.approx(3.5)
-    assert summary[WINDOW_POSSIBLE]["ranges"] == [(21.5, 22.0), (25.5, 26.0)]
+    assert summary[WINDOW_POSSIBLE]["ranges"] == [(21.5, 22.0)]
     assert format_hour_range(22.0, 25.5) == "22:00–01:30"
+
+
+def test_redondeo_ideal_cinco_minutos_cruza_medianoche():
+    """Los bloques ideales y sus restos se mantienen unidos tras medianoche."""
+    summary = capture_window_summary(
+        [WINDOW_IDEAL, WINDOW_POSSIBLE, WINDOW_NO_POSSIBLE],
+        [23 + 57 / 60, 13 / 60, 19 / 60],
+    )
+    assert summary[WINDOW_IDEAL]["ranges"] == [(24.0, 24 + 10 / 60)]
+    assert summary[WINDOW_POSSIBLE]["ranges"] == [
+        (23 + 57 / 60, 24.0), (24 + 10 / 60, 24 + 19 / 60),
+    ]
+    assert sum(s["hours"] for s in summary.values()) == pytest.approx(22 / 60)
