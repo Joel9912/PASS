@@ -30,6 +30,24 @@ def test_enlaza_lights_homonimos_de_filtros_distintos(tmp_path, siril_falso):
     assert {p.resolve() for p in enlaces} == {p.resolve() for p in fuentes}
 
 
+@pytest.mark.parametrize("base", ["light", "flat", "dark"])
+def test_secuencia_mixta_raw_fits_se_rechaza_antes_de_siril(tmp_path, monkeypatch, base):
+    """No se ignoran FITS al elegir convertraw para un conjunto mixto."""
+    fit = _fits(tmp_path / "luz.fit")
+    raw = tmp_path / "luz.NEF"
+    raw.write_bytes(b"raw")
+    def prohibido(*args, **kwargs):
+        """SirIL nunca debe recibir esta secuencia ambigua."""
+        pytest.fail("Se llamó a SirIL con una mezcla RAW/FITS")
+    monkeypatch.setattr(calibrator, "ejecutar_script", prohibido)
+    trabajo = tmp_path / "trabajo"
+    with pytest.raises(SirilError, match="RAW.*FITS"):
+        calibrator._enlazar_frames([raw, fit], trabajo, base)
+    assert not trabajo.exists()
+    assert raw.read_bytes() == b"raw"
+    assert fit.is_file()
+
+
 def _fits(path: Path, *, valor: int = 1, **cabecera) -> Path:
     """Fichero FITS mínimo (2×2) de 16 bits con la cabecera indicada.
 

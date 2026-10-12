@@ -41,7 +41,13 @@ from astropy.io import fits
 
 from db.connection import get_connection
 
-from .session_parser import RAW_EXTS, Session, exposure_de, parse_calibration_folder
+from .session_parser import (
+    FITS_EXTS,
+    RAW_EXTS,
+    Session,
+    exposure_de,
+    parse_calibration_folder,
+)
 from .siril_runner import (
     WORKING_FOLDER,
     SirilError,
@@ -386,8 +392,10 @@ def _enlazar_frames(
         El nombre real de la secuencia creada, leído del ``.seq`` en disco
         (SirIL normaliza ``light_0001`` → secuencia ``light_``).
     """
-    trabajo.mkdir(parents=True, exist_ok=True)
     hay_raw = any(f.suffix.lower() in RAW_EXTS for f in frames)
+    if hay_raw and any(f.suffix.lower() in FITS_EXTS for f in frames):
+        raise SirilError("La secuencia mezcla RAW y FITS; sepáralos antes de calibrar.")
+    trabajo.mkdir(parents=True, exist_ok=True)
     for indice, frame in enumerate(frames, start=1):
         enlace = trabajo / f"{indice:06d}_{frame.name}"
         if not enlace.exists():
