@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **93 hallazgos**: 🔴 18 graves · 🟠 48 medios · 🟡 18 bajos · 9 decisiones (8 pendientes).
-Estado: ✅ 60 corregidos · 🟡 5 contenidos · ⏳ 13 pendientes · 🔎 6 sin reproducir.
+Estado: ✅ 61 corregidos · 🟡 5 contenidos · ⏳ 12 pendientes · 🔎 6 sin reproducir.
 
 ---
 
@@ -77,9 +77,9 @@ Estado: ✅ 60 corregidos · 🟡 5 contenidos · ⏳ 13 pendientes · 🔎 6 si
 | **E-0009** | Los borrados de piezas no comprobaban usos en sesiones/setups ni sus cascadas. | ✅ |
 | **E-0010** | Imágenes de equipo con nombre homónimo podían sobrescribirse. | ✅ |
 | **P-0003** | El factor lunar se puntúa en el tránsito diurno en vez de dentro de la ventana de captura. | 🟡 `97d5787` (evaluación nocturna; pendientes tiempo útil y casos sin bordes) |
-| **P-0004** | Cálculo incorrecto en latitudes altas (geometría polar). | ⏳ |
+| **P-0004** | Cálculo incorrecto en latitudes altas (geometría polar). | ✅ `68e1326` (alturas constantes en polos) |
 | **P-0005** | El tránsito se ordena tras el `LIMIT` y desplaza la ventana elegida. | ✅ `255252c` |
-| **P-0006** | La noche polar queda truncada en el cálculo de ventanas. | ⏳ |
+| **P-0006** | La noche polar queda truncada en el cálculo de ventanas. | ⏳ (rediseño del Planificador) |
 | **P-0007** | Alias NGC/IC tratados de forma inconsistente al resolver el objetivo. | ✅ `d346937` (alias de designación) |
 | **P-0008** | Una duración puede exceder el intervalo de la ventana por un paso. | ✅ `6bd5810` |
 | **P-0009** | La separación lunar diurna se usa en el ranking de noches. | 🟡 `97d5787` (evaluación nocturna; pendientes tiempo útil y casos sin bordes) |
