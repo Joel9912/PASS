@@ -18,6 +18,55 @@ from stacks.registration import audit_pool, auditoria_guardada, register_pool
 from stacks.siril_runner import SirilError, SirilResult
 
 
+@pytest.mark.parametrize("defecto", ["falta", "nombre", "duplicado"])
+def test_mapeo_rechaza_indices_invalidos(tmp_path, defecto):
+    """El mapeo exige índices consecutivos y una referencia por entrada."""
+    pool = _pool(tmp_path)
+    destino = tmp_path / "indices"
+    destino.mkdir()
+    for i, ref in enumerate(pool.entries, 1):
+        (destino / f"registro_{i:05d}.fit").symlink_to(ref.ruta)
+    ultimo = destino / "registro_00005.fit"
+    if defecto == "falta":
+        ultimo.unlink()
+    elif defecto == "nombre":
+        ultimo.rename(destino / "registro_incorrecto.fit")
+    else:
+        ultimo.unlink()
+        ultimo.symlink_to(pool.entries[0].ruta)
+    with pytest.raises(SirilError):
+        registration._mapear(destino, "registro_", pool.entries)
+
+
+def test_registro_limpia_restos_antes_de_invocar_siril(tmp_path, siril_falso, monkeypatch):
+    """Una corrida nueva no consume secuencias ni salidas de la anterior."""
+    monkeypatch.setattr(registration, "WORKING_FOLDER", tmp_path / "working")
+    destino = tmp_path / "working" / "registrados" / "x"
+    destino.mkdir(parents=True)
+    restos = [destino / "r_viejo.fit", destino / "viejo.seq"]
+    for p in restos:
+        p.write_bytes(b"anterior")
+    register_pool(_pool(tmp_path), "x")
+    assert all(not p.exists() for p in restos)
+
+
+@pytest.mark.parametrize("paso", ["calibrate", "seqapplyreg"])
+def test_salidas_mal_nombradas_no_se_admiten(tmp_path, siril_falso, monkeypatch, paso):
+    """Un fichero inesperado no sustituye una salida indexada de SirIL."""
+    def ejecutar(comandos, *, cwd=None, **kwargs):
+        """Simula un OK con una salida cuyo índice no pertenece a la secuencia."""
+        resultado = siril_falso(comandos, cwd=cwd, **kwargs)
+        if any(c.startswith(paso) for c in comandos):
+            prefijo = "pp_d_" if paso == "calibrate" else "r_registro_"
+            (cwd / f"{prefijo}00001.fit").rename(cwd / f"{prefijo}99999.fit")
+        return resultado
+
+    monkeypatch.setattr(registration, "ejecutar_script", ejecutar)
+    monkeypatch.setattr(registration, "WORKING_FOLDER", tmp_path / "working")
+    with pytest.raises(SirilError):
+        register_pool(_pool_cfa(tmp_path), "x", debayer=paso == "calibrate")
+
+
 def _light(path: Path, *, bayer: bool = False) -> Path:
     """Light calibrado de mentira (FITS mínimo); ``bayer`` = CFA crudo."""
     path.parent.mkdir(parents=True, exist_ok=True)

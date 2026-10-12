@@ -35,6 +35,7 @@ Validado con SirIL 1.4.4 (gotchas en ``stacks/README.md``):
 SirIL usa todos los hilos disponibles por sí solo.
 """
 import json
+from collections import Counter
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -268,8 +269,13 @@ def _aplicar_transformadas(
                 "(transformadas de identidad): no hay salida drizzle posible."
             )
         raise SirilError(f"No se pudieron aplicar las transformadas: {res.motivo}")
-    if not list(registro.dir.glob("r_*.fit")):
+    salidas = list(registro.dir.glob("r_*.fit"))
+    if not salidas:
         raise SirilError("SirIL no generó ningún frame registrado (r_*).")
+    esperados = {f"r_{registro.seq}{i:05d}.fit"
+                 for i in range(1, len(registro.frames) + 1)}
+    if any(p.name not in esperados or not p.is_file() for p in salidas):
+        raise SirilError("SirIL generó salidas de registro mal nombradas o inválidas.")
     return registro
 
 
@@ -323,6 +329,9 @@ def _debayerizar(
             f"Debayer: SirIL generó {len(salidas)} ficheros de "
             f"{len(indices_cfa)} frames CFA."
         )
+    esperados = {f"pp_d_{i:05d}.fit" for i in range(1, len(indices_cfa) + 1)}
+    if {p.name for p in salidas} != esperados or any(not p.is_file() for p in salidas):
+        raise SirilError("Debayer: índices de salida mal nombrados o inválidos.")
     resultado = list(refs)
     for posicion, i in enumerate(indices_cfa):
         resultado[i] = replace(refs[i], ruta=salidas[posicion])
@@ -345,6 +354,11 @@ def _mapear(destino: Path, seq: str, refs: list[LightRef]) -> list[LightRef]:
     """
     por_destino = {ref.ruta.resolve(): ref for ref in refs}
     enlaces = sorted(destino.glob(f"{seq}*.fit"))
+    esperados = {f"{seq}{i:05d}.fit" for i in range(1, len(refs) + 1)}
+    if {p.name for p in enlaces} != esperados:
+        raise SirilError("Índices de registro incompletos o mal nombrados.")
+    if Counter(p.resolve() for p in enlaces) != Counter(r.ruta.resolve() for r in refs):
+        raise SirilError("Los enlaces de registro no corresponden uno a uno al pool.")
     try:
         return [por_destino[enlace.resolve()] for enlace in enlaces]
     except KeyError as exc:
