@@ -125,11 +125,14 @@ def hours_above_altitude(latitude_deg: float, dec_deg: float, min_alt_deg: float
     Devuelve 0 si nunca alcanza esa altura y 24 si siempre está sobre ella
     (círculo polar / objeto circumpolar sobre el umbral).
     """
-    cos_h = (
-        (math.sin(math.radians(min_alt_deg))
-         - math.sin(math.radians(latitude_deg)) * math.sin(math.radians(dec_deg)))
-        / (math.cos(math.radians(latitude_deg)) * math.cos(math.radians(dec_deg)))
-    )
+    fondo = math.sin(math.radians(latitude_deg)) * math.sin(math.radians(dec_deg))
+    amplitud = math.cos(math.radians(latitude_deg)) * math.cos(math.radians(dec_deg))
+    umbral = math.sin(math.radians(min_alt_deg))
+    if abs(amplitud) <= 1e-15:
+        # En los polos la altura es constante: el coseno residual de 90°
+        # no debe convertir una igualdad en un falso arco de doce horas.
+        return 24.0 if fondo - umbral > 1e-15 else 0.0
+    cos_h = (umbral - fondo) / amplitud
     if cos_h >= 1.0:
         return 0.0
     if cos_h <= -1.0:

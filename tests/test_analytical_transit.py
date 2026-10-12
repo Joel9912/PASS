@@ -69,6 +69,17 @@ def test_hours_above_altitude_decreases_with_stricter_threshold():
     assert low > high
 
 
+@pytest.mark.parametrize("lat,dec,altura", [
+    (90.0, 30.0, 30.0), (-90.0, -30.0, 30.0),
+    (30.0, 90.0, 30.0), (-30.0, -90.0, 30.0), (90.0, 0.0, 0.0),
+])
+def test_altitud_constante_en_polos_no_inventa_media_jornada(lat, dec, altura):
+    """P-0004: sin variación diaria hay 0 o 24 h, nunca 12 por redondeo."""
+    assert hours_above_altitude(lat, dec, altura) == 0.0
+    assert hours_above_altitude(lat, dec, altura - 1.0) == 24.0
+    assert hours_above_altitude(lat, dec, altura + 1.0) == 0.0
+
+
 def test_transit_time_is_a_valid_hour():
     """La hora de tránsito cae en [0, 24) y cambia poco de un día a otro."""
     first = transit_local_hours(M42_RA, "2026-10-01", MADRID_LON)
