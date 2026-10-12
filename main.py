@@ -1,6 +1,6 @@
 """PASS — Planning & Astronomical Stacking Suite.
 
-Entry point: ventana principal con las 6 pestañas del programa.
+Punto de entrada: ventana principal con las 6 pestañas del programa.
 """
 import sys
 
