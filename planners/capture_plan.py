@@ -299,6 +299,7 @@ def best_dates(
             curve.astro_night,
             item["_illumination_pct"],
             curve.hours_local,
+            sun_altitudes=getattr(curve, "sun_altitudes", None),
         )
         item["transit_local"] = format_hhmm(
             local_utc_offset(longitude, utc_offset_hours) + item["transit_utc_hours"]

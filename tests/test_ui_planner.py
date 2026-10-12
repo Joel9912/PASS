@@ -682,3 +682,26 @@ def test_curva_corta_posible_en_cruce_lunar_cinco_grados(qt_app):
     assert resumen["possible"]["hours"] == pytest.approx(0.5 / 60)
     assert resumen["possible"]["ranges"][0][1] == pytest.approx(22 + 0.5 / 60)
     curva.deleteLater()
+
+
+def test_curva_aplica_margen_nocturno_y_corte_del_amanecer(qt_app, monkeypatch):
+    """La gráfica consume alturas solares para cortar la noche y limitar Ideal."""
+    from types import SimpleNamespace
+
+    import pytest
+
+    from ui.planner_tab import widgets
+
+    curva = widgets.TransitCurve()
+    bandas = []
+    monkeypatch.setattr(curva._night_band, "set_spans", lambda spans: bandas.extend(spans))
+    datos = SimpleNamespace(
+        hours_local=[20, 20 + 10 / 60, 20 + 20 / 60], altitudes=[60] * 3,
+        moon_altitudes=[-5] * 3, moon_separations=[100] * 3, astro_night=[False, True, False],
+        sun_altitudes=[-17, -19, -17], moon_illumination=0.5, transit_index=1,
+    )
+    resumen = curva.show_curve(datos)
+    assert resumen.get("ideal", {}).get("hours", 0) == 0
+    assert resumen["possible"]["ranges"][0] == pytest.approx((20 + 5 / 60, 20 + 15 / 60))
+    assert bandas == pytest.approx([20 + 5 / 60, 20 + 15 / 60])
+    curva.deleteLater()

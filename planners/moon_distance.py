@@ -39,6 +39,9 @@ POSSIBLE_MOON_MARGIN = 10.0
 #: Margen lunar aprobado por el usuario, exclusivo de Captura Posible (<5°).
 POSSIBLE_LOW_MOON_ALTITUDE = 5.0
 
+#: Margen interno de noche astronómica aprobado por el usuario (horas).
+IDEAL_NIGHT_MARGIN_HOURS = 5 / 60
+
 #: Coeficientes del polinomio de grado 3 (de mayor a menor potencia).
 #: Ajustados por mínimos cuadrados a los datos del usuario.
 _POLY_COEFFS = (4.061e-05, -5.012e-03, 0.8861, 40.53)
@@ -139,18 +142,26 @@ def capture_windows(
 def capture_summary_from_samples(
     altitudes: list[float], moon_separations: list[float], moon_altitudes: list[float],
     astro_night_mask: list[bool], illumination_pct: float, hours: list[float],
+    *, sun_altitudes: list[float] | None = None,
 ) -> dict[str, dict]:
-    """Resume intervalos con cortes lunares interpolados, no minutos completos.
+    """Resume intervalos con cruces lunares y solares interpolados.
 
     Inserta los cruces de 0° y 5° y clasifica cada subintervalo en su punto
     medio. La interpolación lineal aproxima el cruce entre muestras; no es
     una efeméride exacta. Las demás magnitudes conservan la etiqueta temporal
-    de la muestra inicial, como el contrato de la malla original.
+    de la muestra inicial, como el contrato de la malla original. Con alturas
+    solares limita Ideal al interior de la noche, con margen de cinco minutos
+    en ambos extremos; los márgenes válidos quedan como Posible.
     """
     windows = capture_windows(altitudes, moon_separations, moon_altitudes,
                               astro_night_mask, illumination_pct)
     hours = unwrap_hours(hours)
     capture_window_summary(windows, hours)  # valida la malla antes de interpolar
+    if sun_altitudes is not None and (
+        len(sun_altitudes) != len(hours) or any(not math.isfinite(a) for a in sun_altitudes)
+    ):
+        raise ValueError("Las alturas solares deben ser finitas y corresponder a la malla.")
+    noches = astronomical_night_spans(hours, astro_night_mask, sun_altitudes)
     refined_hours = []
     refined_windows = []
     for i in range(len(hours) - 1):
@@ -161,17 +172,67 @@ def capture_summary_from_samples(
                 fraccion = (limite - luna) / (siguiente - luna)
                 if 0 < fraccion < 1:
                     cortes.append(fraccion)
-        cortes.sort()
+        for noche_inicio, noche_fin in noches:
+            for borde in (noche_inicio, noche_inicio + IDEAL_NIGHT_MARGIN_HOURS,
+                          noche_fin - IDEAL_NIGHT_MARGIN_HOURS, noche_fin):
+                fraccion = (borde - hours[i]) / (hours[i + 1] - hours[i])
+                if 0 < fraccion < 1:
+                    cortes.append(fraccion)
+        cortes = sorted(set(cortes))
         for inicio, fin in zip(cortes, cortes[1:]):
             refined_hours.append(hours[i] + inicio * (hours[i + 1] - hours[i]))
             lunar_alt = luna + (inicio + fin) / 2 * (siguiente - luna)
-            refined_windows.append(classify_instant(
-                altitudes[i], moon_separations[i], illumination_pct, lunar_alt,
-            ) if astro_night_mask[i] else WINDOW_NO_POSSIBLE)
+            medio = hours[i] + (inicio + fin) / 2 * (hours[i + 1] - hours[i])
+            noche = next((tramo for tramo in noches if tramo[0] <= medio < tramo[1]), None)
+            kind = classify_instant(altitudes[i], moon_separations[i], illumination_pct,
+                                    lunar_alt) if noche else WINDOW_NO_POSSIBLE
+            if kind == WINDOW_IDEAL and sun_altitudes is not None and not (
+                noche[0] + IDEAL_NIGHT_MARGIN_HOURS <= medio < noche[1] - IDEAL_NIGHT_MARGIN_HOURS
+            ):
+                kind = WINDOW_POSSIBLE
+            refined_windows.append(kind)
     if hours:
         refined_hours.append(hours[-1])
         refined_windows.append(windows[-1])
     return capture_window_summary(refined_windows, refined_hours)
+
+
+def astronomical_night_spans(
+    hours: list[float], mask: list[bool], sun_altitudes: list[float] | None,
+) -> list[tuple[float, float]]:
+    """Obtiene tramos nocturnos continuos, interpolando el cruce solar de -18°.
+
+    Sin alturas solares mantiene la compatibilidad de las mallas antiguas,
+    sin aplicar el margen ideal ni acreditar precisión en los bordes.
+    """
+    from planners.transit import ASTRO_TWILIGHT_DEG
+
+    hours = unwrap_hours(hours)
+    if len(mask) != len(hours) or (sun_altitudes is not None and len(sun_altitudes) != len(hours)):
+        raise ValueError("La malla solar y la máscara deben corresponder a las horas.")
+    tramos = []
+    for i in range(len(hours) - 1):
+        inicio, fin = hours[i:i + 2]
+        if sun_altitudes is None:
+            if not mask[i]:
+                continue
+        else:
+            a, b = sun_altitudes[i:i + 2]
+            if a >= ASTRO_TWILIGHT_DEG and b >= ASTRO_TWILIGHT_DEG:
+                continue
+            if (a < ASTRO_TWILIGHT_DEG) != (b < ASTRO_TWILIGHT_DEG):
+                cruce = inicio + (ASTRO_TWILIGHT_DEG - a) / (b - a) * (fin - inicio)
+                if a < ASTRO_TWILIGHT_DEG:
+                    fin = cruce
+                else:
+                    inicio = cruce
+        if fin <= inicio:
+            continue
+        if tramos and math.isclose(tramos[-1][1], inicio, rel_tol=0, abs_tol=1e-9):
+            tramos[-1] = (tramos[-1][0], fin)
+        else:
+            tramos.append((inicio, fin))
+    return tramos
 
 
 def capture_window_summary(

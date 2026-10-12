@@ -118,6 +118,7 @@ class NightCurve:
     - ``astro_night``: True si el sol está bajo -18° (noche astronómica).
     - ``moon_illumination``: fracción iluminada (0-1) en el centro de la noche.
     - ``transit_index``: índice del punto de culminación.
+    - ``sun_altitudes``: alturas solares para interpolar los bordes nocturnos.
     """
 
     times_iso: list[str]
@@ -128,6 +129,7 @@ class NightCurve:
     astro_night: list[bool]
     moon_illumination: float
     transit_index: int
+    sun_altitudes: list[float] | None = None
 
     @property
     def transit_time(self) -> str:
@@ -312,6 +314,7 @@ def night_curve(
         astro_night=[bool(alt < ASTRO_TWILIGHT_DEG) for alt in sun_alt],
         moon_illumination=round(illumination, 3),
         transit_index=int(np.argmax(alts)),
+        sun_altitudes=[float(a) for a in sun_alt],
     )
 
 

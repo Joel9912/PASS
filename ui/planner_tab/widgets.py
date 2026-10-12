@@ -49,6 +49,7 @@ from planners.analytical_transit import local_utc_offset
 from planners.moon_distance import (
     WINDOW_IDEAL,
     WINDOW_POSSIBLE,
+    astronomical_night_spans,
     capture_summary_from_samples,
     format_hour_range,
     min_moon_distance,
@@ -1543,6 +1544,7 @@ class TransitCurve(QWidget):
             curve.astro_night,
             illumination_pct,
             hours,
+            sun_altitudes=getattr(curve, "sun_altitudes", None),
         )
 
         # --- Cabecera (título fijo; el subtítulo resume el tránsito)
@@ -1565,7 +1567,11 @@ class TransitCurve(QWidget):
         self._moon_curve.setData(hours, curve.moon_altitudes)
 
         # --- Bandas
-        self._night_band.set_spans(_contiguous_spans(hours, curve.astro_night))
+        solares = getattr(curve, "sun_altitudes", None)
+        self._night_band.set_spans(
+            [h for tramo in astronomical_night_spans(hours, curve.astro_night, solares) for h in tramo]
+            if solares is not None else _contiguous_spans(hours, curve.astro_night)
+        )
         self._possible_band.set_spans(
             [h for tramo in summary.get(WINDOW_POSSIBLE, {}).get("ranges", []) for h in tramo]
         )

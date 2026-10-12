@@ -122,6 +122,36 @@ def test_salida_lunar_reparte_ideal_y_posible_sin_exceso():
     assert sum(s["hours"] for s in resumen.values()) == pytest.approx(11 / 60)
 
 
+@pytest.mark.parametrize("inicio", [20.0, 23.75])
+def test_margen_ideal_interno_y_corte_solar(inicio):
+    """Los cinco minutos interiores son Posible, sin contar crepúsculo ni día."""
+    from planners.moon_distance import capture_summary_from_samples
+
+    resumen = capture_summary_from_samples(
+        [60] * 4, [100] * 4, [-5] * 4, [False, True, True, False], 50,
+        [(inicio + m / 60) % 24 for m in (0, 10, 30, 40)],
+        sun_altitudes=[-17, -19, -19, -17],
+    )
+    assert resumen[WINDOW_IDEAL]["ranges"][0] == pytest.approx((inicio + 10 / 60, inicio + 30 / 60))
+    assert resumen[WINDOW_POSSIBLE]["ranges"][0] == pytest.approx((inicio + 5 / 60, inicio + 10 / 60))
+    assert resumen[WINDOW_POSSIBLE]["ranges"][1] == pytest.approx((inicio + 30 / 60, inicio + 35 / 60))
+    assert resumen[WINDOW_IDEAL]["hours"] == pytest.approx(20 / 60)
+    assert resumen[WINDOW_POSSIBLE]["hours"] == pytest.approx(10 / 60)
+
+
+@pytest.mark.parametrize("altitud", [29, 60])
+def test_margen_no_inventa_captura_en_noche_corta(altitud):
+    """Una noche de diez minutos no tiene Ideal; objeto bajo no tiene Posible."""
+    from planners.moon_distance import capture_summary_from_samples
+
+    resumen = capture_summary_from_samples(
+        [altitud] * 3, [100] * 3, [-5] * 3, [False, True, False], 50,
+        [20, 20 + 10 / 60, 20 + 20 / 60], sun_altitudes=[-17, -19, -17],
+    )
+    assert resumen.get(WINDOW_IDEAL, {}).get("hours", 0) == 0
+    assert resumen.get(WINDOW_POSSIBLE, {}).get("hours", 0) == pytest.approx(10 / 60 if altitud == 60 else 0)
+
+
 def test_capture_windows_only_classifies_astro_night():
     """Fuera de la noche astronómica todo queda en no_possible."""
     windows = capture_windows(
