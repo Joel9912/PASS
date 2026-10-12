@@ -1,1 +1,1 @@
-"""Gestión de equipos y localizaciones de PASS."""
+"""Gestión de piezas, setups y localizaciones de PASS."""
