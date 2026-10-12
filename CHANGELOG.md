@@ -15,6 +15,7 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 ### Corregido
 - Al guardar o borrar una pieza de componente desde un rol, el otro rol que usaba esa misma pieza (por ejemplo, la misma cámara como Principal y como Guía) refresca su formulario y la suma de la cabecera deja de contar el precio viejo (E-0003).
 - Crear, editar o borrar un filtro global repinta al instante el total del equipo en la cabecera, sin esperar a otra interacción (E-0004).
+- Reabrir el panel de Contaminación Lumínica de una dirección con una fuente a más de 100 km ya no la recorta: el límite de 100 km se mantiene solo para fuentes nuevas (E-0007).
 - Búsqueda de un objeto por designación: se aceptan alias como `m31`, `ngc224` o `IC  001`; los alias numéricos NGC/IC/Messier resuelven por su número de cruce (P-0007).
 - El orden «Tránsito» de Búsqueda ya no recorta la lista por magnitud antes de ordenar: el límite se aplica después de calcular los tránsitos, así que se ven los objetos cuya culminación cae antes (P-0005).
 - Cancelar una tarea del Apilador que no usa SirIL (escaneo, auditoría) la corta en su siguiente paso de progreso o log, en vez de dejarla correr hasta el final mientras el cierre esperaba (S-0012).
