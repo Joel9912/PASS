@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **93 hallazgos**: 🔴 18 graves · 🟠 48 medios · 🟡 18 bajos · 9 decisiones (8 pendientes).
-Estado: ✅ 47 corregidos · 🟡 5 contenidos · ⏳ 26 pendientes · 🔎 6 sin reproducir.
+Estado: ✅ 49 corregidos · 🟡 5 contenidos · ⏳ 24 pendientes · 🔎 6 sin reproducir.
 
 ---
 
@@ -68,8 +68,8 @@ Estado: ✅ 47 corregidos · 🟡 5 contenidos · ⏳ 26 pendientes · 🔎 6 si
 | **S-0015** | Un `EXPTIME` textual puede hacer fallar el escaneo completo de la sesión. | ✅ `ab37304` |
 | **S-0016** | `exportar_apilados` acepta un origen arbitrario por API aunque la UI pase la carpeta de trabajo. | ✅ `f09085f` (origen acotado y resuelto) |
 | **S-0020** | La limpieza de salidas anteriores podía dejar restos y la corrida nueva los mezclaba con sus resultados. | ✅ `4e1e5c0` |
-| **E-0003** | Una pieza usada en dos roles deja el formulario y los totales desactualizados tras editar o borrar. | ⏳ |
-| **E-0004** | El precio de un filtro editado no repinta el total hasta otra interacción. | ⏳ |
+| **E-0003** | Una pieza usada en dos roles deja el formulario y los totales desactualizados tras editar o borrar. | ✅ `dbc82e4` |
+| **E-0004** | El precio de un filtro editado no repinta el total hasta otra interacción. | ✅ `dbc82e4` |
 | **E-0005** | `NaN`/infinito y precio o peso negativos no se filtran antes de persistir un setup. | ✅ `a491664` |
 | **E-0006** | Bortle/SQM no cambia el color base del disco en la rosacea. | ⏳ |
 | **E-0007** | Una fuente de Claridad de Luz >100 km se trunca en el slider al editar otra propiedad. | ⏳ |
