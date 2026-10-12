@@ -107,6 +107,118 @@ def test_descarga_truncada_no_se_cachea(tmp_path, monkeypatch, tap):
     assert not list(tmp_path.iterdir())
 
 
+@pytest.mark.parametrize("tap", [False, True])
+@pytest.mark.parametrize("previo", [False, True])
+def test_sin_longitud_rechaza_carga(tmp_path, memory_db, monkeypatch, tap, previo):
+    """B-0003: sin longitud verificable no hay primera carga ni sustitución."""
+    if previo:
+        memory_db.execute("INSERT INTO catalog(object_id, catalog) VALUES ('LDN 1', 'ldn')")
+        memory_db.commit()
+    modulo = ldn_loader if tap else catalog_loader
+    monkeypatch.setattr(modulo, "CACHE_DIR", tmp_path)
+
+    class Respuesta:
+        """Servidor sin longitud; las filas completas no prueban integridad."""
+
+        def __init__(self):
+            """No aporta una longitud verificable."""
+            self.headers = {}
+
+        def __enter__(self):
+            """Abre el contexto simulado."""
+            return self
+
+        def __exit__(self, *args):
+            """Propaga errores del lector."""
+            return False
+
+        def read(self):
+            """Entrega un CSV legible que podría estar cortado entre filas."""
+            if tap:
+                return (TAP_HEADER + "\n621,281.875,3.2,1,4\n").encode()
+            header = ["Name", "Type", "RA", "Dec"] + [f"c{i}" for i in range(4, 29)]
+            fila = ["NGC0001", "G", "00:01:00", "+01:00:00"] + [""] * 25
+            return (";".join(header) + "\n" + ";".join(fila) + "\n").encode()
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: Respuesta())
+    with pytest.raises(ValueError, match="verificar"):
+        if tap:
+            ldn_loader.load_ldn()
+        else:
+            catalog_loader.load_catalog()
+    assert memory_db.execute("SELECT COUNT(*) FROM catalog").fetchone()[0] == int(previo)
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("tap", [False, True])
+@pytest.mark.parametrize("estado", ["sin_prueba", "cortada", "mismo_tamano"])
+def test_cache_no_verificada_no_se_acepta(tmp_path, monkeypatch, tap, estado):
+    """B-0003: caché antigua, truncada o alterada exige una descarga verificada."""
+    modulo = ldn_loader if tap else catalog_loader
+    monkeypatch.setattr(modulo, "CACHE_DIR", tmp_path)
+    target = tmp_path / "ldn.csv"
+    original = b"LDN,RA\n1,2\n"
+    if estado == "sin_prueba":
+        target.write_bytes(original)
+    else:
+        ldn_loader.guardar_cache_verificada(target, original)
+        target.write_bytes(original[:-4] if estado == "cortada" else original.replace(b"1", b"9"))
+
+    def rechazar_red(*args, **kwargs):
+        """Detecta que no se reutilizó una caché sin prueba válida."""
+        raise OSError("red no disponible")
+
+    monkeypatch.setattr(urllib.request, "urlopen", rechazar_red)
+    with pytest.raises(OSError, match="red no disponible"):
+        if tap:
+            ldn_loader._download_tap("consulta", "ldn.csv")
+        else:
+            catalog_loader._download("https://ejemplo/ldn.csv")
+
+
+def test_cache_verificada_se_reutiliza(tmp_path, monkeypatch):
+    """Una caché con tamaño y huella válidos sigue utilizable sin red."""
+    target = tmp_path / "ldn.csv"
+    data = b"LDN,RA\n1,2\n"
+    ldn_loader.guardar_cache_verificada(target, data)
+    monkeypatch.setattr(ldn_loader, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: pytest.fail("No debe descargar"))
+    assert ldn_loader._download_tap("consulta", "ldn.csv") == data
+
+
+@pytest.mark.parametrize("tap", [False, True])
+def test_descarga_completa_registra_prueba(tmp_path, monkeypatch, tap):
+    """El lector verifica la longitud y registra una caché reutilizable."""
+    data = b"LDN,RA\n1,2\n"
+
+    class Respuesta:
+        """Respuesta completa con longitud HTTP coincidente."""
+
+        def __init__(self):
+            """Anuncia el tamaño completo del cuerpo."""
+            self.headers = {"Content-Length": str(len(data))}
+
+        def __enter__(self):
+            """Abre el contexto de respuesta."""
+            return self
+
+        def __exit__(self, *args):
+            """Propaga errores de descarga."""
+            return False
+
+        def read(self):
+            """Devuelve todos los bytes anunciados."""
+            return data
+
+    modulo = ldn_loader if tap else catalog_loader
+    monkeypatch.setattr(modulo, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: Respuesta())
+    resultado = (ldn_loader._download_tap("consulta", "ldn.csv") if tap
+                 else catalog_loader._download("https://ejemplo/ldn.csv"))
+    assert resultado == data
+    assert ldn_loader.leer_cache_verificada(tmp_path / "ldn.csv") == data
+
+
 def test_parse_ldn_rows_builds_catalog_rows():
     """Cada LDN pasa a fila de catalog con RA en horas (J2000 grados/15)."""
     csv_text = (

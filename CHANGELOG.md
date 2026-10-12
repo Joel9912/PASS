@@ -13,6 +13,7 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 - Captura Ideal reserva al menos cinco minutos dentro de ambos extremos de la noche astronómica; los márgenes válidos quedan como Posible.
 
 ### Corregido
+- Catálogos: se rechazan descargas sin longitud verificable, incluso en la primera carga; se conserva la base anterior. Las cachés requieren tamaño y huella SHA-256 registrados tras una transferencia comprobada; una caché antigua o alterada exige volver a descargar (B-0003).
 - Las horas sobre una altura mínima ya no inventan doce horas cuando el observador o el objeto está exactamente en un polo y la altura es constante (P-0004).
 - Las pruebas fuerzan el modo offscreen aunque el entorno tenga otra plataforma Qt configurada (T-0007).
 - Calibración: las carpetas incompletas ya no bloquean reintentos. Al comenzar se eliminan restos fallidos y salidas de sesiones ajenas al último escaneo, incluso calibraciones correctas; se conservan los éxitos actuales y el material global compartido. Limpieza limitada al trabajo de PASS, con rechazo de enlaces y solapes con originales (S-0009).

@@ -20,7 +20,9 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import math
+from hashlib import sha256
 from pathlib import Path
 
 from db.connection import get_connection
@@ -45,10 +47,12 @@ def _download_tap(query: str, cache_name: str) -> bytes:
     """Ejecuta una consulta ADQL por TAP con caché local en ``cache_name``."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     target = CACHE_DIR / cache_name
-    if target.exists() and target.stat().st_size > 0:
-        return target.read_bytes()
+    cached = leer_cache_verificada(target)
+    if cached is not None:
+        return cached
 
     import urllib.parse
+    import urllib.request
 
     payload = urllib.parse.urlencode(
         {"REQUEST": "doQuery", "LANG": "ADQL", "FORMAT": "csv", "QUERY": query}
@@ -58,17 +62,43 @@ def _download_tap(query: str, cache_name: str) -> bytes:
     )
     with urllib.request.urlopen(request, timeout=120) as response:
         data = leer_respuesta(response)
-    target.write_bytes(data)
+    guardar_cache_verificada(target, data)
     return data
 
 
 def leer_respuesta(response) -> bytes:
-    """Lee el cuerpo HTTP y comprueba la longitud anunciada antes de cachearlo."""
+    """Exige longitud HTTP comprobable antes de aceptar incluso la primera carga."""
     data = response.read()
     longitud = response.headers.get("Content-Length")
-    if not data or (longitud is not None and len(data) != int(longitud)):
+    if longitud is None:
+        raise ValueError("No se puede verificar la descarga: el servidor no anuncia su longitud.")
+    if not data or len(data) != int(longitud):
         raise ValueError("Descarga vacía o incompleta del catálogo.")
     return data
+
+
+def leer_cache_verificada(target: Path) -> bytes | None:
+    """Reutiliza solo una caché con longitud y huella registradas tras verificar HTTP."""
+    prueba = target.with_name(target.name + ".integrity.json")
+    try:
+        datos = target.read_bytes()
+        metadata = json.loads(prueba.read_text(encoding="utf-8"))
+        if (isinstance(metadata, dict) and datos
+                and metadata.get("size") == len(datos)
+                and metadata.get("sha256") == sha256(datos).hexdigest()):
+            return datos
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def guardar_cache_verificada(target: Path, data: bytes) -> None:
+    """Registra huella y tamaño tras una descarga comprobada; una pareja rota no se usa."""
+    target.write_bytes(data)
+    target.with_name(target.name + ".integrity.json").write_text(
+        json.dumps({"size": len(data), "sha256": sha256(data).hexdigest()}),
+        encoding="utf-8",
+    )
 
 
 def _float_or_none(value: str | None) -> float | None:

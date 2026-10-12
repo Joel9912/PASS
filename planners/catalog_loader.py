@@ -49,12 +49,13 @@ def _download(url: str) -> bytes:
     """Descarga ``url`` con caché local: si el fichero ya existe, lo reutiliza."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     target = CACHE_DIR / url.rsplit("/", 1)[-1]
-    if target.exists() and target.stat().st_size > 0:
-        return target.read_bytes()
+    cached = ldn_loader.leer_cache_verificada(target)
+    if cached is not None:
+        return cached
     request = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
     with urllib.request.urlopen(request, timeout=120) as response:
         data = ldn_loader.leer_respuesta(response)
-    target.write_bytes(data)
+    ldn_loader.guardar_cache_verificada(target, data)
     return data
 
 
