@@ -7,6 +7,7 @@ Cambios relevantes para quienes usan PASS. Los detalles de implementación y cad
 Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado**; se completará cuando se apruebe el lanzamiento.
 
 ### Corregido
+- Los cruces lunares de 0° y 5° se interpolan entre muestras para no contar el minuto entero con condiciones caducadas. Captura Posible admite Luna a menos de 5° aun con separación insuficiente, según el criterio del usuario; Captura Ideal mantiene sus requisitos (P-0013).
 - El conteo de Captura Ideal usa bloques completos de cinco minutos y Captura Posible recoge los restos válidos sin huecos artificiales. Las bandas coinciden con el resumen y la última muestra no añade tiempo fuera de la curva (P-0008).
 - Los setups rechazan precios y pesos negativos o no finitos antes de crear o editar; las piezas también rechazan NaN e infinitos en esos campos (E-0005).
 - El plan de captura reconoce las culminaciones de la madrugada del día UTC vecino y evita evaluar la separación lunar en un tránsito diurno cuando hay bordes nocturnos. Se conserva la puntuación provisional hasta el rediseño por tiempo útil ideal (P-0001, P-0003, P-0009).
