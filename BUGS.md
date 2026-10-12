@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **93 hallazgos**: 🔴 18 graves · 🟠 48 medios · 🟡 18 bajos · 9 decisiones (8 pendientes).
-Estado: ✅ 42 corregidos · 🟡 5 contenidos · ⏳ 31 pendientes · 🔎 6 sin reproducir.
+Estado: ✅ 43 corregidos · 🟡 5 contenidos · ⏳ 30 pendientes · 🔎 6 sin reproducir.
 
 ---
 
@@ -66,7 +66,7 @@ Estado: ✅ 42 corregidos · 🟡 5 contenidos · ⏳ 31 pendientes · 🔎 6 si
 | **S-0013** | Un error al escribir en stdin podría dejar un hijo de SirIL vivo. | 🔎 sin reproducir |
 | **S-0014** | Solo se valida el primer FITS como 16-bit; el resto de la sesión se asume correcto. | ✅ `497637a` |
 | **S-0015** | Un `EXPTIME` textual puede hacer fallar el escaneo completo de la sesión. | ✅ `ab37304` |
-| **S-0016** | `exportar_apilados` acepta un origen arbitrario por API aunque la UI pase la carpeta de trabajo. | ⏳ |
+| **S-0016** | `exportar_apilados` acepta un origen arbitrario por API aunque la UI pase la carpeta de trabajo. | ✅ `f09085f` (origen acotado y resuelto) |
 | **S-0020** | La limpieza de salidas anteriores podía dejar restos y la corrida nueva los mezclaba con sus resultados. | ✅ `4e1e5c0` |
 | **E-0003** | Una pieza usada en dos roles deja el formulario y los totales desactualizados tras editar o borrar. | ⏳ |
 | **E-0004** | El precio de un filtro editado no repinta el total hasta otra interacción. | ⏳ |

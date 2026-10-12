@@ -13,6 +13,7 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 - Captura Ideal reserva al menos cinco minutos dentro de ambos extremos de la noche astronómica; los márgenes válidos quedan como Posible.
 
 ### Corregido
+- La exportación del apilado solo copia ficheros generados por PASS dentro de su carpeta de trabajo; un origen ajeno o un enlace que escapa no se copia (S-0016).
 - La comprobación de 16 bits revisa todos los FITS de la secuencia, no solo el primero, e identifica el fichero incompatible antes de calibrarlo (S-0014).
 - La calibración rechaza una misma secuencia con RAW y FITS mezclados antes de crear enlaces o invocar SirIL, evitando que parte de las tomas quede ignorada (S-0008).
 - Una exposición FITS textual inválida no aborta la lectura; se busca un alias válido y, si falta, queda desconocida. Se rechazan segundos no finitos o no positivos (S-0015).
