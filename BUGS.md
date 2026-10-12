@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **93 hallazgos**: 🔴 18 graves · 🟠 48 medios · 🟡 18 bajos · 9 decisiones (8 pendientes).
-Estado: ✅ 59 corregidos · 🟡 5 contenidos · ⏳ 14 pendientes · 🔎 6 sin reproducir.
+Estado: ✅ 60 corregidos · 🟡 5 contenidos · ⏳ 13 pendientes · 🔎 6 sin reproducir.
 
 ---
 
@@ -98,7 +98,7 @@ Estado: ✅ 59 corregidos · 🟡 5 contenidos · ⏳ 14 pendientes · 🔎 6 si
 | **T-0004** | Fixtures que usan red o estrellas reales: inestables según el día y la ubicación. | ⏳ |
 | **T-0005** | Symlinks en fixtures: no portables en Windows. | ⏳ |
 | **T-0006** | Tests con geometría dependiente de temporizadores o DPI de la pantalla. | ⏳ |
-| **T-0007** | El modo offscreen se activa con `setdefault` y puede no aplicarse. | ⏳ |
+| **T-0007** | El modo offscreen se activa con `setdefault` y puede no aplicarse. | ✅ `8930f6d` |
 | **X-0001** | El README raíz contradice la GPL al prohibir la venta. | ✅ `18c384e` |
 | **X-0002** | El README raíz describe un ranking de objetos que no existe. | ✅ `18c384e` |
 | **X-0003** | El README raíz presenta el Planetario como dependiente de red. | ✅ `18c384e` |
