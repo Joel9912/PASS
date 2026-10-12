@@ -426,6 +426,38 @@ def test_search_sort_by_size_and_name(loaded_db):
     assert names == sorted(names)
 
 
+def test_search_transit_limit_no_ventana_de_magnitud(memory_db):
+    """P-0005: el límite se aplica tras ordenar por tránsito, no antes.
+
+    El ``LIMIT`` corría en SQL sobre el orden por magnitud y el reordenado
+    por tránsito llegaba tarde: con «Tránsito» y límite 2 se veían M31 y
+    M42 (los dos más brillantes) en lugar de M31 y M1 (los dos cuya
+    culminación cae antes). El tránsito local es el mismo para todos.
+    """
+    from planners.celestial_search import SearchFilters, search
+
+    memory_db.executemany(
+        "INSERT INTO catalog (object_id, catalog, messier_num, name, type,"
+        " magnitude, ra_hours, dec_deg, constellation)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            ("M31", "messier", 31, "Andromeda Galaxy", "G", 3.44, 0.712, 41.27, "And"),
+            ("M42", "messier", 42, "Orion Nebula", "Neb", 4.0, 8.76, -5.39, "Ori"),
+            ("M1", "messier", 1, "Crab Nebula", "Neb", 8.4, 5.575, 22.02, "Tau"),
+        ],
+    )
+    filtros = SearchFilters(
+        catalogs=["messier"], sort_by="transit",
+        latitude=40.4, longitude=-3.7, date_iso="2026-10-02", utc_offset_hours=2.0,
+    )
+
+    filas = search(filtros, limit=2)
+
+    # M31 (02:14) y M1 (07:05) antes que M42 (10:16), pese a que M1 es la
+    # más tenue de las tres y el orden por magnitud la dejaba fuera.
+    assert [fila["object_id"] for fila in filas] == ["M31", "M1"]
+
+
 # ------------------------------------------------------------------ tránsito
 def test_night_info_winter_madrid():
     """Invierno en Madrid: noche astronómica larga y fase entre 0 y 1."""

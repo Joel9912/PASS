@@ -181,7 +181,9 @@ def search(filters: SearchFilters, limit: int = DEFAULT_LIMIT) -> list[dict]:
 
     El filtro de altitud mínima se traduce a una ventana de declinación en
     SQL (``90 − |lat − dec| >= mín``), de modo que respeta ``limit``. El
-    orden por tránsito y las columnas analíticas se calculan en Python.
+    orden por tránsito y las columnas analíticas se calculan en Python: en
+    ese orden el ``limit`` también se aplica allí, porque el tránsito no
+    vive en la tabla y una ventana SQL por magnitud desplazaría el resultado.
     """
     where: list[str] = ["1=1"]
     params: list = []
@@ -237,20 +239,28 @@ def search(filters: SearchFilters, limit: int = DEFAULT_LIMIT) -> list[dict]:
         " constellation"
         " FROM catalog WHERE " + " AND ".join(where) +
         f" ORDER BY {_order_clause(filters.sort_by)}"
-        " LIMIT ?"
     )
-    params.append(limit)
+    if filters.sort_by != "transit":
+        # El tránsito no está en la tabla: limitar antes desplazaría el
+        # resultado, así que ese orden corta al final, en Python.
+        sql += " LIMIT ?"
+        params.append(limit)
     conn = get_connection()
     rows = [dict(row) for row in conn.execute(sql, params)]
 
     _annotate_transit(rows, filters)
 
-    if filters.sort_by == "transit" and filters.latitude is not None:
-        # Orden "de más tarde a más temprano" no sirve: se ordena por cercanía
-        # al mediodía local para ver primero lo que está disponible al anochecer.
-        rows.sort(key=lambda row: (row["transit_local"] or "99:99"))
-    elif filters.sort_by == "transit":
-        rows.sort(key=lambda row: (row["max_altitude"] is None, -(row["max_altitude"] or 0)))
+    if filters.sort_by == "transit":
+        if filters.latitude is not None:
+            # Orden "de más tarde a más temprano" no sirve: se ordena por
+            # cercanía al mediodía local para ver primero lo que está
+            # disponible al anochecer.
+            rows.sort(key=lambda row: (row["transit_local"] or "99:99"))
+        else:
+            rows.sort(key=lambda row: (
+                row["max_altitude"] is None, -(row["max_altitude"] or 0)
+            ))
+        rows = rows[: max(1, limit)]
 
     return rows
 
