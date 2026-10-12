@@ -186,6 +186,10 @@ class ConfigDialog(QDialog):
         form = QFormLayout()
         form.setSpacing(6)
         self._siril_path = QLineEdit()
+        self._siril_path.textChanged.connect(self._on_siril_path_changed)
+        self._siril_path.editingFinished.connect(
+            lambda: self._check_siril(self._siril_path.text().strip())
+        )
         self._siril_path.setPlaceholderText(r"C:\Program Files\Siril\bin\siril-cli.exe")
         form.addRow("Ruta al ejecutable:", self._field_row(self._siril_path, self._browse_siril))
         self._siril_status = QLabel("")
@@ -339,6 +343,10 @@ class ConfigDialog(QDialog):
         self._sampling_over.setValue(get_float("sampling_over_ratio", 0.5))
         self._sampling_light.setValue(get_float("sampling_light_factor", 1.4))
         self._check_siril(path)
+
+    def _on_siril_path_changed(self, _text: str) -> None:
+        """Retira el estado anterior al editar; la sonda espera al fin de edición."""
+        self._set_siril_status("Ruta modificada: pendiente de comprobación.", _WARN)
 
     def _check_siril(self, path: str) -> None:
         """«✓ detectado y operativo» con la versión real, **sin congelar la UI**.

@@ -42,6 +42,24 @@ def test_config_dialog_check_is_async(tmp_path, monkeypatch):
     cd._BRIDGE.checked.disconnect(dialog._on_siril_result)
 
 
+def test_config_ruta_editada_invalida_estado(qt_app, tmp_path, monkeypatch):
+    """C-0003: editar la ruta retira el éxito previo y comprueba al terminar."""
+    fake = tmp_path / "siril-cli.exe"
+    fake.write_text("", encoding="utf-8")
+    cd, dialog, probed = _config_dialog(monkeypatch, str(fake))
+    dialog._on_siril_result(str(fake), "siril 1.4.4")
+    dialog._siril_path.setText(str(tmp_path / "ausente.exe"))
+    assert "✓" not in dialog._siril_status.text()
+    dialog._siril_path.editingFinished.emit()
+    assert "no existe" in dialog._siril_status.text()
+    dialog._siril_path.setText(str(fake))
+    dialog._siril_path.editingFinished.emit()
+    assert probed == [str(fake), str(fake)]
+    assert "Comprobando" in dialog._siril_status.text()
+    cd._BRIDGE.checked.disconnect(dialog._on_siril_result)
+    dialog.deleteLater()
+
+
 def test_config_dialog_no_siril_warns_instantly(monkeypatch):
     """Sin SirIL el aviso sale ya mismo: ni hilo ni subproceso."""
     cd, dialog, probed = _config_dialog(monkeypatch, None)
