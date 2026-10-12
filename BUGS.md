@@ -24,8 +24,8 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 
 ## Resumen
 
-**90 hallazgos**: 🔴 17 graves · 🟠 46 medios · 🟡 18 bajos · 9 pendientes de decisión.
-Estado: ✅ 32 corregidos · 🟡 3 contenidos · ⏳ 40 pendientes · 🔎 6 sin reproducir.
+**91 hallazgos**: 🔴 18 graves · 🟠 46 medios · 🟡 18 bajos · 9 pendientes de decisión.
+Estado: ✅ 33 corregidos · 🟡 4 contenidos · ⏳ 39 pendientes · 🔎 6 sin reproducir.
 
 ---
 
@@ -42,7 +42,8 @@ Estado: ✅ 32 corregidos · 🟡 3 contenidos · ⏳ 40 pendientes · 🔎 6 si
 | **S-0007** | Filtros con nombres normalizados idénticos sobrescriben el mismo canal. | ✅ `69f1c19` |
 | **B-0001** | La migración de BD v1 hacía `DROP COLUMN` sobre `telescope_name` poblado, perdiendo el dato del usuario. | 🟡 `264b5d0` (contenida; la migración espera a una decisión) |
 | **B-0002** | Una conexión SQLite cuyo esquema fallaba quedaba publicada y era reutilizable en el proceso. | ✅ `e3993a7` |
-| **B-0003** | Una descarga del catálogo vacía o truncada se validaba, borraba y confirmaba el catálogo del usuario. | ⏳ |
+| **B-0003** | Una descarga del catálogo vacía o truncada se validaba, borraba y confirmaba el catálogo del usuario. | 🟡 `0da9548` (validación y rollback; falta integridad de cortes entre filas completas) |
+| **B-0009** | Refrescar OpenNGC eliminaba los LDN previamente cargados aunque no se refrescara ese catálogo. | ✅ `0da9548` |
 | **E-0001** | Dos adjuntos con el mismo nombre se sobrescribían al guardarlos en una entidad de Equipo. | ✅ `ec6d2ee` |
 | **E-0002** | Un filtro inexistente confirmaba el equipo y la imagen antes de que la FK fallara (estado a medias en BD). | 🟡 `183b2b1` (contenida; falta transacción global) |
 | **P-0001** | El tránsito UTC del día vecino puede puntuar con la Luna o la altura de la fecha equivocada. | ⏳ |

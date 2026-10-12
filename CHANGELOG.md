@@ -7,6 +7,8 @@ Cambios relevantes para quienes usan PASS. Los detalles de implementación y cad
 Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado**; se completará cuando se apruebe el lanzamiento.
 
 ### Corregido
+- Las descargas vacías o con CSV incompleto ya no sustituyen el catálogo válido; se comprueba la longitud HTTP cuando está disponible y los errores de inserción revierten el refresco (B-0003, protección parcial).
+- Refrescar OpenNGC ya no elimina las nebulosas LDN previamente cargadas (B-0009).
 - Los lights homónimos de filtros distintos conservan referencias independientes al calibrar (S-0004).
 - Registro y debayer rechazan índices incompletos, duplicados o mal nombrados en lugar de atribuir datos a otro frame (S-0005).
 - Los filtros que generan el mismo nombre de canal, incluso por mayúsculas en Windows, ya no sobrescriben sus pilas (S-0007).
