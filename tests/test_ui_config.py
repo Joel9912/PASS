@@ -60,6 +60,60 @@ def test_config_ruta_editada_invalida_estado(qt_app, tmp_path, monkeypatch):
     dialog.deleteLater()
 
 
+def test_config_limites_invertidos_no_guardan(qt_app, memory_db, monkeypatch):
+    """C-0001: límites invertidos avisan sin persistir ni emitir éxito."""
+    from db.settings import get_setting, set_setting
+
+    set_setting("project_root", "anterior")
+    cd, dialog, _ = _config_dialog(monkeypatch, None)
+    dialog._project_root.setText("nuevo")
+    dialog._sampling_over.setValue(2.0)
+    dialog._sampling_under.setValue(1.0)
+    avisos, exitos = [], []
+    monkeypatch.setattr(cd.QMessageBox, "warning", lambda *args: avisos.append(args))
+    monkeypatch.setattr(cd.QMessageBox, "information", lambda *args: exitos.append(args))
+    dialog.saved.connect(lambda: exitos.append(True))
+    dialog._save()
+    assert avisos
+    assert not exitos
+    assert get_setting("project_root") == "anterior"
+    assert dialog._sampling_over.value() == 2.0
+    dialog._sampling_over.setValue(1.0)
+    dialog._save()
+    assert get_setting("project_root") == "nuevo"
+    assert exitos
+    cd._BRIDGE.checked.disconnect(dialog._on_siril_result)
+    dialog.deleteLater()
+
+
+def test_config_fallo_intermedio_revierte_todo(qt_app, memory_db, monkeypatch):
+    """C-0002: un fallo SQLite conserva todas las claves y no anuncia éxito."""
+    from db.settings import get_setting, set_setting
+
+    set_setting("project_root", "anterior")
+    set_setting("siril_path", "ruta anterior")
+    memory_db.execute("""CREATE TRIGGER rechazar_clima BEFORE INSERT ON settings
+        WHEN NEW.key = 'meteoblue_api_key'
+        BEGIN SELECT RAISE(ABORT, 'fallo simulado'); END""")
+    memory_db.commit()
+    cd, dialog, _ = _config_dialog(monkeypatch, None)
+    dialog._project_root.setText("nuevo")
+    avisos, exitos = [], []
+    monkeypatch.setattr(cd.QMessageBox, "warning", lambda *args: avisos.append(args))
+    monkeypatch.setattr(cd.QMessageBox, "information", lambda *args: exitos.append(args))
+    dialog.saved.connect(lambda: exitos.append(True))
+    dialog._save()
+    assert avisos
+    assert not exitos
+    assert get_setting("project_root") == "anterior"
+    assert get_setting("siril_path") == "ruta anterior"
+    assert get_setting("clear_outside_api_key") is None
+    assert dialog._project_root.text() == "nuevo"
+    assert not memory_db.in_transaction
+    cd._BRIDGE.checked.disconnect(dialog._on_siril_result)
+    dialog.deleteLater()
+
+
 def test_config_dialog_no_siril_warns_instantly(monkeypatch):
     """Sin SirIL el aviso sale ya mismo: ni hilo ni subproceso."""
     cd, dialog, probed = _config_dialog(monkeypatch, None)

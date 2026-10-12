@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from sqlite3 import Error as SQLiteError
 
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -35,8 +36,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from db.settings import PROJECT_ROOT_KEY, get_float, get_setting, set_setting
-from planners.weather.base import load_api_key, save_api_key
+from db.settings import PROJECT_ROOT_KEY, get_float, get_setting, set_settings
+from equipment.metrics import validar_orden_umbrales
+from planners.weather.base import load_api_key
 from stacks.siril_finder import SETTINGS_KEY, find_siril, siril_version
 from ui.style import PALETTE
 
@@ -422,13 +424,27 @@ class ConfigDialog(QDialog):
 
     def _save(self) -> None:
         """Escribe todo de una vez en ``settings`` y avisa a la ventana."""
-        set_setting(SETTINGS_KEY, self._siril_path.text().strip())
-        set_setting(PROJECT_ROOT_KEY, self._project_root.text().strip())
-        save_api_key("clear_outside_api_key", self._clear_outside_key.text().strip())
-        save_api_key("meteoblue_api_key", self._meteoblue_key.text().strip())
-        set_setting("sampling_under_ratio", str(self._sampling_under.value()))
-        set_setting("sampling_over_ratio", str(self._sampling_over.value()))
-        set_setting("sampling_light_factor", str(self._sampling_light.value()))
+        try:
+            validar_orden_umbrales(self._sampling_under.value(), self._sampling_over.value())
+            set_settings({
+                SETTINGS_KEY: self._siril_path.text().strip(),
+                PROJECT_ROOT_KEY: self._project_root.text().strip(),
+                "clear_outside_api_key": self._clear_outside_key.text().strip(),
+                "meteoblue_api_key": self._meteoblue_key.text().strip(),
+                "sampling_under_ratio": str(self._sampling_under.value()),
+                "sampling_over_ratio": str(self._sampling_over.value()),
+                "sampling_light_factor": str(self._sampling_light.value()),
+            })
+        except ValueError as exc:
+            QMessageBox.warning(self, "No se pudo guardar", str(exc))
+            return
+        except SQLiteError:
+            QMessageBox.warning(
+                self, "No se pudo guardar",
+                "No se pudo escribir en la base de datos. "
+                "No se ha guardado ningún cambio.",
+            )
+            return
         self._check_siril(self._siril_path.text().strip())
         QMessageBox.information(self, "Configuración", "Configuración guardada.")
         self.saved.emit()

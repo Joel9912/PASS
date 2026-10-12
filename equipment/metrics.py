@@ -44,6 +44,15 @@ def umbrales_desde_settings() -> dict[str, float]:
     }
 
 
+def validar_orden_umbrales(umbral_sub: float, umbral_sob: float) -> None:
+    """Rechaza un intervalo invertido sin cambiar los límites del usuario."""
+    if umbral_sob > umbral_sub:
+        raise ValueError(
+            "El límite inferior (sobremuestreo) no puede superar al límite "
+            "superior (submuestreo). Revisa los umbrales en Equipo."
+        )
+
+
 def focal_efectiva(
     focal_mm: float | None, reducer: bool, reducer_factor: float | None
 ) -> float | None:

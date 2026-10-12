@@ -45,3 +45,14 @@ def set_setting(key: str, value: str) -> None:
         (key, value),
     )
     conn.commit()
+
+
+def set_settings(values: dict[str, str]) -> None:
+    """Guarda un conjunto de ajustes todo o nada para evitar estados parciales."""
+    conn = get_connection()
+    with conn:
+        conn.executemany(
+            "INSERT INTO settings (key, value) VALUES (?, ?)"
+            " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            values.items(),
+        )
