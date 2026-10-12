@@ -8,6 +8,7 @@ fila el tránsito analítico (rápido, sin astropy): ``max_altitude``,
 Tránsito y Horas >30° de la tabla; la curva detallada del objeto elegido
 sí la calcula :mod:`planners.transit` con astropy.
 """
+import re
 from dataclasses import dataclass, field
 
 from db.connection import get_connection
@@ -265,10 +266,62 @@ def search(filters: SearchFilters, limit: int = DEFAULT_LIMIT) -> list[dict]:
     return rows
 
 
+#: Designación canónica: prefijo de catálogo + número (+ sufijo de componente).
+#: Admite 'm31', 'M 31', 'ngc224', 'IC  001'… el usuario no teclea siempre igual.
+_DESIGNACION = re.compile(r"^(M|NGC|IC|BARNARD|CALDWELL|LDN)\s*0*(\d+)\s*([A-Z]*)$")
+
+#: Prefijo de la designación → forma canónica del ID ('NGC' + '224').
+_PREFIJOS = {
+    "M": ("M", "messier_num"),
+    "NGC": ("NGC", "ngc_num"),
+    "IC": ("IC", "ic_num"),
+    "BARNARD": ("Barnard", None),
+    "CALDWELL": ("Caldwell", None),
+    "LDN": ("LDN", None),
+}
+
+
+def _canonical_designation(text: str) -> tuple[str, str | None, int, str] | None:
+    """Normaliza una designación a ``(forma_canónica, columna, número, sufijo)``.
+
+    Plega a mayúsculas, colapsa espacios y quita los ceros a la izquierda,
+    de modo que 'm31', 'M 31' y 'ngc0224' apunten al mismo objeto. Sin
+    número reconocible no se inventa nada: devuelve ``None``.
+    """
+    match = _DESIGNACION.match(" ".join(text.upper().split()))
+    if match is None:
+        return None
+    prefix, number, suffix = match.groups()
+    forma, column = _PREFIJOS[prefix]
+    canonical = (
+        f"{forma}{number}{suffix}" if prefix == "M"
+        else f"{forma} {number}{suffix}"
+    )
+    return canonical, column, int(number), suffix
+
+
 def get_object(object_id: str) -> dict | None:
-    """Carga un objeto por su designación ('M31', 'NGC 224'...)."""
+    """Carga un objeto por su designación ('M31', 'NGC 224'...).
+
+    Acepta los alias habituales del usuario (mayúsculas, espacios de más o
+    de menos, ceros a la izquierda). Un alias numérico que no es la
+    designación principal ('NGC 224' de M31) resuelve por su columna de
+    cruce, con la misma fila que devolvería el catálogo OpenNGC.
+    """
+    designation = _canonical_designation(object_id)
+    if designation is None:
+        return None
+    canonical, column, number, suffix = designation
     conn = get_connection()
     row = conn.execute(
-        "SELECT * FROM catalog WHERE object_id = ?", (object_id,)
+        "SELECT * FROM catalog WHERE object_id = ? COLLATE NOCASE", (canonical,)
+    ).fetchone()
+    if row is not None:
+        return dict(row)
+    if column is None or suffix:
+        return None  # sin columna de cruce, o componente: solo el ID exacto
+    row = conn.execute(
+        f"SELECT * FROM catalog WHERE {column} = ? ORDER BY object_id",
+        (number,),
     ).fetchone()
     return dict(row) if row else None

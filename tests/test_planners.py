@@ -207,6 +207,34 @@ def test_get_object_and_personal_catalog_roundtrip(memory_db):
                for o in personal_catalog.list_objects())
 
 
+def test_get_object_normaliza_alias_messier_ngc_ic(memory_db):
+    """P-0007: los alias de designación resuelven, no solo la forma exacta.
+
+    La designación canónica es 'M31'/'IC 1'; el usuario escribe 'm31',
+    'ngc224' o con espacios sobrantes y debe encontrar el mismo objeto. El
+    alias NGC busca por número, así que devuelve el objeto que lo usa.
+    """
+    from planners.celestial_search import get_object
+
+    memory_db.executemany(
+        "INSERT INTO catalog (object_id, catalog, messier_num, ngc_num,"
+        " ic_num, magnitude) VALUES (?, ?, ?, ?, ?, ?)",
+        [
+            ("M31", "messier", 31, 224, None, 3.44),
+            ("IC 1", "ic", None, None, 1, 9.0),
+        ],
+    )
+
+    for alias in ("m31", "M 31", "  M31  "):
+        assert (get_object(alias) or {}).get("object_id") == "M31"
+    for alias in ("ngc224", "NGC 224", "NGC  0224"):   # cross-reference de M31
+        assert (get_object(alias) or {}).get("object_id") == "M31"
+    for alias in ("ic1", "IC 1", "Ic 001"):
+        assert (get_object(alias) or {}).get("object_id") == "IC 1"
+    assert get_object("M 999") is None       # número inexistente
+    assert get_object("XYZ 1") is None       # prefijo desconocido no rompe
+
+
 def test_personal_catalog_regions(memory_db):
     """Las regiones guardan centro/encuadre en una BD aislada."""
     from planners import personal_catalog
