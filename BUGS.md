@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **91 hallazgos**: 🔴 18 graves · 🟠 46 medios · 🟡 18 bajos · 9 decisiones (8 pendientes).
-Estado: ✅ 35 corregidos · 🟡 5 contenidos · ⏳ 36 pendientes · 🔎 6 sin reproducir.
+Estado: ✅ 36 corregidos · 🟡 5 contenidos · ⏳ 35 pendientes · 🔎 6 sin reproducir.
 
 ---
 
@@ -70,7 +70,7 @@ Estado: ✅ 35 corregidos · 🟡 5 contenidos · ⏳ 36 pendientes · 🔎 6 si
 | **S-0020** | La limpieza de salidas anteriores podía dejar restos y la corrida nueva los mezclaba con sus resultados. | ✅ `4e1e5c0` |
 | **E-0003** | Una pieza usada en dos roles deja el formulario y los totales desactualizados tras editar o borrar. | ⏳ |
 | **E-0004** | El precio de un filtro editado no repinta el total hasta otra interacción. | ⏳ |
-| **E-0005** | `NaN`/infinito y precio o peso negativos no se filtran antes de persistir un setup. | ⏳ |
+| **E-0005** | `NaN`/infinito y precio o peso negativos no se filtran antes de persistir un setup. | ✅ `a491664` |
 | **E-0006** | Bortle/SQM no cambia el color base del disco en la rosacea. | ⏳ |
 | **E-0007** | Una fuente de Claridad de Luz >100 km se trunca en el slider al editar otra propiedad. | ⏳ |
 | **E-0008** | Las claves de FOV no usaban la focal efectiva del reductor. | ✅ |
