@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **93 hallazgos**: 🔴 18 graves · 🟠 48 medios · 🟡 18 bajos · 9 decisiones (8 pendientes).
-Estado: ✅ 56 corregidos · 🟡 5 contenidos · ⏳ 17 pendientes · 🔎 6 sin reproducir.
+Estado: ✅ 58 corregidos · 🟡 5 contenidos · ⏳ 15 pendientes · 🔎 6 sin reproducir.
 
 ---
 
@@ -91,8 +91,8 @@ Estado: ✅ 56 corregidos · 🟡 5 contenidos · ⏳ 17 pendientes · 🔎 6 si
 | **U-0003** | Quitar el último target deja el plan y el planetario obsoletos. | ✅ `885ba55` |
 | **U-0004** | Si la región no está en el cielo, el target anterior queda resaltado. | ✅ `885ba55` |
 | **U-0005** | Añadir un duplicado recarga la lista y puede cambiar la selección. | ✅ `885ba55` |
-| **C-0001** | Se admiten umbrales de sub/sobremuestreo contradictorios entre sí. | ⏳ |
-| **C-0002** | Configuración guarda varias claves sin atomicidad: un fallo a mitad deja ajustes a medias. | ⏳ |
+| **C-0001** | Se admiten umbrales de sub/sobremuestreo contradictorios entre sí. | ✅ `a7f5ead` |
+| **C-0002** | Configuración guarda varias claves sin atomicidad: un fallo a mitad deja ajustes a medias. | ✅ `a7f5ead` |
 | **C-0003** | Editar la ruta de SirIL deja el ✓ de «encontrado» obsoleto hasta reabrir. | ✅ `600200c` |
 | **T-0003** | La suite depende de los catálogos reales del usuario; faltan fixtures offline sintéticos. | 🟡 `b9118a4` (sandbox; falta independencia) |
 | **T-0004** | Fixtures que usan red o estrellas reales: inestables según el día y la ubicación. | ⏳ |
