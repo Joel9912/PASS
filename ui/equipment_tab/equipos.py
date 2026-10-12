@@ -284,6 +284,7 @@ class EquiposTab(QWidget):
             editor.changed.connect(self._recalcular)
             editor.saved.connect(self._tras_pieza_guardada)
         self._filtros.saved.connect(self.setups_changed.emit)
+        self._filtros.saved.connect(self._recalcular)  # E-0004: el precio del filtro entra en la suma
         self._filtros.changed.connect(self._recalcular)  # casilla → suma en vivo
         # Cambiar de ubicación cambia el seeing que recorta el rango.
         self._ubicacion.currentIndexChanged.connect(lambda _i: self._recalcular())
@@ -813,8 +814,14 @@ class EquiposTab(QWidget):
         self._precio.setValue(precio)
         self._peso.setValue(peso)
 
-    def _tras_pieza_guardada(self) -> None:
-        """Una pieza cambió en la base: repuebla combos y avisa a la ventana."""
+    def _tras_pieza_guardada(self, pieza_id: int) -> None:
+        """Una pieza cambió en la base: refresca los roles que la usan y avisa.
+
+        La misma pieza puede estar en dos roles (Principal y Guía). Si se
+        edita o se borra desde uno, el otro seguía con los valores viejos en
+        pantalla y en la suma de la cabecera; `recargar_si_usa` recarga su
+        combo y formulario (y al borrar, queda en «(sin …)» y limpio).
+        """
         for editor in self._editores:
-            editor.reload()  # conserva su selección y recalcula
+            editor.recargar_si_usa(pieza_id)
         self.setups_changed.emit()

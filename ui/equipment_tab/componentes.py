@@ -548,7 +548,7 @@ class PartEditor(QWidget):
     """
 
     changed = pyqtSignal()  # formulario/selección cambiaron → bloque Cálculos
-    saved = pyqtSignal()    # pieza persistida → setups_changed y combos
+    saved = pyqtSignal(int)  # pieza persistida (con su id) → setups_changed y combos
 
     def __init__(
         self, kind: str, form: QWidget, titulo: str, parent: QWidget | None = None
@@ -589,6 +589,19 @@ class PartEditor(QWidget):
         self.picker.reload(select_id=self.picker.selected_id())
         self.changed.emit()
 
+    def recargar_si_usa(self, pieza_id: int) -> None:
+        """Recarga combo y formulario si este rol muestra ``pieza_id``.
+
+        La misma pieza puede estar en dos roles (Principal y Guía): si se
+        edita o se borra desde uno, el otro seguía con los valores viejos en
+        pantalla y en la suma de la cabecera (E-0003). Si la pieza ya no
+        existe, el combo cae en «(sin …)» y el formulario queda limpio.
+        """
+        if self.selected_id() == pieza_id:
+            self.cargar(pieza_id)
+        else:
+            self.reload()
+
     # -- cableado interno --------------------------------------------------
 
     def _cargar_formulario(self) -> None:
@@ -616,7 +629,7 @@ class PartEditor(QWidget):
             QMessageBox.warning(self, "No se pudo guardar", str(exc))
             return
         self.cargar(nuevo_id)  # releer de la base: ids y valores canónicos
-        self.saved.emit()
+        self.saved.emit(nuevo_id)
         self.changed.emit()
 
     def _eliminar(self) -> None:
@@ -643,7 +656,7 @@ class PartEditor(QWidget):
         self._pieza["borrar"](pieza_id)
         self.picker.reload()
         self.form.limpiar()
-        self.saved.emit()
+        self.saved.emit(pieza_id)  # el id permite refrescar el otro rol
         self.changed.emit()
 
 

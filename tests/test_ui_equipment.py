@@ -560,6 +560,120 @@ def test_cabecera_suma_precio_peso_y_lo_persiste(qt_app, memory_db):
 
     tab.deleteLater()
 
+def test_pieza_compartida_por_dos_roles_se_refresca_al_editar_o_borrar(
+    qt_app, memory_db, monkeypatch
+):
+    """E-0003: una pieza en dos roles no deja formularios ni totales viejos.
+
+    La misma cámara como Principal y como Guía: al cambiar su precio en
+    Principal y guardar el componente, el formulario de Guía y la suma en
+    vivo de la cabecera se repintan; al borrarla, los dos roles quedan sin
+    cámara y sin su peso ni precio.
+    """
+    import pytest
+
+    from equipment import components, manager
+    from equipment.models import Camera, EquipmentSetup
+    from ui.equipment_tab import componentes, equipos
+
+    camera_id = components.create_camera(
+        Camera(name="ASI2600", price_eur=1550.0, weight_kg=0.7)
+    )
+    manager.create(EquipmentSetup(
+        name="Doble rol", camera_id=camera_id, guide_camera_id=camera_id,
+    ))
+
+    _app = qt_app
+    tab = equipos.EquiposTab()
+
+    assert tab._cam_principal.selected_id() == camera_id
+    assert tab._cam_guia.selected_id() == camera_id
+    assert tab._precio.value() == pytest.approx(3100.0)
+
+    # Editar el precio en Principal y guardar el componente: Guía, que usa
+    # la misma pieza, debe ver el valor nuevo (antes seguía con el viejo y
+    # la suma de la cabecera contaba 1550 + 1550 con la pieza ya a 1800).
+    tab._cam_principal.form._precio.setValue(1800.0)
+    tab._cam_principal._guardar()
+
+    assert tab._cam_guia.form._precio.value() == pytest.approx(1800.0)
+    assert tab._precio.value() == pytest.approx(3600.0)
+
+    # Borrar la pieza deja los dos roles sin cámara y sin su peso/precio.
+    class _Caja:
+        """QMessageBox falso: el «¿Eliminar…?» responde Sí sin abrir ventana."""
+
+        StandardButton = componentes.QMessageBox.StandardButton
+        question = staticmethod(lambda *a, **k: _Caja.StandardButton.Yes)
+
+    monkeypatch.setattr(componentes, "QMessageBox", _Caja)
+
+    tab._cam_principal._eliminar()
+
+    assert tab._cam_principal.selected_id() is None
+    assert tab._cam_guia.selected_id() is None
+    assert tab._cam_guia.form._precio.value() == 0.0
+    assert tab._precio.value() == 0.0
+    assert tab._peso.value() == 0.0
+
+    tab.deleteLater()
+
+def test_precio_de_filtro_editado_repinta_el_total_de_la_cabecera(
+    qt_app, memory_db, monkeypatch
+):
+    """E-0004: editar el precio de un filtro marcado repinta la suma al instante.
+
+    «Editar» del panel de filtros guarda el precio global y emite ``saved``;
+    la cabecera suma en vivo ese precio, así que debe repintarse sin esperar
+    a otra interacción (antes la señal solo reemitía ``setups_changed``).
+    """
+    import pytest
+    from PyQt6.QtWidgets import QCheckBox
+
+    from equipment import components
+    from equipment.models import Filter
+    from ui.equipment_tab import componentes, equipos
+
+    _app = qt_app
+    tab = equipos.EquiposTab()
+
+    filtro_id = components.create_filter(
+        Filter(name="UHC", filter_type="uhc", price_eur=45.0)
+    )
+    tab._filtros.reload()
+    tab._filtros._tabla.cellWidget(0, 3).findChild(QCheckBox).click()
+    assert tab._precio.value() == pytest.approx(45.0)
+
+    # El diálogo de edición devuelve el precio nuevo sin abrir ventana.
+    class _Dialogo:
+        """_FiltroDialog falso: acepta al instante con el precio nuevo."""
+
+        def __init__(self, parent, fila=None):
+            """Guarda la fila de partida (la pide `_editar`)."""
+            self._fila = fila or {}
+
+        def exec(self):
+            """Siempre aceptar: el test no abre ventanas modales."""
+            return True
+
+        def filtro(self, filter_id=None):
+            """Modelo con el precio ya subido (misma fila que pide `_editar`)."""
+            return Filter(
+                id=filter_id,
+                name="UHC",
+                filter_type="uhc",
+                price_eur=90.0,
+            )
+
+    monkeypatch.setattr(componentes, "_FiltroDialog", _Dialogo)
+    tab._filtros._tabla.setCurrentCell(0, 0)
+    tab._filtros._editar()
+
+    assert components.get_filter(filtro_id)["price_eur"] == pytest.approx(90.0)
+    assert tab._precio.value() == pytest.approx(90.0)
+
+    tab.deleteLater()
+
 def test_subtipo_es_solo_seleccionable_conserva_al_cargar_y_cambia_con_el_tipo(
     qt_app,
     memory_db,
