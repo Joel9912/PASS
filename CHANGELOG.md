@@ -1,6 +1,6 @@
 # Historial de cambios
 
-Cambios relevantes para quienes usan PASS. Los detalles de implementación y cada corrección pequeña quedan en los commits. Cada entrada sobre un bug cita su ID de `BUGS.md`, el registro público de hallazgos, donde está su severidad y su estado. La documentación se mantiene en español.
+Cambios relevantes para quienes usan PASS. Los detalles de implementación y cada corrección pequeña quedan en los commits. Las correcciones registradas citan su ID en [`BUGS.md`](BUGS.md), donde constan su severidad y estado. La documentación se mantiene en español.
 
 ## Sin publicar — preparación de v0.2
 
