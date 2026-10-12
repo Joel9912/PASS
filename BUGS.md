@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **93 hallazgos**: 🔴 18 graves · 🟠 48 medios · 🟡 18 bajos · 9 decisiones (8 pendientes).
-Estado: ✅ 62 corregidos · 🟡 4 contenidos · ⏳ 12 pendientes · 🔎 6 sin reproducir.
+Estado: ✅ 64 corregidos · 🟡 3 contenidos · ⏳ 11 pendientes · 🔎 6 sin reproducir.
 
 ---
 
@@ -94,8 +94,8 @@ Estado: ✅ 62 corregidos · 🟡 4 contenidos · ⏳ 12 pendientes · 🔎 6 si
 | **C-0001** | Se admiten umbrales de sub/sobremuestreo contradictorios entre sí. | ✅ `a7f5ead` |
 | **C-0002** | Configuración guarda varias claves sin atomicidad: un fallo a mitad deja ajustes a medias. | ✅ `a7f5ead` |
 | **C-0003** | Editar la ruta de SirIL deja el ✓ de «encontrado» obsoleto hasta reabrir. | ✅ `600200c` |
-| **T-0003** | La suite depende de los catálogos reales del usuario; faltan fixtures offline sintéticos. | 🟡 `b9118a4` (sandbox; falta independencia) |
-| **T-0004** | Fixtures que usan red o estrellas reales: inestables según el día y la ubicación. | ⏳ |
+| **T-0003** | La suite depende de los catálogos reales del usuario; faltan fixtures offline sintéticos. | ✅ `39593f3` |
+| **T-0004** | Fixtures que usan red o estrellas reales: inestables según el día y la ubicación. | ✅ `39593f3` |
 | **T-0005** | Symlinks en fixtures: no portables en Windows. | ⏳ |
 | **T-0006** | Tests con geometría dependiente de temporizadores o DPI de la pantalla. | ⏳ |
 | **T-0007** | El modo offscreen se activa con `setdefault` y puede no aplicarse. | ✅ `8930f6d` |
