@@ -16,6 +16,15 @@ from stacks.siril_runner import cancelar_siril
 CANCELADO = "Corrida cancelada por el usuario."
 
 
+class _CanceladoError(Exception):
+    """Señal interna de parada: la recogen los callbacks del worker.
+
+    La cancelación es cooperativa: SirIL se mata por proceso, pero una tarea
+    pura de Python (escaneo, medición) solo puede parar si sus callbacks la
+    interrumpen en el siguiente paso.
+    """
+
+
 class SirilWorker(QObject):
     """Tarea única ejecutada en su hilo; informa a la UI por señales.
 
@@ -47,13 +56,22 @@ class SirilWorker(QObject):
         if self._cancelado:
             self.fallo.emit(CANCELADO)
             return
+
+        def _exigir_vivo() -> None:
+            """Corta la tarea en su siguiente paso si ya se pidió parar."""
+            if self._cancelado:
+                raise _CanceladoError
+
+        def _progreso(fraccion: float) -> None:
+            _exigir_vivo()
+            self.progreso.emit(min(max(int(round(fraccion * 100)), 0), 100))
+
+        def _log(linea: str) -> None:
+            _exigir_vivo()
+            self.log.emit(linea)
+
         try:
-            resultado = self._tarea(
-                progress_cb=lambda f: self.progreso.emit(
-                    min(max(int(round(f * 100)), 0), 100)
-                ),
-                log_cb=self.log.emit,
-            )
+            resultado = self._tarea(progress_cb=_progreso, log_cb=_log)
         except Exception as exc:
             # El error viaja como texto: la UI lo pinta en el log/estado.
             motivo = (

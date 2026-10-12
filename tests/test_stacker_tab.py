@@ -378,6 +378,38 @@ def test_worker_cancelado_descarta_resultado_y_cancela_siril(monkeypatch):
     assert fin == []
 
 
+def test_cancelar_durante_tarea_corta_por_su_progreso(monkeypatch):
+    """La cancelación es cooperativa: el progreso aborta la tarea en curso.
+
+    Sin esto, una tarea que no llama a SirIL (escaneo, medición) ignoraba la
+    cancelación y seguía hasta el final mientras el cierre esperaba 3 s.
+    """
+    from ui.stacker_tab import worker as modulo_worker
+    from ui.stacker_tab.worker import CANCELADO, SirilWorker
+
+    monkeypatch.setattr(modulo_worker, "cancelar_siril", lambda: None)
+    hechas: list[int] = []
+
+    def tarea(progress_cb, log_cb):
+        """Cien pasos: ninguna tarea real debe completarlos tras cancelar."""
+        for i in range(100):
+            progress_cb(i / 100)
+            hechas.append(i)
+        return "no debí llegar"
+
+    worker = SirilWorker(tarea)
+    worker.progreso.connect(lambda _p: worker.cancelar())  # cancela al 1er paso
+    fin, fallos = [], []
+    worker.fin.connect(fin.append)
+    worker.fallo.connect(fallos.append)
+
+    worker.run()
+
+    assert fin == []
+    assert fallos == [CANCELADO]
+    assert len(hechas) < 100  # abortada en el primer progreso, no al final
+
+
 def test_hilo_libera_su_referencia_al_finished_no_al_resultado():
     """La referencia al QThread vive hasta que ``finished`` la confirma.
 
