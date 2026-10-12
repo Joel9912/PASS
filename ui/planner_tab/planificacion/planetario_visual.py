@@ -189,6 +189,7 @@ class PlanetarioVisual(QWidget):
         """Centra la vista en ``object_id`` y lo resalta. Devuelve si existía."""
         index = self._find_object_index(object_id, catalog)
         if index is None:
+            self.clear_target()
             return False
         self._selected = (object_id, self._objects["catalogs"][index])
         self.set_center(
@@ -197,6 +198,12 @@ class PlanetarioVisual(QWidget):
             object_id,
         )
         return True
+
+    def clear_target(self) -> None:
+        """Quita resaltado y etiqueta sin desplazar la vista del usuario."""
+        self._selected = None
+        self._label = ""
+        self.update()
 
     def set_framing(
         self,

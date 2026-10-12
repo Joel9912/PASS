@@ -222,14 +222,15 @@ class CatalogoPersonalTab(QWidget):
             row["object_id"] == object_id and row["catalog"] == catalog
             for row in self._rows
         )
-        personal_catalog.add(object_id, catalog)
-        self.refresh()
         if already:
             QMessageBox.information(
                 self,
                 "Ya estaba guardado",
                 f"{object_id} ya estaba en tu catálogo personal.",
             )
+            return
+        personal_catalog.add(object_id, catalog)
+        self.refresh()
 
     # -- Relleno de la tabla -------------------------------------------------
     def _fill(self) -> None:

@@ -353,7 +353,7 @@ class PlanificacionTab(QWidget):
             self._on_target_changed()
         else:
             self._target.addItem("(sin elementos)", None)
-            self._curve.clear()
+            self._on_target_changed()
 
     def reload_setups(self) -> None:
         """Vuelve a leer los setups de equipo (para el FOV del encuadre)."""
@@ -422,6 +422,10 @@ class PlanificacionTab(QWidget):
         target = self._current_target()
         if target is None:
             self._curve.clear()
+            self._invalidate_plan()
+            self._planetario.clear_target()
+            self._planetario.clear_framing()
+            self._session_name.setPlaceholderText("")
             return
         object_id = str(target["object_id"])
         catalog = str(target["catalog"])
@@ -491,6 +495,7 @@ class PlanificacionTab(QWidget):
         self._dec.blockSignals(False)
         self._ra.blockSignals(False)
         self._updating_view = False
+        self._apply_framing()
 
     def _on_planet_object_clicked(self, object_id: str, catalog: str) -> None:
         """Clic en un objeto del cielo → lo coloca como target si está guardado."""

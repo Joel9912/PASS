@@ -407,6 +407,81 @@ def test_reload_targets_actualiza_una_vez(qt_app, monkeypatch):
     page.deleteLater()
 
 
+def test_arrastre_repinta_encuadre(qt_app, monkeypatch):
+    """U-0002: el encuadre sigue el centro antes de guardar la sesión."""
+    from ui.planner_tab.planificacion import tab as plan_tab
+
+    monkeypatch.setattr(plan_tab.personal_catalog, "list_objects", list)
+    page = plan_tab.PlanificacionTab()
+    page._fov = (2.0, 1.0)
+    page._planetario.set_center(5.0, 20.0)
+    assert page._planetario._framing[:2] == (75.0, 20.0)
+    page.deleteLater()
+
+
+def test_ultimo_target_limpia_plan_y_planetario(qt_app, monkeypatch):
+    """U-0003: vaciar el catálogo elimina el estado del objetivo anterior."""
+    from ui.planner_tab.planificacion import tab as plan_tab
+
+    filas = [{"object_id": "M42", "catalog": "messier"}]
+    monkeypatch.setattr(plan_tab.personal_catalog, "list_objects", lambda: filas)
+    page = plan_tab.PlanificacionTab()
+    page._planetario._selected = ("M42", "messier")
+    page._planetario._label = "M42"
+    page._planetario.set_framing(5.0, 20.0, 2.0, 1.0)
+    page._plan = [{"date": "2026-10-12"}]
+    filas.clear()
+    page.reload_targets()
+    assert not page._plan
+    assert page._planetario._selected is None
+    assert page._planetario._label == ""
+    assert page._planetario._framing is None
+    page.deleteLater()
+
+
+def test_target_ausente_limpia_resaltado(qt_app):
+    """U-0004: una región ausente no mantiene seleccionado el objeto previo."""
+    from ui.planner_tab.planificacion.planetario_visual import PlanetarioVisual
+
+    cielo = PlanetarioVisual()
+    cielo._selected = ("M42", "messier")
+    cielo._label = "M42"
+    assert not cielo.set_target("Región que no está en el catálogo", "region")
+    assert cielo._selected is None
+    assert cielo._label == ""
+    cielo.deleteLater()
+
+
+def test_duplicado_no_recarga_catalogo(qt_app, monkeypatch):
+    """U-0005: añadir un duplicado avisa sin tocar selección ni tabla."""
+    from ui.planner_tab.catalogo_personal import tab as cat_tab
+
+    filas = [
+        {"object_id": "M42", "catalog": "messier"},
+        {"object_id": "M31", "catalog": "messier"},
+    ]
+    monkeypatch.setattr(cat_tab.personal_catalog, "list_objects", lambda: filas)
+    monkeypatch.setattr(cat_tab.personal_catalog, "add", lambda *args: None)
+    avisos = []
+    monkeypatch.setattr(cat_tab.QMessageBox, "information", lambda *args: avisos.append(args))
+    page = cat_tab.CatalogoPersonalTab()
+    page._table.selectRow(1)
+    recargas = []
+    original = page.refresh
+
+    def refrescar():
+        """Cuenta recargas reales para detectar efectos laterales del duplicado."""
+        recargas.append(True)
+        original()
+
+    monkeypatch.setattr(page, "refresh", refrescar)
+    page.add_object("M42", "messier")
+    assert avisos
+    assert not recargas
+    assert page._table.currentRow() == 1
+    page.deleteLater()
+
+
 def test_reload_setups_mantiene_la_seleccion(qt_app, monkeypatch):
     """M-19: repoblar el combo de equipos reselecciona por id, no al primero."""
     from ui.planner_tab.planificacion import tab as plan_tab
