@@ -3,13 +3,13 @@
 #
 # Reglas ignoradas (deuda o decisión consciente, no olvido):
 #
-# - BLE001, S110  → `except Exception` amplios y `try/except-pass`: deuda ya
-#                   documentada en `ui/README.md` («Bajos de la auditoría»).
+# - BLE001, S110  → `except Exception` amplios y `try/except-pass`: deuda
+#                   conocida, pendiente de revisar por módulo.
 # - DTZ011        → `datetime.date.today()` sin huso: el programa trabaja en
 #                   hora local del usuario; una fecha con huso cambiaría «hoy».
 # - PLW1510       → `subprocess.run` sin `check`: SirIL se juzga por su propia
 #                   salida; añadir `check=True` cambiaría el comportamiento en
-#                   fallos → revisar junto a la Tanda C de la auditoría de código.
+#                   fallos → revisar con pruebas específicas de SirIL.
 # - RUF046, RUF007, RUF015, C408 → estilo menor (int() redundante, zip() vs
 #                   pairwise, next() vs slice[0], dict() vs {}): sin beneficio
 #                   suficiente para tocar código ya probado.
