@@ -7,6 +7,7 @@ Cambios relevantes para quienes usan PASS. Los detalles de implementación y cad
 Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado**; se completará cuando se apruebe el lanzamiento.
 
 ### Corregido
+- Captura Ideal empieza al menos cinco minutos después del inicio de la noche astronómica y termina al menos cinco minutos antes del alba. Los márgenes válidos quedan como Posible; conteo y bandas se cortan en el cruce solar interpolado, sin prolongar captura al crepúsculo (P-0014).
 - Los cruces lunares de 0° y 5° se interpolan entre muestras para no contar el minuto entero con condiciones caducadas. Captura Posible admite Luna a menos de 5° aun con separación insuficiente, según el criterio del usuario; Captura Ideal mantiene sus requisitos (P-0013).
 - El conteo de Captura Ideal usa bloques completos de cinco minutos y Captura Posible recoge los restos válidos sin huecos artificiales. Las bandas coinciden con el resumen y la última muestra no añade tiempo fuera de la curva (P-0008).
 - Los setups rechazan precios y pesos negativos o no finitos antes de crear o editar; las piezas también rechazan NaN e infinitos en esos campos (E-0005).
