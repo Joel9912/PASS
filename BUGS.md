@@ -24,8 +24,8 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 
 ## Resumen
 
-**91 hallazgos**: 🔴 18 graves · 🟠 46 medios · 🟡 18 bajos · 9 decisiones (8 pendientes).
-Estado: ✅ 37 corregidos · 🟡 5 contenidos · ⏳ 34 pendientes · 🔎 6 sin reproducir.
+**92 hallazgos**: 🔴 18 graves · 🟠 47 medios · 🟡 18 bajos · 9 decisiones (8 pendientes).
+Estado: ✅ 37 corregidos · 🟡 5 contenidos · ⏳ 35 pendientes · 🔎 6 sin reproducir.
 
 ---
 
@@ -85,6 +85,7 @@ Estado: ✅ 37 corregidos · 🟡 5 contenidos · ⏳ 34 pendientes · 🔎 6 si
 | **P-0009** | La separación lunar diurna se usa en el ranking de noches. | 🟡 `97d5787` (evaluación nocturna; pendientes tiempo útil y casos sin bordes) |
 | **P-0010** | La excepción de un proveedor de clima en hilo secundario rompía la consulta (las claves se leían desde el hilo de trabajo). | ✅ `0a04cee` |
 | **P-0012** | Las tarjetas de clima lanzaban una excepción al recibir métricas numéricas del proveedor. | ✅ `0a04cee` |
+| **P-0013** | El minuto anterior a la salida lunar se cuenta completo aunque la Luna cruce el horizonte dentro de él e invalide la captura. | ⏳ |
 | **U-0002** | Arrastrar la vista no actualiza el encuadre visible antes de guardar. | ⏳ |
 | **U-0003** | Quitar el último target deja el plan y el planetario obsoletos. | ⏳ |
 | **U-0004** | Si la región no está en el cielo, el target anterior queda resaltado. | ⏳ |
