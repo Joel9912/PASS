@@ -1,7 +1,7 @@
 """Rosáceas de la ficha de Ubicación: los 3 discos de entrada y la salida.
 
 Todo QPainter y dueño único de la paleta de CL: los colores
-muestreados de las capturas de referencia (barra 19,6–21,8 mag/arcsec²),
+aproximados de las capturas de referencia (barra fija 17,66–22 mag/arcsec²),
 la correspondencia Bortle→SQM y el modelo de campana viven aquí porque
 solo los consume este módulo.
 
@@ -53,17 +53,27 @@ _AZIMUT: dict[str, int] = {
 _AZ_POR_GRADOS = {grados: direccion for direccion, grados in _AZIMUT.items()}
 
 #: Paleta de CL muestreada de la captura de referencia: de cielo
-#: brillante (t = 0, mag 19,6) a cielo oscuro (t = 1, mag 21,8).
+#: brillante (17,66) a cielo oscuro (22); aproximación visual de los ejemplos.
+_SQM_MIN = 17.66
+_SQM_MAX = 22.0
 _PALETA: tuple[tuple[float, str], ...] = (
-    (0.000, "#e171eb"),  # magenta
-    (0.182, "#ee260d"),  # rojo
-    (0.409, "#ff750d"),  # naranja
-    (0.636, "#f4f40d"),  # amarillo
-    (0.864, "#6e9d0d"),  # verde
-    (1.000, "#1090bf"),  # azul
+    (17.66, "#f4e9fc"),
+    (18.0, "#e9cefa"),
+    (18.5, "#dcb0f6"),
+    (19.0, "#cf70ed"),
+    (19.6, "#e171eb"),
+    (20.0, "#ee260d"),
+    (20.5, "#ff750d"),
+    (21.0, "#f4f40d"),
+    (21.5, "#6e9d0d"),
+    (21.7, "#008f9c"),
+    (21.8, "#007cb6"),
+    (21.9, "#0557a6"),
+    (22.0, "#203e75"),
 )
 _PARADAS: tuple[tuple[float, QColor], ...] = tuple(
-    (t, QColor(hex)) for t, hex in _PALETA
+    ((sqm - _SQM_MIN) / (_SQM_MAX - _SQM_MIN), QColor(hex))
+    for sqm, hex in _PALETA
 )
 
 _NEGRO = QColor("#000000")      # fondo del disco sin datos (las capturas)
@@ -75,8 +85,8 @@ _ROJO = QColor(226, 63, 55, 170)  # obstrucciones: rojo translúcido
 
 #: Escala de caída con la distancia (km) de la campana: glow ∝ R/(R+km).
 _R_KM = 10.0
-#: Ancho del eje de color en mag/arcsec² (el de la captura: 19,6–21,8).
-_ANCHO_ESCALA = 2.2
+#: Ancho fijo del eje de color aprobado por el usuario.
+_ANCHO_ESCALA = _SQM_MAX - _SQM_MIN
 #: SQM de cielo medio cuando solo hay fuentes sin Bortle/SQM informado.
 _SQM_BASE = 21.0
 #: Campana por fuente: (intensidad, altura h en grados, anchura σ en
@@ -686,10 +696,10 @@ class DiscoEsquematico(QWidget):
     ) -> None:
         """Fija los valores del sitio y reconstruye el campo si cambian.
 
-        El campo de color depende solo de las fuentes (la fórmula da t en
-        función del glow), así que Bortle/SQM solo obligan a repintar la
-        barra: tipear en el SQM no vuelve a calcular el campo.
+        SQM/Bortle fijan el fondo en la escala absoluta; las fuentes lo
+        aclaran. Solo los cambios de fondo o fuentes invalidan la caché.
         """
+        base_anterior = self._base_sqm()
         self._bortle = bortle if isinstance(bortle, int) and 1 <= bortle <= 9 else None
         self._sqm = float(sqm) if isinstance(sqm, (int, float)) and sqm > 0 else None
         self._obstacles = _grados_sitio(obstacles)
@@ -699,7 +709,7 @@ class DiscoEsquematico(QWidget):
             else {d: {"fuente": None, "km": 0.0} for d in DIRECTIONS}
         )
         fuentes = _fuentes_de(self._lp)
-        if fuentes != self._fuentes:
+        if fuentes != self._fuentes or self._base_sqm() != base_anterior:
             self._fuentes = fuentes
             self._campo = self._construye_campo(fuentes) if fuentes else None
         self.update()
@@ -729,12 +739,13 @@ class DiscoEsquematico(QWidget):
         """Campo de color (168×168) con la paleta ligado a mag/arcsec².
 
         Por píxel: altitud y azimut del punto, suma de las campanas de
-        cada fuente (``glow``) y ``t = 1 − glow / 2,2`` — es decir, el
-        fondo es el valor del sitio y la luz solo sube de brillo. Los
+        cada fuente (``glow``), restada al SQM de fondo para situar el
+        color en la escala absoluta. Es una representación aproximada. Los
         pixeles fuera del disco quedan transparentes; se escala con
         suavizado al pintar.
         """
         res = _CAMPO_RES
+        base = self._base_sqm()
         mitad = res / 2
         img = QImage(res, res, QImage.Format.Format_ARGB32)
         img.fill(Qt.GlobalColor.transparent)
@@ -756,7 +767,7 @@ class DiscoEsquematico(QWidget):
                         * math.exp(-alt / altura)
                         * math.exp(-(delta * delta) / (2.0 * sig * sig))
                     )
-                img.setPixelColor(x, y, _color_para(1.0 - glow / _ANCHO_ESCALA))
+                img.setPixelColor(x, y, _color_para((base - glow - _SQM_MIN) / _ANCHO_ESCALA))
         return img
 
     def paintEvent(self, event) -> None:
@@ -788,7 +799,7 @@ class DiscoEsquematico(QWidget):
             pintor.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
             pintor.drawImage(QRectF(cx - r, cy - r, 2 * r, 2 * r), self._campo)
         else:
-            relleno = _color_para(1.0) if base is not None else _NEGRO
+            relleno = _color_para((base - _SQM_MIN) / _ANCHO_ESCALA) if base is not None else _NEGRO
             pintor.setPen(QPen(_ARO, 1.2))
             pintor.setBrush(relleno)
             pintor.drawEllipse(QPointF(cx, cy), r, r)
@@ -811,7 +822,7 @@ class DiscoEsquematico(QWidget):
 
         _pintar_letras(pintor, cx, cy, r)
         if base is not None:
-            self._pintar_barra(pintor, QRectF(cx + r + 32, cy - r, 12, 2 * r), base)
+            self._pintar_barra(pintor, QRectF(cx + r + 32, cy - r, 12, 2 * r))
 
     def _pintar_rejilla(self, pintor: QPainter, cx: float, cy: float, r: float) -> None:
         """Rejilla punteada: anillos de altitud cada 10° y radiales cada 15°."""
@@ -835,15 +846,11 @@ class DiscoEsquematico(QWidget):
                 f"{grados}°",
             )
 
-    def _pintar_barra(self, pintor: QPainter, rect: QRectF, base: float) -> None:
-        """Barra de color con las etiquetas de mag/arcsec² del sitio.
-
-        El extremo brillante (magenta) es ``base − 2,2`` y el oscuro
-        (azul) el valor del sitio: la misma horquilla de la captura.
-        """
+    def _pintar_barra(self, pintor: QPainter, rect: QRectF) -> None:
+        """Barra absoluta 17,66–22: oscuro arriba, brillante abajo."""
         gradiente = QLinearGradient(rect.topLeft(), rect.bottomLeft())
         for t, color in _PARADAS:
-            gradiente.setColorAt(t, color)
+            gradiente.setColorAt(1.0 - t, color)
         pintor.setPen(QPen(_ARO, 1))
         pintor.setBrush(gradiente)
         pintor.drawRect(rect)
@@ -852,15 +859,14 @@ class DiscoEsquematico(QWidget):
         fuente.setPointSizeF(7)
         pintor.setFont(fuente)
         pintor.setPen(_LETRAS)
-        for i in range(5):
-            t = i / 4
+        for mag in (22.0, 21.5, 21.0, 20.5, 20.0, 19.5, 19.0, 18.5, 18.0, 17.66):
+            t = (_SQM_MAX - mag) / _ANCHO_ESCALA
             y = rect.top() + t * rect.height()
-            mag = (base - _ANCHO_ESCALA) + t * _ANCHO_ESCALA
             pintor.drawLine(QPointF(rect.left() - 4, y), QPointF(rect.left(), y))
             pintor.drawText(
                 QRectF(rect.right() + 4, y - 8, 44, 16),
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                f"{mag:.1f}".replace(".", ","),
+                f"{mag:g}".replace(".", ","),
             )
         pintor.setPen(_DIM)
         pintor.drawText(

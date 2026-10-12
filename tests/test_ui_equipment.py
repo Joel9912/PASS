@@ -485,6 +485,45 @@ def test_rosaceas_construyen_pintan_y_hacen_roundtrip(qt_app):
         widget.deleteLater()
 
 
+def test_rosacea_color_absoluto_y_cache_sqm(qt_app):
+    """E-0006: el fondo cambia con SQM/Bortle incluso con fuentes cacheadas."""
+    from ui.equipment_tab.rosaceas import DiscoEsquematico
+
+    disco = DiscoEsquematico()
+    disco.resize(420, 340)
+
+    def color():
+        """Muestrea dentro del disco lejos de rejilla, letras y barra."""
+        foto = disco.grab()
+        dpr = foto.devicePixelRatio()
+        return foto.toImage().pixelColor(round(177 * dpr), round(193 * dpr)).name()
+
+    disco.set_datos(1, None, {}, {})
+    oscuro = color()
+    disco.set_datos(9, None, {}, {})
+    assert color() != oscuro
+    disco.set_datos(9, 22.0, {}, {})
+    assert color() == oscuro
+    disco.set_datos(9, 17.66, {}, {})
+    claro = color()
+    disco.set_datos(9, 15.9, {}, {})
+    assert color() == claro
+    assert disco._sqm == 15.9
+    disco.set_datos(9, 23.0, {}, {})
+    assert color() == oscuro
+
+    fuentes = {"N": {"fuente": "ciudad", "km": 10.0}}
+    disco.set_datos(1, 22.0, {}, fuentes)
+    campo = disco._campo
+    disco.set_datos(1, 19.0, {}, fuentes)
+    assert disco._campo is not campo
+    assert disco._campo.pixelColor(84, 84) != campo.pixelColor(84, 84)
+    campo = disco._campo
+    disco.set_datos(1, 19.0, {"N": 45}, fuentes)
+    assert disco._campo is campo
+    disco.deleteLater()
+
+
 def test_panel_cl_conserva_fuente_a_mas_de_100_km(qt_app):
     """E-0007: una fuente de CL a más de 100 km no se trunca en el panel.
 

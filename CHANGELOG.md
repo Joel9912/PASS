@@ -13,6 +13,7 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 - Captura Ideal reserva al menos cinco minutos dentro de ambos extremos de la noche astronómica; los márgenes válidos quedan como Posible.
 
 ### Corregido
+- Rosácea: el fondo refleja el SQM o Bortle con una escala fija de 17,66–22 mag/arcsec² y colores aproximados de las referencias; los valores exteriores saturan el color sin cambiar el dato (E-0006).
 - Al guardar o borrar una pieza de componente desde un rol, el otro rol que usaba esa misma pieza (por ejemplo, la misma cámara como Principal y como Guía) refresca su formulario y la suma de la cabecera deja de contar el precio viejo (E-0003).
 - Crear, editar o borrar un filtro global repinta al instante el total del equipo en la cabecera, sin esperar a otra interacción (E-0004).
 - Reabrir el panel de Contaminación Lumínica de una dirección con una fuente a más de 100 km ya no la recorta: el límite de 100 km se mantiene solo para fuentes nuevas (E-0007).
