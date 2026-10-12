@@ -87,8 +87,39 @@ def test_classify_instant_moon_below_horizon_skips_separation():
     assert classify_instant(20.0, 10.0, 50.0, moon_down) == WINDOW_NO_POSSIBLE
     # En el horizonte exacto cuenta como hundida (arriba = > 0°)
     assert classify_instant(60.0, 10.0, 50.0, 0.0) == WINDOW_IDEAL
-    # Un pelo sobre el horizonte vuelve a exigir la distancia
-    assert classify_instant(60.0, 10.0, 50.0, 1.0) == WINDOW_NO_POSSIBLE
+    # La excepción hasta menos de 5° solo permite Posible, no Ideal.
+    assert classify_instant(60.0, 10.0, 50.0, 1.0) == WINDOW_POSSIBLE
+
+
+@pytest.mark.parametrize("luna, esperado", [(0.001, WINDOW_POSSIBLE), (4.999, WINDOW_POSSIBLE),
+                                            (5.0, WINDOW_NO_POSSIBLE), (5.001, WINDOW_NO_POSSIBLE)])
+def test_margen_lunar_bajo_cinco_grados(luna, esperado):
+    """El margen bajo de la Luna no convierte una separación insuficiente en Ideal."""
+    assert classify_instant(60, 10, 50, luna) == esperado
+    assert classify_instant(29, 10, 50, luna) == WINDOW_NO_POSSIBLE
+
+
+@pytest.mark.parametrize("lunas, esperado", [([4.8, 5.2], (22.0, 22 + 0.5 / 60)),
+                                            ([5.2, 4.8], (22 + 0.5 / 60, 22 + 1 / 60))])
+def test_corte_lunar_fraccionario_en_cinco_grados(lunas, esperado):
+    """Subida y bajada lunar cortan el intervalo, sin adjudicar un minuto entero."""
+    from planners.moon_distance import capture_summary_from_samples
+
+    resumen = capture_summary_from_samples([60, 60], [10, 10], lunas, [True, True], 50,
+                                          [22.0, 22 + 1 / 60])
+    assert resumen[WINDOW_POSSIBLE]["ranges"][0] == pytest.approx(esperado)
+    assert resumen[WINDOW_POSSIBLE]["hours"] == pytest.approx(0.5 / 60)
+
+
+def test_salida_lunar_reparte_ideal_y_posible_sin_exceso():
+    """Al salir la Luna, Ideal acaba en su cruce y el resto sigue como Posible."""
+    from planners.moon_distance import capture_summary_from_samples
+
+    resumen = capture_summary_from_samples([60, 60], [10, 10], [-1, 1], [True, True], 50,
+                                          [22.0, 22 + 11 / 60])
+    assert resumen[WINDOW_IDEAL]["hours"] == pytest.approx(5 / 60)
+    assert resumen[WINDOW_POSSIBLE]["ranges"] == [(22 + 5 / 60, 22 + 11 / 60)]
+    assert sum(s["hours"] for s in resumen.values()) == pytest.approx(11 / 60)
 
 
 def test_capture_windows_only_classifies_astro_night():

@@ -13,11 +13,10 @@ Con ese umbral se clasifica cada instante de la noche en tres ventanas:
 Solo se clasifica dentro de la noche astronómica; el día y el crepúsculo
 quedan fuera (la UI los pinta aparte).
 
-La separación lunar solo se exige cuando la Luna está sobre el horizonte
-(``moon_altitude > 0°``): con la Luna hundida no contamina, así que la
-condición de separación se da por cumplida y manda únicamente la altitud
-del objeto. Sin esa regla, un objeto a tiro de umbral quedaba bloqueado
-por una separación angular calculada contra una Luna invisible.
+Ideal no exige separación con la Luna bajo el horizonte. Para Posible,
+el usuario admite además una Luna a menos de 5° de altura aunque no
+cumpla la distancia mínima menos 10°. A partir de 5° vuelve a exigirse
+la distancia. Los cortes de 0° y 5° se interpolan entre muestras.
 """
 from __future__ import annotations
 
@@ -36,6 +35,9 @@ POSSIBLE_MIN_ALTITUDE = 30.0
 
 #: Margen de tolerancia (grados) respecto al umbral lunar para "possible".
 POSSIBLE_MOON_MARGIN = 10.0
+
+#: Margen lunar aprobado por el usuario, exclusivo de Captura Posible (<5°).
+POSSIBLE_LOW_MOON_ALTITUDE = 5.0
 
 #: Coeficientes del polinomio de grado 3 (de mayor a menor potencia).
 #: Ajustados por mínimos cuadrados a los datos del usuario.
@@ -73,8 +75,8 @@ def classify_instant(
 
     Si ``moon_altitude_deg`` no supera los 0° la Luna está bajo el
     horizonte: no contamina, la separación se da por cumplida y solo
-    manda la altitud. En cuanto la Luna asoma, la distancia exige el
-    umbral de vuelta.
+    manda la altitud. Al asomar se exige distancia para Ideal, pero Posible
+    conserva el margen lunar aprobado hasta menos de 5° de altura.
 
     Esta función NO mira si es de noche: el filtro de noche astronómica lo
     aplica quien tenga la máscara (ver :func:`capture_windows`).
@@ -83,7 +85,8 @@ def classify_instant(
     moon_up = moon_altitude_deg > 0.0
     sep_ok_ideal = not moon_up or separation_moon_deg > min_dist
     sep_ok_possible = (
-        not moon_up or separation_moon_deg >= min_dist - POSSIBLE_MOON_MARGIN
+        moon_altitude_deg < POSSIBLE_LOW_MOON_ALTITUDE
+        or separation_moon_deg >= min_dist - POSSIBLE_MOON_MARGIN
     )
     if altitude_deg > IDEAL_MIN_ALTITUDE and sep_ok_ideal:
         return WINDOW_IDEAL
@@ -131,6 +134,44 @@ def capture_windows(
         else:
             windows.append(classify_instant(alt, sep, illumination_pct, moon_alt))
     return windows
+
+
+def capture_summary_from_samples(
+    altitudes: list[float], moon_separations: list[float], moon_altitudes: list[float],
+    astro_night_mask: list[bool], illumination_pct: float, hours: list[float],
+) -> dict[str, dict]:
+    """Resume intervalos con cortes lunares interpolados, no minutos completos.
+
+    Inserta los cruces de 0° y 5° y clasifica cada subintervalo en su punto
+    medio. La interpolación lineal aproxima el cruce entre muestras; no es
+    una efeméride exacta. Las demás magnitudes conservan la etiqueta temporal
+    de la muestra inicial, como el contrato de la malla original.
+    """
+    windows = capture_windows(altitudes, moon_separations, moon_altitudes,
+                              astro_night_mask, illumination_pct)
+    hours = unwrap_hours(hours)
+    capture_window_summary(windows, hours)  # valida la malla antes de interpolar
+    refined_hours = []
+    refined_windows = []
+    for i in range(len(hours) - 1):
+        luna, siguiente = moon_altitudes[i:i + 2]
+        cortes = [0.0, 1.0]
+        if siguiente != luna:
+            for limite in (0.0, POSSIBLE_LOW_MOON_ALTITUDE):
+                fraccion = (limite - luna) / (siguiente - luna)
+                if 0 < fraccion < 1:
+                    cortes.append(fraccion)
+        cortes.sort()
+        for inicio, fin in zip(cortes, cortes[1:]):
+            refined_hours.append(hours[i] + inicio * (hours[i + 1] - hours[i]))
+            lunar_alt = luna + (inicio + fin) / 2 * (siguiente - luna)
+            refined_windows.append(classify_instant(
+                altitudes[i], moon_separations[i], illumination_pct, lunar_alt,
+            ) if astro_night_mask[i] else WINDOW_NO_POSSIBLE)
+    if hours:
+        refined_hours.append(hours[-1])
+        refined_windows.append(windows[-1])
+    return capture_window_summary(refined_windows, refined_hours)
 
 
 def capture_window_summary(

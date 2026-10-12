@@ -49,8 +49,7 @@ from planners.analytical_transit import local_utc_offset
 from planners.moon_distance import (
     WINDOW_IDEAL,
     WINDOW_POSSIBLE,
-    capture_window_summary,
-    capture_windows,
+    capture_summary_from_samples,
     format_hour_range,
     min_moon_distance,
     unwrap_hours,
@@ -1537,14 +1536,14 @@ class TransitCurve(QWidget):
         min_dist = min_moon_distance(illumination_pct)
 
         hours = unwrap_hours(curve.hours_local)
-        windows = capture_windows(
+        summary = capture_summary_from_samples(
             curve.altitudes,
             curve.moon_separations,
             curve.moon_altitudes,
             curve.astro_night,
             illumination_pct,
+            hours,
         )
-        summary = capture_window_summary(windows, hours)
 
         # --- Cabecera (título fijo; el subtítulo resume el tránsito)
         transit = curve.hours_local[curve.transit_index]

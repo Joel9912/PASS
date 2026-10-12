@@ -662,3 +662,23 @@ def test_bandas_de_captura_coinciden_con_resumen_redondeado(qt_app, monkeypatch)
     assert bandas["ideal"] == [h for tramo in resumen["ideal"]["ranges"] for h in tramo]
     assert bandas["possible"] == [h for tramo in resumen["possible"]["ranges"] for h in tramo]
     curva.deleteLater()
+
+
+def test_curva_corta_posible_en_cruce_lunar_cinco_grados(qt_app):
+    """La UI utiliza el resumen refinado, no el minuto completo antes del cruce."""
+    from types import SimpleNamespace
+
+    import pytest
+
+    from ui.planner_tab import widgets
+
+    curva = widgets.TransitCurve()
+    datos = SimpleNamespace(
+        hours_local=[22.0, 22 + 1 / 60], altitudes=[60, 60], moon_altitudes=[4.8, 5.2],
+        moon_separations=[10, 10], astro_night=[True, True],
+        moon_illumination=0.5, transit_index=0,
+    )
+    resumen = curva.show_curve(datos)
+    assert resumen["possible"]["hours"] == pytest.approx(0.5 / 60)
+    assert resumen["possible"]["ranges"][0][1] == pytest.approx(22 + 0.5 / 60)
+    curva.deleteLater()

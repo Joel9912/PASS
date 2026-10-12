@@ -36,8 +36,7 @@ from planners.analytical_transit import (
 from planners.moon_distance import (
     WINDOW_IDEAL,
     WINDOW_POSSIBLE,
-    capture_window_summary,
-    capture_windows,
+    capture_summary_from_samples,
     min_moon_distance,
 )
 from planners.timefmt import format_hhmm
@@ -293,14 +292,14 @@ def best_dates(
             target_ra_hours, target_dec_deg, latitude, longitude, item["date"],
             utc_offset_hours,
         )
-        windows = capture_windows(
+        item["windows"] = capture_summary_from_samples(
             curve.altitudes,
             curve.moon_separations,
             curve.moon_altitudes,
             curve.astro_night,
             item["_illumination_pct"],
+            curve.hours_local,
         )
-        item["windows"] = capture_window_summary(windows, curve.hours_local)
         item["transit_local"] = format_hhmm(
             local_utc_offset(longitude, utc_offset_hours) + item["transit_utc_hours"]
         )
