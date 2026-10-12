@@ -15,6 +15,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import exifread
 from astropy.io import fits
 
 from equipment.metrics import escala_imagen
@@ -223,14 +224,45 @@ def exposure_de(fichero: Path) -> float | None:
     """Exposición por frame en segundos (EXPOSURE o EXPTIME), o ``None``.
 
     Compartida por el calibrador (resultado y ``-opt=exp``) y el pool
-    (tiempo total acumulado); sin cabecera legible no hay dato.
+    (tiempo total acumulado); sin segundos finitos positivos no hay dato.
+    Una clave ilegible permite probar el alias en vez de abortar el escaneo.
+    En RAW consulta ExposureTime EXIF en solo lectura, sin revelar imágenes;
+    contenedores no soportados (como CR3) quedan sin dato.
     """
+    if fichero.suffix.lower() in RAW_EXTS:
+        return _exposure_raw(fichero)
     header = _leer_header(fichero)
     if header is None:
         return None
     for clave in ("EXPOSURE", "EXPTIME"):
         if header.get(clave) is not None:
-            return float(header[clave])
+            try:
+                valor = float(header[clave])
+            except (TypeError, ValueError):
+                continue
+            if math.isfinite(valor) and valor > 0:
+                return valor
+    return None
+
+
+def _exposure_raw(fichero: Path) -> float | None:
+    """Lee segundos EXIF en RAW soportados, sin miniaturas ni MakerNotes.
+
+    Datos ausentes o metadatos corruptos no deben abortar el escaneo. Solo
+    ExposureTime representa segundos; no confunde ShutterSpeedValue (APEX).
+    """
+    try:
+        with fichero.open("rb") as archivo:
+            tags = exifread.process_file(archivo, details=False, extract_thumbnail=False,
+                                        stop_tag="ExposureTime")
+        for clave in ("EXIF ExposureTime", "Image ExposureTime"):
+            tag = tags.get(clave)
+            if tag is not None and tag.values:
+                valor = float(tag.values[0])
+                if math.isfinite(valor) and valor > 0:
+                    return valor
+    except Exception:  # formatos no soportados y metadatos corruptos quedan sin dato
+        return None
     return None
 
 

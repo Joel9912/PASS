@@ -1,4 +1,6 @@
 """session_parser: detección de sesiones, másters, filtros y tipo de sesión."""
+import struct
+
 import numpy as np
 import pytest
 from astropy.io import fits
@@ -10,6 +12,46 @@ from stacks.session_parser import (
     parse_session,
     parse_sessions,
 )
+
+
+@pytest.mark.parametrize("valor", ["Unknown", "", "NaN", "inf", "-1", "0"])
+def test_exposicion_invalida_es_dato_desconocido(tmp_path, valor):
+    """Una exposición ilegible o sin sentido no aborta la lectura del FITS."""
+    fichero = _fits(tmp_path / "light.fit", EXPTIME=valor)
+    assert session_parser.exposure_de(fichero) is None
+
+
+def test_exposicion_usa_alias_valido_tras_texto_invalido(tmp_path):
+    """Si EXPOSURE no es numérico, EXPTIME todavía puede aportar la exposición."""
+    fichero = _fits(tmp_path / "light.fit", EXPOSURE="Unknown", EXPTIME=30)
+    assert session_parser.exposure_de(fichero) == 30
+
+
+def test_exposicion_texto_numerico_sigue_siendo_valido(tmp_path):
+    """Las cámaras que escriben segundos como texto conservan su dato."""
+    fichero = _fits(tmp_path / "light.fit", EXPTIME="30.5")
+    assert session_parser.exposure_de(fichero) == 30.5
+
+
+@pytest.mark.parametrize("numerador, denominador", [(30, 1), (1, 125), (305, 10)])
+def test_exposicion_raw_lee_exif_sin_modificar_original(tmp_path, numerador, denominador):
+    """Un contenedor TIFF/EXIF mínimo permite probar el lector real de metadatos."""
+    fichero = tmp_path / "light.dng"
+    datos = (struct.pack("<2sHI", b"II", 42, 8)
+             + struct.pack("<H", 1) + struct.pack("<HHII", 0x8769, 4, 1, 26) + struct.pack("<I", 0)
+             + struct.pack("<H", 1) + struct.pack("<HHII", 0x829A, 5, 1, 44) + struct.pack("<I", 0)
+             + struct.pack("<II", numerador, denominador))
+    fichero.write_bytes(datos)
+    assert session_parser.exposure_de(fichero) == pytest.approx(numerador / denominador)
+    assert fichero.read_bytes() == datos
+
+
+def test_exposicion_raw_corrupto_o_ausente_no_aborta(tmp_path):
+    """Un RAW ilegible no aporta segundos ni rompe la operación."""
+    fichero = tmp_path / "light.nef"
+    assert session_parser.exposure_de(fichero) is None
+    fichero.write_bytes(b"raw corrupto")
+    assert session_parser.exposure_de(fichero) is None
 
 
 def _fits(path, **cabecera):
