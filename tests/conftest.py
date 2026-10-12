@@ -1,4 +1,9 @@
-"""Fixtures compartidos de los tests de PASS."""
+"""Fixtures compartidos de los tests de PASS.
+
+Aíslan la base del usuario, las descargas y el área de trabajo en un sandbox
+temporal (ver ``pytest_configure``), y retienen una ``QApplication`` única
+para toda la sesión.
+"""
 import os
 import sqlite3
 import tempfile

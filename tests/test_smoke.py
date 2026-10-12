@@ -39,6 +39,14 @@ def test_root_docs_exist():
         assert (ROOT / doc).exists(), f"Falta {doc}"
 
 
+def test_readme_publico_no_cita_documentos_internos():
+    """El README público no dirige a documentos de trabajo no distribuidos."""
+    contenido = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    for nombre in ("PROGRAM.md", "MEMORY.md", "STRUCTURE.md"):
+        assert nombre not in contenido
+
+
 def test_every_code_folder_has_readme():
     """Convención: toda carpeta con código tiene su README.md (4 secciones)."""
     folders = [
