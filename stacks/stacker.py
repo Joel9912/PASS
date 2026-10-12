@@ -181,11 +181,14 @@ def apilar_pool(
             "Ponderación wfwhm/nbstars pedida sobre secuencias de enlaces: los "
             "datos de registro (filas R) no viajan con ellas."
         )
-    for filtro, indices in grupos.items():
-        carpeta = registro.dir / "secuencias" / _canal(filtro)
+    nombres = [_canal(filtro) for filtro in grupos]
+    colision = len({nombre.casefold() for nombre in nombres}) != len(nombres)
+    for numero, (filtro, indices) in enumerate(grupos.items(), start=1):
+        canal = f"{numero:04d}_{_canal(filtro)}" if colision else _canal(filtro)
+        carpeta = registro.dir / "secuencias" / canal
         limpiar_trabajo(carpeta, raiz=registro.dir)
         seq = _secuencia_de(registro, indices, carpeta, log_cb)
-        destino = salida / (f"{nombre}.fit" if un_grupo else f"{_canal(filtro)}.fit")
+        destino = salida / (f"{nombre}.fit" if un_grupo else f"{canal}.fit")
         apiladas.append(_apilar_secuencia(
             carpeta, seq, destino, opciones, progress_cb, log_cb,
         ))

@@ -16,6 +16,15 @@ from stacks.siril_runner import SirilError, SirilResult
 from stacks.stacker import StackOptions, apilar_pool
 
 
+def test_filtros_normalizados_homonimos_no_comparten_salidas(tmp_path, siril_falso, apilados):
+    """Nombres normalizados iguales siguen siendo canales independientes."""
+    registro = _registro(tmp_path, ["Ha+", "Ha-", "ha", None, "sin_filtro"])
+    salidas = apilar_pool(registro, "prueba", opciones=StackOptions())
+    assert len(salidas) == 5
+    assert len({p.name.casefold() for p in salidas}) == 5
+    assert all(p.is_file() for p in salidas)
+
+
 class _SirilFalso:
     """Doble de ejecutar_script: link renumera; stack/rgbcomp crean su -out=."""
 
