@@ -32,6 +32,7 @@ Gotchas de SirIL 1.4.4 (validados con el binario real, ver ``stacks/README.md``)
 - Los avisos «...solo se pueden mantener si ... 16 bits. Anulando.» del log
   son ruido no fatal: el éxito lo decide el runner (exit + marcadores + salida).
 """
+import logging
 from dataclasses import dataclass, field
 from hashlib import sha256
 from pathlib import Path
@@ -410,23 +411,27 @@ def _enlazar_frames(
 
 
 def _exigir_enteros_16bit(frames: list[Path], contexto: str) -> None:
-    """Rechaza lights/flats float32 antes de invocar a SirIL.
+    """Revisa todas las cabeceras FITS y rechaza frames que no sean de 16 bits.
 
     ``calibrate`` de SirIL 1.4.4 solo procesa secuencias de 16 bits y con
     float32 aborta en mitad con un log enrevesado; aquí sale un error claro
     sin haber ejecutado nada.
     """
-    try:
-        with fits.open(frames[0], memmap=True) as hdul:
-            bitpix = int(hdul[0].header.get("BITPIX", 16))
-    except Exception:  # cabecera ilegible: que decida SirIL
-        return
-    if bitpix < 0:  # -32/-64: punto flotante
-        raise SirilError(
-            f"{contexto}: SirIL solo calibra secuencias de 16 bits y "
-            f"{frames[0].name} es de punto flotante (BITPIX {bitpix}). "
-            "Convierte los frames a 16 bits antes de calibrar."
-        )
+    for frame in frames:
+        if frame.suffix.lower() not in FITS_EXTS:
+            continue
+        try:
+            with fits.open(frame, memmap=True) as hdul:
+                bitpix = int(hdul[0].header["BITPIX"])
+        except Exception as exc:  # cabecera ilegible: que decida SirIL, sin omitir las demás
+            logging.getLogger(__name__).warning("No se pudo verificar BITPIX de %s: %s", frame, exc)
+            continue
+        if bitpix != 16:
+            raise SirilError(
+                f"{contexto}: SirIL solo calibra secuencias de 16 bits y "
+                f"{frame.name} tiene BITPIX {bitpix}. "
+                "Convierte los frames a 16 bits antes de calibrar."
+            )
 
 
 def _avisos_de_faltantes(faltan: set[str]) -> list[str]:

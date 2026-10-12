@@ -599,6 +599,30 @@ def test_lights_float32_no_se_calibran(tmp_path, siril_falso):
     assert not siril_falso.llamadas  # se rechaza antes de invocar a SirIL
 
 
+@pytest.mark.parametrize("dtype", [np.float32, np.float64, np.int32, np.uint8])
+def test_bitpix_incompatible_en_segundo_light_no_se_calibra(tmp_path, siril_falso, dtype):
+    """El primer light válido no autoriza los demás frames de la secuencia."""
+    _fits(tmp_path / "masters" / "master_bias.fits")
+    primero = _fits(tmp_path / "lights" / "light_0001.fits")
+    segundo = primero.with_name("light_0002.fits")
+    fits.writeto(segundo, np.ones((2, 2), dtype=dtype))
+    originales = [p.read_bytes() for p in (primero, segundo)]
+    with pytest.raises(SirilError, match="light_0002.*BITPIX"):
+        calibrate_session(parse_session(tmp_path))
+    assert not siril_falso.llamadas
+    assert [p.read_bytes() for p in (primero, segundo)] == originales
+
+
+def test_cabecera_ilegible_no_omite_validacion_de_fits_posteriores(tmp_path):
+    """Una cabecera ilegible no interrumpe la comprobación del resto de frames."""
+    primero = tmp_path / "corrupto.fit"
+    primero.write_bytes(b"corrupto")
+    segundo = tmp_path / "incompatible.fit"
+    fits.writeto(segundo, np.ones((2, 2), dtype=np.float32))
+    with pytest.raises(SirilError, match="incompatible.fit"):
+        calibrator._exigir_enteros_16bit([primero, segundo], "Lights")
+
+
 # ---------------------------------------------------------------- persistencia
 def test_save_list_delete(memory_db, siril_falso, sesion_completa):
     """La tabla calibrated_sessions guarda, lista y olvida sesiones."""
