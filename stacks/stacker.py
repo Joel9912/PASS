@@ -203,9 +203,17 @@ def exportar_apilados(salidas: list[Path], carpeta: Path) -> list[Path]:
 
     Comprueba todos los nombres antes de copiar; si falla una copia, quita
     únicamente los archivos creados en esta operación (working permanece).
+
+    Solo se exportan ficheros generados por PASS dentro de su carpeta de
+    apilados: un origen ajeno (o un enlace que escapa) no se copia jamás.
     """
     if not carpeta.is_dir() or carpeta.is_symlink() or carpeta.is_junction():
         raise SirilError(f"Carpeta madre no disponible o enlazada: {carpeta}")
+    raiz = (WORKING_FOLDER / APILADOS_DIR).resolve()
+    if any(not salida.resolve().is_relative_to(raiz) for salida in salidas):
+        raise SirilError(
+            f"Las salidas deben vivir en la carpeta de trabajo de apilados ({raiz})."
+        )
     destinos = [carpeta / salida.name for salida in salidas]
     if len(set(destinos)) != len(destinos) or any(p.exists() or p.is_symlink() for p in destinos):
         raise SirilError("Ya existe una salida con ese nombre en la carpeta madre; no se reemplazó.")

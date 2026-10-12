@@ -346,16 +346,16 @@ def test_sin_salida_aunque_siril_diga_ok(tmp_path, siril_falso, apilados):
     siril_falso.crea_salida = False
     with pytest.raises(SirilError, match="apilado"):
         apilar_pool(_registro(tmp_path, [None]), "x")
-def test_exportacion_sin_sobrescritura_ni_copias_parciales(tmp_path):
+def test_exportacion_sin_sobrescritura_ni_copias_parciales(tmp_path, apilados):
     """Exporta solo salidas finales y nunca pisa una existente."""
     import pytest
 
     from stacks.siril_runner import SirilError
-    from stacks.stacker import exportar_apilados
+    from stacks.stacker import APILADOS_DIR, exportar_apilados
 
-    origen = tmp_path / "working"
+    origen = apilados / APILADOS_DIR / "objetos"
     madre = tmp_path / "sesiones"
-    origen.mkdir()
+    origen.mkdir(parents=True)
     madre.mkdir()
     salidas = [origen / "a.fit", origen / "b.fit"]
     for ruta in salidas:
@@ -368,3 +368,23 @@ def test_exportacion_sin_sobrescritura_ni_copias_parciales(tmp_path):
     (madre / "b.fit").unlink()
     assert exportar_apilados(salidas, madre) == [madre / p.name for p in salidas]
     assert (madre / "a.fit").read_bytes() == b"a.fit"
+
+
+def test_exportacion_rechaza_origen_fuera_de_la_carpeta_de_trabajo(tmp_path, apilados):
+    """No se exportan ficheros que PASS no generó en su carpeta de apilados."""
+    from stacks.siril_runner import SirilError
+    from stacks.stacker import APILADOS_DIR, exportar_apilados
+
+    madre = tmp_path / "sesiones"
+    madre.mkdir()
+    ajeno = tmp_path / "privado"
+    ajeno.mkdir()
+    secreto = ajeno / "secreto.fit"
+    secreto.write_bytes(b"privado")
+    escapado = apilados / APILADOS_DIR / "externo.fit"
+    escapado.parent.mkdir(parents=True, exist_ok=True)
+    escapado.symlink_to(secreto)
+    for ruta in (secreto, escapado):
+        with pytest.raises(SirilError, match="carpeta de trabajo"):
+            exportar_apilados([ruta], madre)
+    assert not (madre / "secreto.fit").exists()
