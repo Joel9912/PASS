@@ -484,6 +484,45 @@ def test_rosaceas_construyen_pintan_y_hacen_roundtrip(qt_app):
     for widget in (rosa, obstaculos, lumen, salida):
         widget.deleteLater()
 
+
+def test_panel_cl_conserva_fuente_a_mas_de_100_km(qt_app):
+    """E-0007: una fuente de CL a más de 100 km no se trunca en el panel.
+
+    El slider iba de 0,5 a 100 km, así que una fuente guardada a 150 km
+    (la validación solo pide km > 0) abría el panel ya recortada y, al
+    tocar cualquier otro control, ``_aplicar`` devolvía los 100 km a la
+    ubicación. El tope del slider se abre solo cuando el valor guardado
+    lo pide; una fuente nueva sigue limitada a 100 km.
+    """
+    from equipment.models import DIRECTIONS
+    from ui.equipment_tab.rosaceas import DiscoLumen, _PanelLumen
+
+    _app = qt_app
+    lumen = DiscoLumen()
+    fuentes = {d: {"fuente": None, "km": 0.0} for d in DIRECTIONS}
+    fuentes["N"] = {"fuente": "gran_ciudad", "km": 150.0}
+    lumen.set_lp(fuentes)
+
+    # El panel muestra la distancia guardada y, al cambiar la fuente, no la
+    # recorta: el disco vuelve a la base con los 150 km originales.
+    panel = _PanelLumen("N", lumen.lp()["N"], lumen)
+    assert panel.km() == 150.0
+    panel._elegir("ciudad", True)
+    assert panel.km() == 150.0
+    lumen._aplicar(panel, "N")
+    assert lumen.lp()["N"] == {"fuente": "ciudad", "km": 150.0}
+
+    # Una fuente nueva sigue limitada al tope de 100 km (5 km por defecto).
+    panel_nuevo = _PanelLumen("E", {"fuente": None, "km": 0.0}, lumen)
+    assert panel_nuevo.km() == 5.0
+    panel_nuevo._elegir("pueblo", True)
+    panel_nuevo._slider.setValue(panel_nuevo._slider.maximum())
+    assert panel_nuevo.km() == 100.0
+
+    panel.deleteLater()
+    panel_nuevo.deleteLater()
+    lumen.deleteLater()
+
 def test_cabecera_suma_precio_peso_y_lo_persiste(qt_app, memory_db):
     """Cabecera: precio/peso son la suma en vivo (solo lectura) y se guarda.
 

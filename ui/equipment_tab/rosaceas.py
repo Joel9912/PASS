@@ -448,7 +448,8 @@ class _PanelLumen(QFrame):
 
     Vivo en memoria (D-5): cada cambio emite ``cambio`` y el disco lo
     vuelca a su estado; solo «Guardar ubicación» persiste. El slider va
-    de 0,5 a 100 km en pasos de 0,5.
+    de 0,5 a 100 km en pasos de 0,5, y sube su techo solo si la fuente
+    guardada está más lejos (nada se trunca al volver a editar).
     """
 
     #: El valor del panel cambió (fuente elegida o km movido).
@@ -489,7 +490,11 @@ class _PanelLumen(QFrame):
         fila = QHBoxLayout()
         fila.addWidget(QLabel("Distancia"))
         self._slider = QSlider(Qt.Orientation.Horizontal)
-        self._slider.setRange(1, 200)  # 0,5–100 km en pasos de 0,5
+        # 0,5–100 km en pasos de 0,5, pero el tope se abre solo si el valor
+        # guardado lo pide: la validación admite km > 0 sin techo, y un
+        # techo fijo recortaba en silencio las fuentes más lejanas (E-0007).
+        techo = max(200, round(km * 2))
+        self._slider.setRange(1, techo)  # 0,5–100 km, o hasta el km guardado
         self._slider.setValue(round(km * 2) if km > 0 else 10)  # 5 km por defecto
         self._slider.setFixedWidth(170)
         self._slider.valueChanged.connect(self._mostrar_km)
@@ -516,7 +521,7 @@ class _PanelLumen(QFrame):
         return self._fuente
 
     def km(self) -> float:
-        """Distancia de la fuente en km (0,5–100)."""
+        """Distancia de la fuente en km (0,5–100, o más si el valor guardado lo era)."""
         return self._slider.value() / 2
 
     def _elegir(self, fuente: str | None, activo: bool) -> None:
