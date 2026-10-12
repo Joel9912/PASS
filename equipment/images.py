@@ -7,6 +7,8 @@ La API es polymórfica por ``entity_kind`` («setup», «telescope», «camera»
 «location») con un mapa cerrado de tablas: sin SQL dinámico fuera de él.
 """
 import shutil
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from db.connection import DATA_DIR, get_connection
@@ -37,13 +39,43 @@ def _entidad(entity_kind: str) -> tuple[str, str, str]:
         raise ValueError(f"Entidad de imagen desconocida: {entity_kind!r}.") from None
 
 
-def _copy_to_data(entity_kind: str, entity_id: int, path: str) -> str:
+@dataclass
+class CambiosImagenes:
+    """Registra copias nuevas y retiradas para compensar un guardado de setup."""
+
+    nuevas: list[Path] = field(default_factory=list)
+    retiradas: list[str] = field(default_factory=list)
+
+
+@contextmanager
+def guardado():
+    """Confirma BD antes de retirar adjuntos; ante error elimina solo copias nuevas.
+
+    Las escrituras participantes no deben confirmar por separado. No cubre
+    cierres abruptos del proceso ni hace transaccional el sistema de archivos.
+    """
+    cambios = CambiosImagenes()
+    try:
+        with get_connection():
+            yield cambios
+    except BaseException:
+        for path in cambios.nuevas:
+            _borrar_si_propia(str(path))
+        raise
+    for path in cambios.retiradas:
+        _borrar_si_propia(path)
+
+
+def _copy_to_data(
+    entity_kind: str, entity_id: int, path: str, cambios: CambiosImagenes | None = None,
+) -> str:
     """Copia ``path`` a ``IMAGES_ROOT/<entity_kind>/<entity_id>/``.
 
     Devuelve la ruta a guardar. Si el original ya está en el destino
     (re-adjuntar) no se copia. Si ya existe otra imagen con el mismo nombre,
     se elige un sufijo libre en lugar de sobrescribirla. Si el original falta
-    o la copia falla, se devuelve la ruta tal cual.
+    o la copia falla, se devuelve la ruta tal cual, salvo en guardado de setup:
+    entonces el error se propaga y se registra incluso la copia parcial.
     """
     origin = Path(path)
     target_dir = IMAGES_ROOT / entity_kind / str(entity_id)
@@ -52,12 +84,16 @@ def _copy_to_data(entity_kind: str, entity_id: int, path: str) -> str:
         if origin.resolve() != target.resolve():
             target_dir.mkdir(parents=True, exist_ok=True)
             indice = 2
-            while target.exists():
+            while target.exists() or target.is_symlink():
                 target = target_dir / f"{origin.stem}-{indice}{origin.suffix}"
                 indice += 1
+            if cambios is not None:
+                cambios.nuevas.append(target)
             shutil.copy2(origin, target)
         return str(target)
     except OSError:
+        if cambios is not None:
+            raise
         return path
 
 
@@ -75,7 +111,10 @@ def _borrar_si_propia(path: str) -> None:
         pass  # un fichero que no se puede borrar no debe romper el guardado
 
 
-def _attach(entity_kind: str, entity_id: int, path: str, kind: str | None = None) -> int:
+def _attach(
+    entity_kind: str, entity_id: int, path: str, kind: str | None = None,
+    *, cambios: CambiosImagenes | None = None,
+) -> int:
     """Adjunta una imagen a una entidad y devuelve su id (interna de ``sync``).
 
     El fichero se **copia** a `data/equipment_images/<entidad>/<id>/` (D-1):
@@ -89,9 +128,10 @@ def _attach(entity_kind: str, entity_id: int, path: str, kind: str | None = None
     conn = get_connection()
     cur = conn.execute(
         f"INSERT INTO {tabla} ({fk}, path, kind) VALUES (?, ?, ?)",
-        (entity_id, _copy_to_data(entity_kind, entity_id, path), kind or kind_defecto),
+        (entity_id, _copy_to_data(entity_kind, entity_id, path, cambios), kind or kind_defecto),
     )
-    conn.commit()
+    if cambios is None:
+        conn.commit()
     return cur.lastrowid
 
 
@@ -105,7 +145,9 @@ def list_images(entity_kind: str, entity_id: int) -> list[dict]:
     return [dict(row) for row in rows]
 
 
-def _remove(entity_kind: str, entity_id: int, path: str) -> None:
+def _remove(
+    entity_kind: str, entity_id: int, path: str, *, cambios: CambiosImagenes | None = None,
+) -> None:
     """Quita una imagen de una entidad: borra la fila y su copia propia (interna de ``sync``).
 
     Solo se borran ficheros bajo ``IMAGES_ROOT``: los originales del usuario
@@ -116,11 +158,17 @@ def _remove(entity_kind: str, entity_id: int, path: str) -> None:
     conn.execute(
         f"DELETE FROM {tabla} WHERE {fk} = ? AND path = ?", (entity_id, path)
     )
-    conn.commit()
-    _borrar_si_propia(path)
+    if cambios is None:
+        conn.commit()
+        _borrar_si_propia(path)
+    else:
+        cambios.retiradas.append(path)
 
 
-def sync(entity_kind: str, entity_id: int, paths: list[str]) -> None:
+def sync(
+    entity_kind: str, entity_id: int, paths: list[str],
+    *, cambios: CambiosImagenes | None = None,
+) -> None:
     """Re-sincroniza las imágenes de una entidad con ``paths`` (contrato D-5).
 
     La lista es la verdad al guardar: primero ``_remove`` de las que sobran y
@@ -131,10 +179,10 @@ def sync(entity_kind: str, entity_id: int, paths: list[str]) -> None:
     guardadas = [img["path"] for img in list_images(entity_kind, entity_id)]
     for sobra in guardadas:
         if sobra not in paths:
-            _remove(entity_kind, entity_id, sobra)
+            _remove(entity_kind, entity_id, sobra, cambios=cambios)
     for falta in dict.fromkeys(paths):
         if falta not in guardadas:
-            _attach(entity_kind, entity_id, falta)
+            _attach(entity_kind, entity_id, falta, cambios=cambios)
 
 
 def purge(entity_kind: str, entity_id: int) -> None:

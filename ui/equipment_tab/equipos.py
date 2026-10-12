@@ -27,6 +27,8 @@ base.
 """
 from __future__ import annotations
 
+import sqlite3
+
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QResizeEvent
 from PyQt6.QtWidgets import (
@@ -701,7 +703,7 @@ class EquiposTab(QWidget):
                 manager.create(setup)
             else:
                 manager.update(setup)
-        except ValueError as exc:
+        except (ValueError, OSError, sqlite3.Error) as exc:
             QMessageBox.warning(self, "No se pudo guardar", str(exc))
             return
         self._recargar_lista(select_id=setup.id)

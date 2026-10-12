@@ -4,6 +4,31 @@ La ``QApplication`` viene del fixture ``qt_app`` de ``conftest.py``.
 """
 
 
+def test_guardado_fallido_avisa_y_conserva_formulario(qt_app, memory_db, monkeypatch):
+    """Errores de copia o SQLite no se escapan ni anuncian un guardado exitoso."""
+    import sqlite3
+
+    from ui.equipment_tab import equipos
+
+    pagina = equipos.EquiposTab()
+    pagina._nombre.setText("Sin guardar")
+    avisos = []
+    emisiones = []
+    monkeypatch.setattr(equipos.QMessageBox, "warning", lambda *args: avisos.append(args[2]))
+    pagina.setups_changed.connect(lambda: emisiones.append(True))
+    for error in (OSError("copia fallida"), sqlite3.IntegrityError("BD fallida")):
+        def fallar(setup, error=error):
+            """Simula un fallo de persistencia del backend."""
+            raise error
+        monkeypatch.setattr(equipos.manager, "create", fallar)
+        pagina._guardar()
+    assert avisos == ["copia fallida", "BD fallida"]
+    assert emisiones == []
+    assert pagina._nombre.text() == "Sin guardar"
+    assert pagina._setup_id is None
+    pagina.deleteLater()
+
+
 def test_equipment_page_construye_con_sus_dos_subpestanas(qt_app):
     """Paso 2: EquipmentPage monta Equipos y Ubicaciones y reemite señales.
 

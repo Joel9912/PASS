@@ -56,32 +56,26 @@ def create(setup: EquipmentSetup) -> int:
     El diálogo solo edita la lista en memoria (cancelar no toca ficheros) y
     llama a ``create`` al confirmar. ``filter_ids`` se sincroniza igual con
     ``setup_filters`` (M2M, diff por conjunto).
+    Fila, filtros y adjuntos se confirman juntos; el id se asigna solo tras éxito.
     """
     validar_setup(setup)
     conn = get_connection()
     _validar_filtros(conn, setup.filter_ids)
-    cur = conn.execute(
-        "INSERT INTO equipment_setups (name, category, location_id, telescope_id,"
-        " guide_telescope_id, camera_id, guide_camera_id, mount_id, price_eur,"
-        " weight_kg, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (
-            setup.name,
-            setup.category,
-            setup.location_id,
-            setup.telescope_id,
-            setup.guide_telescope_id,
-            setup.camera_id,
-            setup.guide_camera_id,
-            setup.mount_id,
-            setup.price_eur,
-            setup.weight_kg,
-            setup.notes,
-        ),
-    )
-    conn.commit()
-    setup.id = cur.lastrowid
-    images.sync("setup", setup.id, setup.images)
-    _sync_filters(setup.id, setup.filter_ids)
+    with images.guardado() as cambios:
+        cur = conn.execute(
+            "INSERT INTO equipment_setups (name, category, location_id, telescope_id,"
+            " guide_telescope_id, camera_id, guide_camera_id, mount_id, price_eur,"
+            " weight_kg, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                setup.name, setup.category, setup.location_id, setup.telescope_id,
+                setup.guide_telescope_id, setup.camera_id, setup.guide_camera_id,
+                setup.mount_id, setup.price_eur, setup.weight_kg, setup.notes,
+            ),
+        )
+        nuevo_id = cur.lastrowid
+        images.sync("setup", nuevo_id, setup.images, cambios=cambios)
+        _sync_filters(nuevo_id, setup.filter_ids)
+    setup.id = nuevo_id
     return setup.id
 
 
@@ -93,35 +87,27 @@ def update(setup: EquipmentSetup) -> None:
     sin tocar el ``kind`` de las que siguen. Parte siempre de la lista que
     devuelva ``images.list_images()``; una lista vacía vacía las imágenes.
     ``filter_ids`` se sincroniza igual con ``setup_filters``.
+    Ante un fallo se conserva lo guardado, incluidos los adjuntos anteriores.
     """
     if setup.id is None:
         raise ValueError("Equipo: falta el id (crea antes de actualizar).")
     validar_setup(setup)
     conn = get_connection()
     _validar_filtros(conn, setup.filter_ids)
-    conn.execute(
-        "UPDATE equipment_setups SET name = ?, category = ?, location_id = ?,"
-        " telescope_id = ?, guide_telescope_id = ?, camera_id = ?,"
-        " guide_camera_id = ?, mount_id = ?, price_eur = ?, weight_kg = ?,"
-        " notes = ? WHERE id = ?",
-        (
-            setup.name,
-            setup.category,
-            setup.location_id,
-            setup.telescope_id,
-            setup.guide_telescope_id,
-            setup.camera_id,
-            setup.guide_camera_id,
-            setup.mount_id,
-            setup.price_eur,
-            setup.weight_kg,
-            setup.notes,
-            setup.id,
-        ),
-    )
-    conn.commit()
-    images.sync("setup", setup.id, setup.images)
-    _sync_filters(setup.id, setup.filter_ids)
+    with images.guardado() as cambios:
+        conn.execute(
+            "UPDATE equipment_setups SET name = ?, category = ?, location_id = ?,"
+            " telescope_id = ?, guide_telescope_id = ?, camera_id = ?,"
+            " guide_camera_id = ?, mount_id = ?, price_eur = ?, weight_kg = ?,"
+            " notes = ? WHERE id = ?",
+            (
+                setup.name, setup.category, setup.location_id, setup.telescope_id,
+                setup.guide_telescope_id, setup.camera_id, setup.guide_camera_id,
+                setup.mount_id, setup.price_eur, setup.weight_kg, setup.notes, setup.id,
+            ),
+        )
+        images.sync("setup", setup.id, setup.images, cambios=cambios)
+        _sync_filters(setup.id, setup.filter_ids)
 
 
 def delete(setup_id: int) -> None:
@@ -244,7 +230,7 @@ def _sync_filters(setup_id: int, filter_ids: list[int]) -> None:
 
     La lista es la verdad al guardar (mismo criterio D-5 que las imágenes):
     las que sobran se quitan, las que faltan se añaden y las que siguen
-    quedan intactas.
+    quedan intactas. La transacción la confirma el guardado del setup.
     """
     conn = get_connection()
     actuales = {
@@ -264,4 +250,3 @@ def _sync_filters(setup_id: int, filter_ids: list[int]) -> None:
             "INSERT INTO setup_filters (setup_id, filter_id) VALUES (?, ?)",
             (setup_id, anadir),
         )
-    conn.commit()

@@ -36,6 +36,102 @@ from equipment.validaciones import (
 )
 
 
+@pytest.mark.parametrize("editar", [False, True])
+@pytest.mark.parametrize("fallo", ["copia", "imagen", "filtro", "commit"])
+def test_guardado_setup_atomico(memory_db, monkeypatch, tmp_path, editar, fallo):
+    """Un fallo en cualquier etapa conserva BD, adjuntos anteriores y originales."""
+    from equipment import components, images, manager
+
+    raiz = tmp_path / "adjuntos"
+    monkeypatch.setattr(images, "IMAGES_ROOT", raiz)
+    original = tmp_path / "anterior.png"
+    original.write_bytes(b"anterior")
+    nueva = tmp_path / "nueva.png"
+    nueva.write_bytes(b"nueva")
+    filtro = components.create_filter(Filter(name="Ha"))
+    anterior = EquipmentSetup(name="Anterior", images=[str(original)], filter_ids=[filtro])
+    manager.create(anterior)
+    copia = Path(images.list_images("setup", anterior.id)[0]["path"])
+    snapshot = list(memory_db.iterdump())
+    equipo = EquipmentSetup(name="Nuevo", images=[str(nueva)], filter_ids=[filtro])
+    if editar:
+        equipo.id = anterior.id
+    if fallo == "copia":
+        def copiar(origen, destino):
+            """Deja una copia parcial antes de fallar."""
+            Path(destino).write_bytes(b"parcial")
+            raise OSError("copia fallida")
+        monkeypatch.setattr(images.shutil, "copy2", copiar)
+    elif fallo == "imagen":
+        memory_db.execute("CREATE TEMP TRIGGER fallo BEFORE INSERT ON equipment_images BEGIN SELECT RAISE(ABORT, 'imagen'); END")
+    elif fallo == "filtro":
+        def filtros(*args):
+            """Falla después de modificar la relación."""
+            memory_db.execute("DELETE FROM setup_filters")
+            raise RuntimeError("filtro fallido")
+        monkeypatch.setattr(manager, "_sync_filters", filtros)
+    else:
+        memory_db.execute("CREATE TABLE diferida (id INTEGER REFERENCES filters(id) DEFERRABLE INITIALLY DEFERRED)")
+        memory_db.commit()
+        snapshot = list(memory_db.iterdump())
+        sincronizar = manager._sync_filters
+        def filtros(*args):
+            """Provoca una FK diferida que falla únicamente al confirmar."""
+            sincronizar(*args)
+            memory_db.execute("INSERT INTO diferida VALUES (999999)")
+        monkeypatch.setattr(manager, "_sync_filters", filtros)
+    with pytest.raises((OSError, sqlite3.IntegrityError, RuntimeError)):
+        (manager.update if editar else manager.create)(equipo)
+    memory_db.commit()
+    assert list(memory_db.iterdump()) == snapshot
+    assert equipo.id == (anterior.id if editar else None)
+    assert copia.read_bytes() == b"anterior"
+    assert list(raiz.rglob("*.png")) == [copia]
+    assert original.read_bytes() == b"anterior"
+    assert nueva.read_bytes() == b"nueva"
+
+
+def test_guardado_setup_confirmado_retira_solo_imagen_sobrante(memory_db, monkeypatch, tmp_path):
+    """Un éxito confirma relaciones y conserva adjuntos retenidos y originales."""
+    from equipment import components, images, manager
+
+    monkeypatch.setattr(images, "IMAGES_ROOT", tmp_path / "adjuntos")
+    fuentes = [tmp_path / nombre for nombre in ("uno.png", "dos.png", "tres.png")]
+    for path in fuentes:
+        path.write_bytes(path.name.encode())
+    filtro = components.create_filter(Filter(name="Ha"))
+    setup = EquipmentSetup(name="Antes", images=[str(p) for p in fuentes[:2]])
+    manager.create(setup)
+    viejas = [Path(img["path"]) for img in images.list_images("setup", setup.id)]
+    setup.name = "Después"
+    setup.images = [str(viejas[1]), str(fuentes[2])]
+    setup.filter_ids = [filtro]
+    manager.update(setup)
+    assert manager.get(setup.id)["name"] == "Después"
+    assert manager.get(setup.id)["filter_ids"] == [filtro]
+    assert not viejas[0].exists()
+    assert viejas[1].is_file()
+    assert len(images.list_images("setup", setup.id)) == 2
+    assert all(p.is_file() for p in fuentes)
+
+
+def test_guardado_setup_segunda_copia_fallida_retira_todas_las_nuevas(memory_db, monkeypatch, tmp_path):
+    """También se compensa una copia correcta antes de otra fallida."""
+    from equipment import images, manager
+
+    raiz = tmp_path / "adjuntos"
+    monkeypatch.setattr(images, "IMAGES_ROOT", raiz)
+    origen = tmp_path / "uno.png"
+    origen.write_bytes(b"original")
+    setup = EquipmentSetup(name="Nuevo", images=[str(origen), str(tmp_path / "ausente.png")])
+    with pytest.raises(OSError):
+        manager.create(setup)
+    assert manager.list_setups() == []
+    assert setup.id is None
+    assert not list(raiz.rglob("*.png"))
+    assert origen.read_bytes() == b"original"
+
+
 def test_camera_expone_los_datos_del_fov(memory_db):
     """C-1: Camera lleva píxel y tamaño de sensor, en su tabla (Equipo v2).
 
