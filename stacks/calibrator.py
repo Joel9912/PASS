@@ -388,8 +388,8 @@ def _enlazar_frames(
     """
     trabajo.mkdir(parents=True, exist_ok=True)
     hay_raw = any(f.suffix.lower() in RAW_EXTS for f in frames)
-    for frame in frames:
-        enlace = trabajo / frame.name
+    for indice, frame in enumerate(frames, start=1):
+        enlace = trabajo / f"{indice:06d}_{frame.name}"
         if not enlace.exists():
             enlazar(frame, enlace)
         if log_cb and base_seq == "light":

@@ -20,6 +20,16 @@ from stacks.session_parser import parse_session
 from stacks.siril_runner import SirilError, SirilResult
 
 
+def test_enlaza_lights_homonimos_de_filtros_distintos(tmp_path, siril_falso):
+    """Dos lights homónimos conservan ambos orígenes, sin sobrescribirlos."""
+    fuentes = [_fits(tmp_path / filtro / "luz.fit") for filtro in ("Ha", "OIII")]
+    trabajo = tmp_path / "enlaces"
+    calibrator._enlazar_frames(fuentes, trabajo, "light")
+    enlaces = list(trabajo.glob("*.fit"))
+    assert len(enlaces) == 2
+    assert {p.resolve() for p in enlaces} == {p.resolve() for p in fuentes}
+
+
 def _fits(path: Path, *, valor: int = 1, **cabecera) -> Path:
     """Fichero FITS mínimo (2×2) de 16 bits con la cabecera indicada.
 
