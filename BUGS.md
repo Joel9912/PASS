@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **91 hallazgos**: 🔴 18 graves · 🟠 46 medios · 🟡 18 bajos · 9 decisiones (8 pendientes).
-Estado: ✅ 34 corregidos · 🟡 3 contenidos · ⏳ 39 pendientes · 🔎 6 sin reproducir.
+Estado: ✅ 35 corregidos · 🟡 5 contenidos · ⏳ 36 pendientes · 🔎 6 sin reproducir.
 
 ---
 
@@ -46,7 +46,7 @@ Estado: ✅ 34 corregidos · 🟡 3 contenidos · ⏳ 39 pendientes · 🔎 6 si
 | **B-0009** | Refrescar OpenNGC eliminaba los LDN previamente cargados aunque no se refrescara ese catálogo. | ✅ `0da9548` |
 | **E-0001** | Dos adjuntos con el mismo nombre se sobrescribían al guardarlos en una entidad de Equipo. | ✅ `ec6d2ee` |
 | **E-0002** | Un filtro inexistente confirmaba el equipo y la imagen antes de que la FK fallara (estado a medias en BD). | ✅ `e5bf105` |
-| **P-0001** | El tránsito UTC del día vecino puede puntuar con la Luna o la altura de la fecha equivocada. | ⏳ |
+| **P-0001** | El tránsito UTC del día vecino puede puntuar con la Luna o la altura de la fecha equivocada. | ✅ `97d5787` |
 | **P-0002** | Las mejores noches pueden quedar sin ventana de captura (criterio de recomendación). | ⏳ |
 | **U-0001** | `_metric_text` lanzaba `KeyError('value')` con valores numéricos en la respuesta del worker. | ✅ `0a04cee` |
 | **T-0001** | `pytest` a secas migraba y escribía la BD real del usuario y descargaba en `data/downloads`. | ✅ `b9118a4` |
@@ -76,13 +76,13 @@ Estado: ✅ 34 corregidos · 🟡 3 contenidos · ⏳ 39 pendientes · 🔎 6 si
 | **E-0008** | Las claves de FOV no usaban la focal efectiva del reductor. | ✅ |
 | **E-0009** | Los borrados de piezas no comprobaban usos en sesiones/setups ni sus cascadas. | ✅ |
 | **E-0010** | Imágenes de equipo con nombre homónimo podían sobrescribirse. | ✅ |
-| **P-0003** | El factor lunar se puntúa en el tránsito diurno en vez de dentro de la ventana de captura. | ⏳ |
+| **P-0003** | El factor lunar se puntúa en el tránsito diurno en vez de dentro de la ventana de captura. | 🟡 `97d5787` (evaluación nocturna; pendientes tiempo útil y casos sin bordes) |
 | **P-0004** | Cálculo incorrecto en latitudes altas (geometría polar). | ⏳ |
 | **P-0005** | El tránsito se ordena tras el `LIMIT` y desplaza la ventana elegida. | ⏳ |
 | **P-0006** | La noche polar queda truncada en el cálculo de ventanas. | ⏳ |
 | **P-0007** | Alias NGC/IC tratados de forma inconsistente al resolver el objetivo. | ⏳ |
 | **P-0008** | Una duración puede exceder el intervalo de la ventana por un paso. | ⏳ |
-| **P-0009** | La separación lunar diurna se usa en el ranking de noches. | ⏳ |
+| **P-0009** | La separación lunar diurna se usa en el ranking de noches. | 🟡 `97d5787` (evaluación nocturna; pendientes tiempo útil y casos sin bordes) |
 | **P-0010** | La excepción de un proveedor de clima en hilo secundario rompía la consulta (las claves se leían desde el hilo de trabajo). | ✅ `0a04cee` |
 | **P-0012** | Las tarjetas de clima lanzaban una excepción al recibir métricas numéricas del proveedor. | ✅ `0a04cee` |
 | **U-0002** | Arrastrar la vista no actualiza el encuadre visible antes de guardar. | ⏳ |
