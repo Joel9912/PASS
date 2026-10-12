@@ -866,18 +866,28 @@ class StackerPage(QWidget):
             al_fin=self._al_terminar,
             al_fallo=self._al_fallar,
             contenedor=self,
+            al_liberar=self._hilo_terminado,
         )
         return True
 
+    def _hilo_terminado(self, hilo: QThread) -> None:
+        """Suelta la referencia al hilo cuando Qt emite ``finished``.
+
+        No en el callback de resultado: entre medias el hilo sigue vivo y
+        ``_parar_todo`` puede necesitar ``wait()``. Si ya corre otro hilo
+        nuevo, ése no se toca.
+        """
+        if self._hilo is hilo:
+            self._hilo = None
+
     def _al_terminar(self, resultado: object) -> None:
-        """Fin de tarea: libera el hilo y ejecuta el callback de la fase."""
+        """Fin de tarea: libera el worker y ejecuta el callback de la fase."""
         al_terminar, self._tarea_ok, self._tarea_no = (
             self._tarea_ok,
             None,
             None,
         )
         self._worker = None
-        self._hilo = None
         self._ocupar(False)
         if al_terminar is not None:
             al_terminar(resultado)
@@ -890,7 +900,6 @@ class StackerPage(QWidget):
             None,
         )
         self._worker = None
-        self._hilo = None
         self._ocupar(False)
         if motivo == CANCELADO:
             self._decir("Cancelado.")

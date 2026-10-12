@@ -378,6 +378,27 @@ def test_worker_cancelado_descarta_resultado_y_cancela_siril(monkeypatch):
     assert fin == []
 
 
+def test_hilo_libera_su_referencia_al_finished_no_al_resultado():
+    """La referencia al QThread vive hasta que ``finished`` la confirma.
+
+    Al soltarla en el callback de resultado, un cierre inmediato posterior
+    (``_parar_todo``) no puede ``wait()`` a un hilo que sigue corriendo y Qt
+    destruye un QThread vivo.
+    """
+    from ui.stacker_tab import StackerPage
+
+    pagina = StackerPage()
+    vistos = []
+
+    def al_terminar(_resultado):
+        """Captura el hilo en el instante en que llega el resultado."""
+        vistos.append(pagina._hilo)
+
+    assert pagina._lanzar(lambda progress_cb, log_cb: "ok", al_terminar)
+    assert _esperar(lambda: vistos and pagina._hilo is None)
+    assert vistos[0] is not None  # en el callback el hilo aún existe
+
+
 # ------------------------------------------------------------------ escaneo
 
 def test_escaneo_en_hilo_rellena_y_el_siguiente_avanza(tmp_path, monkeypatch):

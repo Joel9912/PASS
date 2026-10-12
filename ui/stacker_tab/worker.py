@@ -8,7 +8,7 @@ motivo de cancelación, nunca ``fin``: el resultado ya no es fiable.
 """
 from collections.abc import Callable
 
-from PyQt6.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QObject, Qt, QThread, pyqtSignal, pyqtSlot
 
 from stacks.siril_runner import cancelar_siril
 
@@ -77,6 +77,7 @@ def arrancar_en_hilo(
     al_fin: Callable[[object], None],
     al_fallo: Callable[[str], None],
     contenedor: QObject,
+    al_liberar: Callable[[QThread], None] | None = None,
 ) -> tuple[QThread, SirilWorker]:
     """Crea el hilo + worker, conecta sus señales a ``contenedor`` y lo arranca.
 
@@ -84,6 +85,10 @@ def arrancar_en_hilo(
     (``worker.cancelar()``) y para limpiar al terminar. Las conexiones
     ``fin``/``fallo`` también cierran el hilo (``quit``) y programan el
     borrado de ambos objetos (``deleteLater``).
+
+    ``al_liberar(hilo)`` se ejecuta cuando Qt emite ``finished``: la referencia
+    se suelta ahí, no al recibir el resultado, porque entre medias el hilo
+    sigue corriendo y un ``wait()`` posterior lo necesitaría vivo.
     """
     hilo = QThread(contenedor)
     worker = SirilWorker(tarea)
@@ -95,6 +100,12 @@ def arrancar_en_hilo(
     worker.fallo.connect(hilo.quit)
     worker.fin.connect(al_fin)
     worker.fallo.connect(al_fallo)
+    if al_liberar is not None:
+        # Encolada al hilo principal y antes de deleteLater: la referencia se
+        # suelta en la UI y una tarea instantánea no debe perder la señal.
+        hilo.finished.connect(
+            lambda h=hilo: al_liberar(h), Qt.ConnectionType.QueuedConnection
+        )
     hilo.finished.connect(worker.deleteLater)
     hilo.finished.connect(hilo.deleteLater)
     hilo.start()
