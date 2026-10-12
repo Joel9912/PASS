@@ -7,6 +7,7 @@ Cambios relevantes para quienes usan PASS. Los detalles de implementación y cad
 Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado**; se completará cuando se apruebe el lanzamiento.
 
 ### Corregido
+- Guardar un equipo confirma juntos sus datos, filtros y adjuntos; un fallo revierte la BD y retira las copias nuevas sin borrar las anteriores. Los errores de copia y SQLite se muestran conservando el formulario (E-0002; decisión E-0012).
 - Las descargas vacías o con CSV incompleto ya no sustituyen el catálogo válido; se comprueba la longitud HTTP cuando está disponible y los errores de inserción revierten el refresco (B-0003, protección parcial).
 - Refrescar OpenNGC ya no elimina las nebulosas LDN previamente cargadas (B-0009).
 - Los lights homónimos de filtros distintos conservan referencias independientes al calibrar (S-0004).

@@ -24,8 +24,8 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 
 ## Resumen
 
-**91 hallazgos**: 🔴 18 graves · 🟠 46 medios · 🟡 18 bajos · 9 pendientes de decisión.
-Estado: ✅ 33 corregidos · 🟡 4 contenidos · ⏳ 39 pendientes · 🔎 6 sin reproducir.
+**91 hallazgos**: 🔴 18 graves · 🟠 46 medios · 🟡 18 bajos · 9 decisiones (8 pendientes).
+Estado: ✅ 34 corregidos · 🟡 3 contenidos · ⏳ 39 pendientes · 🔎 6 sin reproducir.
 
 ---
 
@@ -45,7 +45,7 @@ Estado: ✅ 33 corregidos · 🟡 4 contenidos · ⏳ 39 pendientes · 🔎 6 si
 | **B-0003** | Una descarga del catálogo vacía o truncada se validaba, borraba y confirmaba el catálogo del usuario. | 🟡 `0da9548` (validación y rollback; falta integridad de cortes entre filas completas) |
 | **B-0009** | Refrescar OpenNGC eliminaba los LDN previamente cargados aunque no se refrescara ese catálogo. | ✅ `0da9548` |
 | **E-0001** | Dos adjuntos con el mismo nombre se sobrescribían al guardarlos en una entidad de Equipo. | ✅ `ec6d2ee` |
-| **E-0002** | Un filtro inexistente confirmaba el equipo y la imagen antes de que la FK fallara (estado a medias en BD). | 🟡 `183b2b1` (contenida; falta transacción global) |
+| **E-0002** | Un filtro inexistente confirmaba el equipo y la imagen antes de que la FK fallara (estado a medias en BD). | ✅ `e5bf105` |
 | **P-0001** | El tránsito UTC del día vecino puede puntuar con la Luna o la altura de la fecha equivocada. | ⏳ |
 | **P-0002** | Las mejores noches pueden quedar sin ventana de captura (criterio de recomendación). | ⏳ |
 | **U-0001** | `_metric_text` lanzaba `KeyError('value')` con valores numéricos en la respuesta del worker. | ✅ `0a04cee` |
@@ -126,15 +126,15 @@ Estado: ✅ 33 corregidos · 🟡 4 contenidos · ⏳ 39 pendientes · 🔎 6 si
 | **X-0015** | Prosas extensas en la documentación frente a la regla de brevedad. | ⏳ poda continua |
 | **X-0016** | El README público citaba documentos de trabajo que no se distribuyen. | ✅ `0da24f5` |
 
-## ⏳ Pendientes de decisión
+## Decisiones
 
-Cuestiones que frenan una corrección porque falta decidir el comportamiento:
+Cuestiones que requieren decidir el comportamiento; las resueltas indican su acuerdo:
 
 | ID | Pendiente |
 |---|---|
 | **B-0008** | Añadir una región con un nombre repetido se descarta en silencio (`INSERT OR IGNORE`). |
 | **E-0011** | La migración de los datos de equipos v1 embebidos queda detenida para no borrarlos ni inventar piezas. |
-| **E-0012** | Un fallo a mitad de guardado de Equipo puede dejar la operación a medias. |
+| **E-0012** | ✅ Todo o nada para guardar setups: BD y adjuntos; aplicado en `e5bf105`. |
 | **E-0013** | No está definido si el «total» guardado de un setup son los datos persistidos o las ediciones del formulario. |
 | **S-0010** | Una secuencia nueva pide métricas `wfwhm`/`nbstars` que SirIL no vuelve a calcular. |
 | **P-0011** | Las horas se calculan con un offset fijo por ubicación: no se tiene en cuenta el cambio de hora (DST). |
