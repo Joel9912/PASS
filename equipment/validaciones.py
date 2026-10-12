@@ -4,6 +4,8 @@ Un solo sitio para las reglas de la tabla del plan (paso 1): los CRUD llaman
 a éstas antes de tocar la base y los tests las ejercitan por entero. La UI
 no valida a medias — si un valor no pasa aquí, no se guarda.
 """
+import math
+
 from .models import (
     BIT_DEPTHS,
     CATEGORIES,
@@ -29,14 +31,14 @@ def _nombre(nombre: str, entidad: str) -> None:
 
 
 def _precio_peso(price_eur: float | None, weight_kg: float | None = None) -> None:
-    """Precio y peso de la pieza ≥ 0 (``None`` = no informado, no valida).
+    """Precio y peso finitos y ≥ 0 (``None`` = no informado, no valida).
 
     El filtro solo tiene precio: se le pasa el peso como ``None``.
     """
-    if price_eur is not None and price_eur < 0:
-        raise ValueError("El precio no puede ser negativo.")
-    if weight_kg is not None and weight_kg < 0:
-        raise ValueError("El peso no puede ser negativo.")
+    if price_eur is not None and (not math.isfinite(price_eur) or price_eur < 0):
+        raise ValueError("El precio debe ser finito y no negativo.")
+    if weight_kg is not None and (not math.isfinite(weight_kg) or weight_kg < 0):
+        raise ValueError("El peso debe ser finito y no negativo.")
 
 
 def validar_ubicacion(location: Location) -> None:
@@ -124,7 +126,8 @@ def validar_filtro(filt: Filter) -> None:
 
 
 def validar_setup(setup: EquipmentSetup) -> None:
-    """Setup: nombre y categoría del enum del usuario."""
+    """Setup: nombre, categoría del usuario y precio/peso finitos no negativos."""
     _nombre(setup.name, "Equipo")
+    _precio_peso(setup.price_eur, setup.weight_kg)
     if setup.category not in CATEGORIES:
         raise ValueError(f"Categoría desconocida: {setup.category!r}.")

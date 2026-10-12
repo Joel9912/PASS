@@ -132,6 +132,39 @@ def test_guardado_setup_segunda_copia_fallida_retira_todas_las_nuevas(memory_db,
     assert origen.read_bytes() == b"original"
 
 
+@pytest.mark.parametrize("campo", ["price_eur", "weight_kg"])
+@pytest.mark.parametrize("valor", [-1.0, float("nan"), float("inf"), -float("inf")])
+def test_setup_rechaza_precio_peso_invalido(memory_db, campo, valor):
+    """Crear o editar con importes inválidos no modifica el equipo persistido."""
+    from equipment import manager
+
+    nuevo = EquipmentSetup(name="Inválido", **{campo: valor})
+    with pytest.raises(ValueError):
+        manager.create(nuevo)
+    assert nuevo.id is None
+    assert manager.list_setups() == []
+    valido = EquipmentSetup(name="Válido", price_eur=0, weight_kg=0)
+    manager.create(valido)
+    anterior = manager.get(valido.id)
+    setattr(valido, campo, valor)
+    with pytest.raises(ValueError):
+        manager.update(valido)
+    assert manager.get(valido.id) == anterior
+
+
+@pytest.mark.parametrize("valor", [float("nan"), float("inf"), -float("inf")])
+def test_piezas_rechazan_precios_y_pesos_no_finitos(valor):
+    """Los validadores compartidos no dejan pasar valores sin medida real."""
+    for modelo, validar in (
+        (Telescope, validar_telescopio), (Camera, validar_camara), (Mount, validar_montura),
+    ):
+        for campo in ("price_eur", "weight_kg"):
+            with pytest.raises(ValueError):
+                validar(modelo(name="Prueba", **{campo: valor}))
+    with pytest.raises(ValueError):
+        validar_filtro(Filter(name="Prueba", price_eur=valor))
+
+
 def test_camera_expone_los_datos_del_fov(memory_db):
     """C-1: Camera lleva píxel y tamaño de sensor, en su tabla (Equipo v2).
 
