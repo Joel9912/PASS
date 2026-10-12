@@ -7,7 +7,6 @@ para toda la sesión.
 import os
 import sqlite3
 import tempfile
-from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -31,10 +30,8 @@ _SANDBOX: tempfile.TemporaryDirectory | None = None
 def pytest_configure() -> None:
     """Aísla BD, descargas y working antes de importar los módulos de test.
 
-    La base del usuario se abre solo en lectura y se clona a una carpeta
-    temporal. Así los tests que construyen páginas sin ``memory_db`` tampoco
-    migran ni escriben en ``data/pass.db``. Las descargas y el área de SirIL
-    se redirigen incluso si la copia no tenía catálogos.
+    Crea esquema y datos sintéticos en una carpeta temporal sin abrir la base
+    del usuario. Descargas y working quedan aislados también.
     """
     global _SANDBOX
     from planners import catalog_loader, ldn_loader
@@ -45,18 +42,54 @@ def pytest_configure() -> None:
         if os.name == "nt" else None
     )
     base = Path(_SANDBOX.name)
-    origen = db_connection.DB_PATH.resolve()
-    if origen.is_file():
-        with (
-            closing(sqlite3.connect(origen.as_uri() + "?mode=ro", uri=True)) as fuente,
-            closing(sqlite3.connect(base / "pass.db")) as destino,
-        ):
-            fuente.backup(destino)
     db_connection.DATA_DIR = base
     db_connection.DB_PATH = base / "pass.db"
     catalog_loader.CACHE_DIR = base / "downloads"
     ldn_loader.CACHE_DIR = base / "downloads"
     siril_runner.WORKING_FOLDER = base / "working"
+    from astropy.utils import iers
+
+    iers.conf.auto_download = False
+    iers.conf.auto_max_age = None
+    conn = db_connection.get_connection()
+    conn.executemany(
+        "INSERT INTO catalog(object_id,catalog,messier_num,ngc_num,name,type,magnitude,ra_hours,dec_deg)"
+        " VALUES (?,?,?,?,?,?,?,?,?)",
+        [
+            ("M31", "messier", 31, 224, "Andromeda Galaxy", "G", 3.44, 0.712, 41.27),
+            ("M42", "messier", 42, 1976, "Orion Nebula", "Neb", 4.0, 5.59, -5.39),
+            ("M45", "messier", 45, None, "Pleiades", "OCl", 1.6, 3.79, 24.12),
+            ("M13", "messier", 13, 6205, "Hercules", "GCl", 5.8, 16.69, 36.46),
+            ("M102", "messier", 102, 5866, "Spindle", "G", 9.9, 15.11, 55.76),
+            ("NGC 7000", "ngc", None, 7000, "North America", "Neb", None, 20.98, 44.52),
+            ("IC 1", "ic", None, None, None, "**", None, 0.14, 27.72),
+            ("LDN 621", "ldn", None, None, None, "DrkN", None, 18.79, 3.22),
+        ],
+    )
+    conn.execute("UPDATE catalog SET ic_num=1 WHERE object_id='IC 1'")
+    conn.executemany(
+        "UPDATE catalog SET constellation=? WHERE object_id=?",
+        [("And", "M31"), ("Ori", "M42"), ("Tau", "M45"),
+         ("Her", "M13"), ("Dra", "M102"), ("Cyg", "NGC 7000"), ("Peg", "IC 1")],
+    )
+    conn.executemany(
+        "INSERT INTO stars(name,magnitude,ra_hours,dec_deg,color,constellation) VALUES (?,?,?,?,?,?)",
+        [("Estrella A", 1.0, 5.5, -5.0, "A0", "Ori"),
+         ("Estrella B", 2.0, 0.7, 41.0, "K0", "And")],
+    )
+    conn.commit()
+
+
+@pytest.fixture(autouse=True)
+def sin_red_real(monkeypatch):
+    """Impide descargas accidentales; los tests de HTTP instalan sus propios dobles."""
+    import urllib.request
+
+    def rechazar(*args, **kwargs):
+        """Falla explícitamente si un test intenta acceder a Internet."""
+        raise AssertionError("La suite debe funcionar sin red; falta un doble HTTP.")
+
+    monkeypatch.setattr(urllib.request, "urlopen", rechazar)
 
 
 def pytest_unconfigure() -> None:

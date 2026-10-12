@@ -277,16 +277,14 @@ def test_size_major_from_area_is_equivalent_diameter():
 
 
 def test_ldn_loaded_in_database():
-    """Si los catálogos están cargados, hay LDN reales consultables."""
+    """El LDN sintético está cargado y se encuentra sin red ni datos del usuario."""
     from planners import catalog_loader
 
-    counts = catalog_loader.ensure_catalog()
-    if counts.get("ldn", 0) == 0:
-        pytest.skip("Sin LDN cargados y sin red para descargarlos")
+    counts = catalog_loader.catalog_counts()
 
     from planners.celestial_search import SearchFilters, search
 
-    assert counts["ldn"] >= 1700
+    assert counts["ldn"] == 1
     results = search(SearchFilters(catalogs=["ldn"], text="LDN 621"))
     assert results and results[0]["type"] == "DrkN"
     assert results[0]["ra_hours"] is not None

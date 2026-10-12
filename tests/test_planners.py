@@ -1,8 +1,7 @@
 """Tests del planificador: catálogo, carga, búsqueda, tránsito y ranking.
 
 - Los tests de PARSING son offline (datos inline).
-- Los tests contra la BD usan ``ensure_catalog`` (caché local; en una máquina
-  nueva descarga los catálogos; sin red y sin datos, se omite el test).
+- Los tests contra la BD usan el catálogo sintético del sandbox, sin red.
 """
 import gzip
 import sys
@@ -34,11 +33,8 @@ def _ngc_line(**values_by_index: str) -> str:
 
 @pytest.fixture(scope="module")
 def loaded_db() -> dict[str, int]:
-    """Asegura catálogos cargados; omite el test si no hay datos ni red."""
-    counts = catalog_loader.ensure_catalog()
-    if counts["catalog"] == 0:
-        pytest.skip("Sin catálogo cargado y sin red para descargarlo")
-    return counts
+    """Consulta los datos sintéticos; nunca descarga ni omite por falta de red."""
+    return catalog_loader.catalog_counts()
 
 
 # ------------------------------------------------------------------ parsing
@@ -116,10 +112,10 @@ def test_parse_hyg_magnitude_limit():
 
 # -------------------------------------------------------------- contra la BD
 def test_catalog_counts(loaded_db):
-    """Los catálogos reales están cargados con tamaños razonables."""
+    """Los contadores reflejan exactamente el catálogo sintético aislado."""
     counts = catalog_loader.catalog_counts()
-    assert counts["catalog"] >= 13000
-    assert counts["stars"] >= 40000
+    assert counts["catalog"] == 8
+    assert counts["stars"] == 2
 
 
 def test_search_text_m31(loaded_db):
@@ -132,14 +128,14 @@ def test_search_text_m31(loaded_db):
     assert results[0]["name"] == "Andromeda Galaxy"
 
 
-def test_search_messier_catalog_complete(loaded_db):
-    """Catálogo Messier completo (110: OpenNGC + M102 de convención)."""
+def test_search_messier_catalog_sintetico(loaded_db):
+    """El filtro Messier devuelve todos y solo los objetos de la fixture."""
     from planners.celestial_search import SearchFilters, search
 
     results = search(SearchFilters(catalogs=["messier"]), limit=200)
     ids = {row["object_id"] for row in results}
-    assert len(results) >= 110
-    assert {"M31", "M42", "M45", "M13", "M102"} <= ids
+    assert len(results) == 5
+    assert {"M31", "M42", "M45", "M13", "M102"} == ids
     assert all(row["messier_num"] is not None for row in results)
 
 
