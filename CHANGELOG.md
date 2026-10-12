@@ -7,6 +7,9 @@ Cambios relevantes para quienes usan PASS. Los detalles de implementación y cad
 Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado**; se completará cuando se apruebe el lanzamiento.
 
 ### Corregido
+- Los lights homónimos de filtros distintos conservan referencias independientes al calibrar (S-0004).
+- Registro y debayer rechazan índices incompletos, duplicados o mal nombrados en lugar de atribuir datos a otro frame (S-0005).
+- Los filtros que generan el mismo nombre de canal, incluso por mayúsculas en Windows, ya no sobrescriben sus pilas (S-0007).
 - El Apilador detiene una corrida si no consigue limpiar por completo salidas temporales anteriores, en vez de mezclarlas con resultados nuevos.
 - Un fallo de migración ya no deja una conexión SQLite incompleta reutilizable en el proceso.
 - Un filtro inexistente impide guardar el equipo antes de crear adjuntos o confirmar cambios parciales.

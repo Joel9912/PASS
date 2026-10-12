@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **90 hallazgos**: 🔴 17 graves · 🟠 46 medios · 🟡 18 bajos · 9 pendientes de decisión.
-Estado: ✅ 28 corregidos · 🟡 3 contenidos · ⏳ 44 pendientes · 🔎 6 sin reproducir.
+Estado: ✅ 32 corregidos · 🟡 3 contenidos · ⏳ 40 pendientes · 🔎 6 sin reproducir.
 
 ---
 
@@ -36,10 +36,10 @@ Estado: ✅ 28 corregidos · 🟡 3 contenidos · ⏳ 44 pendientes · 🔎 6 si
 | **S-0001** | Calibrar una sesión cuyo origen vivía dentro de `working/calibrados` borraba las tomas originales al limpiar el destino. | ✅ `264b5d0`, `5df5e12` |
 | **S-0002** | Dos sesiones homónimas de raíces distintas compartían la carpeta de calibrado; la UI marcaba como «calibrada» la que no lo estaba, heredaba sus exposiciones/fichas y el pool se quedaba con una sola. | ✅ `5df5e12` |
 | **S-0003** | La ruta completa de la sesión llegaba al nombre de enlace de SirIL: ficheros con `:` y `\`, imposibles de crear en Windows. | ✅ `5df5e12` |
-| **S-0004** | Nombres idénticos de lights entre filtros distintos colisionan en disco. | ⏳ |
-| **S-0005** | Índices o salidas de registro incompletos o mal nombrados se admiten como válidos: métricas atribuidas al frame equivocado. | ⏳ |
-| **S-0006** | Restos de corridas anteriores en la carpeta de registro se usan como si fueran de la corrida actual. | ⏳ |
-| **S-0007** | Filtros con nombres normalizados idénticos sobrescriben el mismo canal. | ⏳ |
+| **S-0004** | Nombres idénticos de lights entre filtros distintos colisionan en disco. | ✅ `983f5de` |
+| **S-0005** | Índices o salidas de registro incompletos o mal nombrados se admiten como válidos: métricas atribuidas al frame equivocado. | ✅ `9bac15a` |
+| **S-0006** | Restos de corridas anteriores en la carpeta de registro se usan como si fueran de la corrida actual. | ✅ limpieza existente desde `01813e3`, verificada en `9bac15a` |
+| **S-0007** | Filtros con nombres normalizados idénticos sobrescriben el mismo canal. | ✅ `69f1c19` |
 | **B-0001** | La migración de BD v1 hacía `DROP COLUMN` sobre `telescope_name` poblado, perdiendo el dato del usuario. | 🟡 `264b5d0` (contenida; la migración espera a una decisión) |
 | **B-0002** | Una conexión SQLite cuyo esquema fallaba quedaba publicada y era reutilizable en el proceso. | ✅ `e3993a7` |
 | **B-0003** | Una descarga del catálogo vacía o truncada se validaba, borraba y confirmaba el catálogo del usuario. | ⏳ |
