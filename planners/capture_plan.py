@@ -69,7 +69,7 @@ def _moon_separation_at_transit(
     date_iso: str,
     transit_utc_hours: float,
 ) -> float:
-    """Separación angular objeto-Luna en el instante de la culminación.
+    """Separación angular objeto-Luna en el instante UTC indicado.
 
     Se calcula en el mismo marco AltAz que la curva nocturna, para que el
     valor coincida con el que muestra la gráfica (y sin mezclar frames).
@@ -82,6 +82,32 @@ def _moon_separation_at_transit(
         ra=ra_hours * u.hourangle, dec=dec_deg * u.deg, frame="icrs"
     ).transform_to(frame)
     return float(target_altaz.separation(moon_altaz).to_value(u.deg))
+
+
+def _night_peak(
+    ra_hours: float, dec_deg: float, latitude: float, longitude: float,
+    day: str, transit_utc: float, dusk_iso: str, dawn_iso: str,
+) -> tuple[datetime, bool]:
+    """Localiza la máxima altura nocturna respetando las fechas UTC de sus bordes.
+
+    Recalcula las culminaciones de los días cubiertos por la noche; sumar
+    24 horas al tránsito daría un instante erróneo por el avance sidéreo.
+    Sin culminación dentro, elige el extremo con mayor altura.
+    """
+    dusk, dawn = datetime.fromisoformat(dusk_iso), datetime.fromisoformat(dawn_iso)
+    fecha = dusk.date()
+    while fecha <= dawn.date():
+        horas = transit_utc if fecha.isoformat() == day else transit_utc_hours(
+            ra_hours, fecha.isoformat(), longitude,
+        )
+        instant = datetime.combine(fecha, datetime.min.time()) + timedelta(hours=horas)
+        if dusk <= instant <= dawn:
+            return instant, True
+        fecha += timedelta(days=1)
+    instant = max((dusk, dawn), key=lambda t: altitude_at_utc(
+        ra_hours, dec_deg, latitude, longitude, t,
+    ))
+    return instant, False
 
 
 def _moon_score(separation_deg: float, min_dist_deg: float) -> float:
@@ -143,15 +169,12 @@ def _night_max_altitude(
     """
     if not dusk_iso or not dawn_iso:
         return culmination
-    dusk = datetime.fromisoformat(dusk_iso)
-    dawn = datetime.fromisoformat(dawn_iso)
-    transit = datetime.fromisoformat(day) + timedelta(hours=transit_utc)
-    if dusk <= transit <= dawn:
-        return culmination
-    return max(
-        altitude_at_utc(ra_hours, dec_deg, latitude, longitude, dusk),
-        altitude_at_utc(ra_hours, dec_deg, latitude, longitude, dawn),
+    instant, culmina = _night_peak(
+        ra_hours, dec_deg, latitude, longitude, day, transit_utc, dusk_iso, dawn_iso,
     )
+    if culmina:
+        return culmination
+    return altitude_at_utc(ra_hours, dec_deg, latitude, longitude, instant)
 
 
 def best_dates(
@@ -168,7 +191,9 @@ def best_dates(
     """Mejores noches para captar ``target_ra_hours``/``target_dec_deg``.
 
     Para cada noche del rango calcula: culminación (analítica), separación
-    lunar en la culminación, umbral de fase y horas de noche astronómica.
+    lunar en el instante de máxima altura nocturna, umbral de fase y horas
+    de noche astronómica. Esta puntuación provisional no mide todavía las
+    horas útiles ideales del futuro planificador.
     Descarta las noches sin noche astronómica o en las que el objeto no
     cruza el horizonte. Ordena por puntuación y, para las ``top_n``
     mejores, añade las ventanas de captura (Ideal/Posible) con sus rangos.
@@ -205,9 +230,18 @@ def best_dates(
             continue  # sin noche astronómica no hay captura
 
         transit_utc = transit_utc_hours(target_ra_hours, day, longitude)
+        evaluation_utc = transit_utc
+        if night.astronomical_dusk and night.astronomical_dawn:
+            instant, culmina = _night_peak(
+                target_ra_hours, target_dec_deg, latitude, longitude, day, transit_utc,
+                night.astronomical_dusk, night.astronomical_dawn,
+            )
+            evaluation_utc = (instant - datetime.fromisoformat(day)).total_seconds() / 3600
+            if culmina:
+                transit_utc = evaluation_utc
         separation = _moon_separation_at_transit(
             target_ra_hours, target_dec_deg, latitude, longitude, day,
-            transit_utc,
+            evaluation_utc,
         )
         illumination_pct = night.moon_illumination * 100.0
         min_dist = min_moon_distance(illumination_pct)

@@ -67,6 +67,51 @@ def test_score_date_never_exceeds_100():
 
 
 # ------------------------------------------------------------ altura por noche
+@pytest.mark.parametrize("desplazamiento", [-1, 1])
+def test_altura_detecta_transito_en_dia_utc_vecino(monkeypatch, desplazamiento):
+    """La fecha UTC de la culminación puede diferir de la fecha de la noche."""
+    from datetime import datetime, timedelta
+
+    from planners import capture_plan
+
+    dia = datetime.fromisoformat("2026-10-02")
+    vecino = dia + timedelta(days=desplazamiento)
+    monkeypatch.setattr(capture_plan, "transit_utc_hours", lambda *args: 2.0)
+    monkeypatch.setattr(capture_plan, "altitude_at_utc", lambda *args: 10.0)
+    resultado = capture_plan._night_max_altitude(
+        5, 20, 40, 0, dia.date().isoformat(), 2,
+        vecino.isoformat(), (vecino + timedelta(hours=6)).isoformat(), 70,
+    )
+    assert resultado == 70
+
+
+@pytest.mark.parametrize("transito", [2.0, 12.0])
+def test_luna_se_evalua_dentro_de_la_noche(monkeypatch, transito):
+    """El tránsito diurno no debe decidir la separación lunar de la noche."""
+    from types import SimpleNamespace
+
+    from planners import capture_plan
+
+    monkeypatch.setattr(capture_plan, "transit_utc_hours", lambda *args: transito)
+    monkeypatch.setattr(capture_plan, "night_info", lambda *args, **kwargs: SimpleNamespace(
+        astronomical_hours=8, moon_illumination=0.5,
+        astronomical_dusk="2026-10-02 20:00:00", astronomical_dawn="2026-10-03 04:00:00",
+    ))
+    monkeypatch.setattr(capture_plan, "altitude_at_utc", lambda *args: 40.0)
+    instantes = []
+    def luna(*args):
+        """Anota el instante utilizado para calcular la separación."""
+        instantes.append(args[-1])
+        return 90.0
+    monkeypatch.setattr(capture_plan, "_moon_separation_at_transit", luna)
+    monkeypatch.setattr(capture_plan, "night_curve", lambda *args: SimpleNamespace(
+        altitudes=[], moon_separations=[], moon_altitudes=[], astro_night=[], hours_local=[],
+    ))
+    capture_plan.best_dates(5, 20, 40, 0, start_date="2026-10-02", date_range_days=1)
+    assert len(instantes) == 1
+    assert 20 <= instantes[0] <= 28
+
+
 def test_altitude_at_utc_coincide_con_la_culminacion():
     """La fórmula analítica en el instante de la culminación da `max_altitude`."""
     from datetime import datetime, timedelta
@@ -87,7 +132,7 @@ def test_altitude_at_utc_coincide_con_la_culminacion():
     assert alt == pytest.approx(max_altitude(MADRID_LAT, M42_DEC), abs=0.3)
 
 
-def test_altura_por_noche_dentro_y_fuera_de_la_ventana():
+def test_altura_por_noche_dentro_y_fuera_de_la_ventana(monkeypatch):
     """D-2 (M-11): se puntúa la altura de ESA noche, no la culminación fija.
 
     Con la culminación dentro de la ventana la noche la alcanza; con la
@@ -95,7 +140,10 @@ def test_altura_por_noche_dentro_y_fuera_de_la_ventana():
     dos ventanas distintas dan altitudes distintas — antes las 30 noches
     recibían exactamente el mismo valor.
     """
+    from planners import capture_plan
     from planners.capture_plan import _night_max_altitude
+
+    monkeypatch.setattr(capture_plan, "transit_utc_hours", lambda *args: 12.0)
 
     day = "2026-10-02"
     culminacion = 44.2
