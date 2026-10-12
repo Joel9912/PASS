@@ -7,12 +7,13 @@ Cambios relevantes para quienes usan PASS. Los detalles de implementación y cad
 Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado**; se completará cuando se apruebe el lanzamiento.
 
 ### Añadido
-- Lectura de exposición RAW en metadatos EXIF mediante ExifRead, sin revelar ni modificar originales. Los contenedores no soportados, incluido CR3, siguen sin dato; la ampliación multimarca está pendiente.
+- Lectura de exposición RAW en metadatos EXIF mediante la librería Python ExifRead, sin revelar ni modificar originales ni necesitar programas externos. Los contenedores no soportados, incluido CR3, quedan sin dato.
 - Captura Posible admite Luna a menos de 5° aun con separación insuficiente, según el criterio del usuario. Captura Ideal mantiene sus requisitos.
 - Captura Ideal usa bloques completos de cinco minutos; sus restos válidos se suman a Captura Posible sin huecos artificiales.
 - Captura Ideal reserva al menos cinco minutos dentro de ambos extremos de la noche astronómica; los márgenes válidos quedan como Posible.
 
 ### Corregido
+- La calibración rechaza una misma secuencia con RAW y FITS mezclados antes de crear enlaces o invocar SirIL, evitando que parte de las tomas quede ignorada (S-0008).
 - Una exposición FITS textual inválida no aborta la lectura; se busca un alias válido y, si falta, queda desconocida. Se rechazan segundos no finitos o no positivos (S-0015).
 - Conteo y bandas se cortan en el cruce solar interpolado, sin prolongar captura al crepúsculo (P-0014).
 - Los cruces lunares de 0° y 5° se interpolan entre muestras para no contar el minuto entero con condiciones caducadas (P-0013).

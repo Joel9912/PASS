@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **93 hallazgos**: 🔴 18 graves · 🟠 48 medios · 🟡 18 bajos · 9 decisiones (8 pendientes).
-Estado: ✅ 40 corregidos · 🟡 5 contenidos · ⏳ 33 pendientes · 🔎 6 sin reproducir.
+Estado: ✅ 41 corregidos · 🟡 5 contenidos · ⏳ 32 pendientes · 🔎 6 sin reproducir.
 
 ---
 
@@ -59,7 +59,7 @@ Estado: ✅ 40 corregidos · 🟡 5 contenidos · ⏳ 33 pendientes · 🔎 6 si
 | **B-0004** | Objetos nuevos del Catálogo Personal no aparecían tras guardarlos (reportado por el usuario). | 🔎 sin reproducir |
 | **B-0005** | El arranque bloquea la ventana hasta 120 s si la red está lenta (`ensure_catalog` antes de pintar). | ⏳ |
 | **B-0006** | La conexión SQLite del hilo principal no debe pasar a hilos Qt; hoy se cumple por diseño. | ⏳ revisión continua |
-| **S-0008** | Mezcla de RAW y FITS en una misma sesión no se rechaza pese al contrato declarado. | ⏳ |
+| **S-0008** | Mezcla de RAW y FITS en una misma sesión no se rechaza pese al contrato declarado. | ✅ `8210353` (validación por secuencia) |
 | **S-0009** | Una carpeta creada por una calibración fallida bloquea el reintento: `exists()` cuenta como «ya calibrada». Sigue vigente tras **S-0002**. | ⏳ |
 | **S-0011** | `_hilo` se libera al recibir el resultado y no al emitir `finished`. | ⏳ |
 | **S-0012** | `wait(3000)` sobre tareas Python sin cancelación cooperativa puede congelar el cierre. | ⏳ |
