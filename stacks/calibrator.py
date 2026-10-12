@@ -54,6 +54,7 @@ from .siril_runner import (
     SirilError,
     arg_ruta,
     ejecutar_script,
+    eliminar_salidas_trabajo,
     enlazar,
     limpiar_trabajo,
     ultima_secuencia,
@@ -126,6 +127,46 @@ def calibrated_dir_for(session: Session) -> Path:
     target = output_dir_for(session.path)
     target.mkdir(parents=True, exist_ok=True)
     return target
+
+
+def limpiar_calibraciones_ajenas(sesiones: list[Session], filas: list[dict]) -> list[str]:
+    """Limpia salidas no válidas del escaneo actual sin seguir rutas externas.
+
+    Conserva las salidas registradas de las sesiones escaneadas y el material
+    global compartido. Prevalida todas las rutas antes de borrar; devuelve
+    los orígenes cuyas filas deben retirarse desde el hilo principal.
+    """
+    base = WORKING_FOLDER.absolute()
+    raiz = base / CALIBRATED_DIR
+    if not raiz.exists():
+        return []
+    if base.resolve() != base or raiz.resolve() != raiz:
+        raise ValueError("La carpeta de calibrados tiene enlaces: no se limpiará.")
+    origenes = {s.path.resolve() for s in sesiones}
+    conservar = {
+        Path(f["calibrated_dir"]).absolute()
+        for f in filas
+        if Path(f["session_dir"]).resolve() in origenes
+        and f["n_frames"] > 0
+        and output_matches_source(Path(f["session_dir"]), Path(f["calibrated_dir"]), root=raiz)
+        and Path(f["calibrated_dir"]).is_dir()
+    }
+    candidatos = [p for p in raiz.iterdir() if p not in conservar and p.name != GLOBAL_DIR_NAME]
+    entradas = list(origenes) + [Path(f["session_dir"]).resolve() for f in filas]
+    entradas += [p.resolve() for s in sesiones for ps in s.frames.values() for p in ps]
+    entradas += [p.resolve() for s in sesiones for p in s.masters.values()]
+    for ruta in candidatos:
+        if ruta.is_symlink() or ruta.is_junction() or ruta.resolve() != ruta or not ruta.is_dir():
+            raise ValueError("Salida de calibración no segura: no se limpiará.")
+        if any(p.is_relative_to(ruta) or ruta.is_relative_to(p) for p in entradas):
+            raise ValueError("La salida se solapa con originales: no se limpiará.")
+    eliminadas = []
+    for ruta in candidatos:
+        eliminar_salidas_trabajo(ruta)
+        eliminadas.extend(
+            f["session_dir"] for f in filas if Path(f["calibrated_dir"]).absolute() == ruta
+        )
+    return eliminadas
 
 
 def calibrate_session(

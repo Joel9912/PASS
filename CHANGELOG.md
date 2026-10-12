@@ -13,6 +13,7 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 - Captura Ideal reserva al menos cinco minutos dentro de ambos extremos de la noche astronómica; los márgenes válidos quedan como Posible.
 
 ### Corregido
+- Calibración: las carpetas incompletas ya no bloquean reintentos. Al comenzar se eliminan restos fallidos y salidas de sesiones ajenas al último escaneo, incluso calibraciones correctas; se conservan los éxitos actuales y el material global compartido. Limpieza limitada al trabajo de PASS, con rechazo de enlaces y solapes con originales (S-0009).
 - Configuración rechaza límites de muestreo invertidos sin cambiarlos automáticamente; guarda todos los ajustes en una única transacción para evitar cambios parciales si falla la base de datos (C-0001, C-0002).
 - Configuración: editar la ruta de SirIL retira el estado anterior y la comprueba al terminar la edición (C-0003).
 - Planificación: encuadre actualizado al mover la vista, limpieza del plan y planetario al quitar el último objetivo y del resaltado al seleccionar una región ausente; añadir un duplicado conserva la selección (U-0002–U-0005).

@@ -30,6 +30,7 @@ from stacks.calibrator import (
     SETTING_GLOBAL_DIR,
     calibrate_session,
     delete_calibrated,
+    limpiar_calibraciones_ajenas,
     list_calibrated,
     output_dir_for,
     save_calibration,
@@ -532,19 +533,19 @@ class StackerPage(QWidget):
             return
         if not self._asegurar_siril():
             return
+        if self._worker is not None:
+            return
+        try:
+            for origen in limpiar_calibraciones_ajenas(self.sesiones, list_calibrated()):
+                delete_calibrated(origen)
+        except (ValueError, OSError, SirilError) as exc:
+            self._decir(f"No se pudo preparar la calibración: {exc}")
+            return
+        self._refrescar_calibradas()
         opciones = self.panel_calibrar.opciones()
         sesiones = [
-            s for s in self.sesiones if not self._salida_atribuida(s).exists()
+            s for s in self.sesiones if clave_sesion(s) not in self._calibradas
         ]
-        if not explicita and any(
-            (WORKING_FOLDER / CALIBRATED_DIR / s.path.name).exists()
-            for s in sesiones
-        ):
-            self._decir(
-                "Hay una salida antigua sin origen atribuible. Consérvala y pulsa "
-                "«Calibrar» explícitamente para generar una salida nueva."
-            )
-            return
         if not sesiones:
             self._calibrado = all(
                 clave_sesion(s) in self._calibradas for s in self.sesiones

@@ -241,14 +241,17 @@ def test_homonima_escaneada_junta_no_hereda_el_calibrado(tmp_path, memory_db):
     ]
 
 
-def test_salida_legacy_ajena_no_marca_calibrada_ni_se_limpia(
+def test_salida_legacy_ajena_se_limpia_al_calibrar(
     tmp_path, memory_db, monkeypatch,
 ):
-    """La UI preserva legacy ajeno y exige recalibración manual del homónimo."""
+    """S-0009: calibrar limpia legacy ajeno y retira su registro sin tocar origen."""
+    from stacks import calibrator, siril_runner
     from ui import stacker_tab
 
     raiz = tmp_path / "working"
     monkeypatch.setattr(stacker_tab, "WORKING_FOLDER", raiz)
+    monkeypatch.setattr(calibrator, "WORKING_FOLDER", raiz)
+    monkeypatch.setattr(siril_runner, "WORKING_FOLDER", raiz)
     ajena = _sesion("noche", 1, tmp_path / "a")
     actual = _sesion("noche", 1, tmp_path / "b")
     antigua = raiz / "calibrados" / "noche"
@@ -264,10 +267,84 @@ def test_salida_legacy_ajena_no_marca_calibrada_ni_se_limpia(
     assert pagina._calibradas == set()
     assert pagina._carpeta_calibrada(actual) != antigua
     monkeypatch.setattr(pagina, "_asegurar_siril", lambda: True)
-    monkeypatch.setattr(pagina, "_lanzar", lambda *a, **k: pytest.fail("No debe arrancar"))
-    pagina.calibrar(siguiente=lambda: pytest.fail("No debe encadenar"))
-    assert "explícitamente" in pagina._estado.text()
-    assert (antigua / "test.fit").read_bytes() == b"antiguo"
+    llamadas = []
+    monkeypatch.setattr(pagina, "_lanzar", lambda *a, **k: llamadas.append(True))
+    pagina.calibrar()
+    assert llamadas
+    assert not antigua.exists()
+    assert not calibrator.list_calibrated()
+
+
+def test_calibrar_reintenta_parciales_y_conserva_validas(tmp_path, memory_db, monkeypatch):
+    """S-0009: una carpeta parcial no bloquea reintento ni borra éxitos actuales."""
+    from stacks import calibrator, siril_runner
+    from ui import stacker_tab
+
+    raiz = tmp_path / "working"
+    for modulo in (calibrator, siril_runner, stacker_tab):
+        monkeypatch.setattr(modulo, "WORKING_FOLDER", raiz)
+    valida = _sesion("valida", 1, tmp_path / "origen")
+    fallida = _sesion("fallida", 1, tmp_path / "origen")
+    buena = calibrator.output_dir_for(valida.path)
+    parcial = calibrator.output_dir_for(fallida.path)
+    for carpeta in (buena, parcial):
+        carpeta.mkdir(parents=True)
+        (carpeta / "pp_light_00001.fit").write_bytes(b"resultado")
+    memory_db.execute(
+        "INSERT INTO calibrated_sessions(session_dir, calibrated_dir, n_frames) VALUES (?, ?, 1)",
+        (str(valida.path), str(buena)),
+    )
+    memory_db.commit()
+    pagina = stacker_tab.StackerPage()
+    pagina.sesiones = [valida, fallida]
+    monkeypatch.setattr(pagina, "_asegurar_siril", lambda: True)
+    llamadas = []
+    monkeypatch.setattr(pagina, "_lanzar", lambda *args, **kw: llamadas.append(True))
+    pagina.calibrar()
+    assert llamadas
+    assert not parcial.exists()
+    assert (buena / "pp_light_00001.fit").read_bytes() == b"resultado"
+    assert len(calibrator.list_calibrated()) == 1
+
+
+def test_limpieza_calibrados_rechaza_solape_original(tmp_path, monkeypatch):
+    """S-0009: originales dentro de una candidata bloquean toda la limpieza."""
+    from stacks import calibrator
+
+    raiz = tmp_path / "working"
+    monkeypatch.setattr(calibrator, "WORKING_FOLDER", raiz)
+    candidata = raiz / "calibrados" / "original"
+    candidata.mkdir(parents=True)
+    original = candidata / "light.fit"
+    original.write_bytes(b"original")
+    sesion = _sesion("original", 1, candidata.parent)
+    with pytest.raises(ValueError, match="originales"):
+        calibrator.limpiar_calibraciones_ajenas([sesion], [])
+    assert original.read_bytes() == b"original"
+
+
+def test_limpieza_calibrados_no_sigue_enlaces(tmp_path, monkeypatch):
+    """S-0009: una salida enlazada al exterior bloquea el borrado completo."""
+    from stacks import calibrator
+
+    raiz = tmp_path / "working"
+    monkeypatch.setattr(calibrator, "WORKING_FOLDER", raiz)
+    fuera = tmp_path / "originales"
+    fuera.mkdir()
+    (fuera / "original.fit").write_bytes(b"intacto")
+    calibrados = raiz / "calibrados"
+    calibrados.mkdir(parents=True)
+    enlace = calibrados / "enlace"
+    try:
+        enlace.symlink_to(fuera, target_is_directory=True)
+    except OSError:
+        pytest.skip("El sistema no permite crear enlaces simbólicos")
+    parcial = calibrados / "parcial"
+    parcial.mkdir()
+    with pytest.raises(ValueError, match="segura"):
+        calibrator.limpiar_calibraciones_ajenas([], [])
+    assert parcial.exists()
+    assert (fuera / "original.fit").read_bytes() == b"intacto"
 
 
 def test_auditoria_no_recorta_la_cabecera_frame():
@@ -818,10 +895,11 @@ def test_limpieza_selectiva_conserva_otras_salidas(tmp_path, monkeypatch, memory
     assert apilado.read_bytes() == b"apilado"
 
 
-def test_conservar_no_sobrescribe_calibrados_parciales(
+def test_calibrar_limpia_calibrados_parciales_legacy(
     tmp_path, monkeypatch, memory_db,
 ):
-    """Una salida parcial sin registro en BD tampoco se limpia al calibrar."""
+    """La política aprobada elimina parciales legacy al comenzar la calibración."""
+    from stacks import calibrator, siril_runner
     from ui import stacker_tab
 
     raiz = tmp_path / "working"
@@ -829,14 +907,16 @@ def test_conservar_no_sobrescribe_calibrados_parciales(
     salida.parent.mkdir(parents=True)
     salida.write_bytes(b"parcial")
     monkeypatch.setattr(stacker_tab, "WORKING_FOLDER", raiz)
+    monkeypatch.setattr(calibrator, "WORKING_FOLDER", raiz)
+    monkeypatch.setattr(siril_runner, "WORKING_FOLDER", raiz)
     pagina = stacker_tab.StackerPage()
     pagina.sesiones = [Session(path=tmp_path / "noche1")]
     monkeypatch.setattr(pagina, "_asegurar_siril", lambda: True)
-    monkeypatch.setattr(
-        pagina, "_lanzar", lambda *a, **k: pytest.fail("No debe lanzar SirIL"),
-    )
+    lanzamientos = []
+    monkeypatch.setattr(pagina, "_lanzar", lambda *a, **k: lanzamientos.append(True))
     pagina.calibrar()
-    assert salida.read_bytes() == b"parcial"
+    assert not salida.exists()
+    assert lanzamientos
     assert not pagina._calibrado
 
 
