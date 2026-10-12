@@ -57,8 +57,17 @@ def _download_tap(query: str, cache_name: str) -> bytes:
         URL_LDN_TAP, data=payload, headers={"User-Agent": _USER_AGENT}
     )
     with urllib.request.urlopen(request, timeout=120) as response:
-        data = response.read()
+        data = leer_respuesta(response)
     target.write_bytes(data)
+    return data
+
+
+def leer_respuesta(response) -> bytes:
+    """Lee el cuerpo HTTP y comprueba la longitud anunciada antes de cachearlo."""
+    data = response.read()
+    longitud = response.headers.get("Content-Length")
+    if not data or (longitud is not None and len(data) != int(longitud)):
+        raise ValueError("Descarga vacía o incompleta del catálogo.")
     return data
 
 
@@ -71,6 +80,30 @@ def _float_or_none(value: str | None) -> float | None:
         return float(value)
     except ValueError:
         return None
+
+
+def validar_csv(text: str, columnas: tuple[tuple[str, ...], ...], *, delimiter=",") -> None:
+    """Rechaza CSV vacíos, cabeceras ajenas y filas truncadas antes de borrar datos.
+
+    Cada grupo de columnas contiene alias válidos para una columna requerida.
+    No prueba integridad semántica ni detecta truncaciones entre filas completas.
+    """
+    reader = csv.reader(io.StringIO(text), delimiter=delimiter, strict=True)
+    try:
+        header = next(reader, [])
+        if not header or any(not set(alias).intersection(header) for alias in columnas):
+            raise ValueError("Cabecera inesperada en la descarga del catálogo.")
+        n = 0
+        for fields in reader:
+            if not fields:
+                continue
+            if len(fields) != len(header):
+                raise ValueError("Fila incompleta en la descarga del catálogo.")
+            n += 1
+        if not n:
+            raise ValueError("La descarga del catálogo no contiene filas.")
+    except csv.Error as exc:
+        raise ValueError("CSV inválido en la descarga del catálogo.") from exc
 
 
 def _pick(record: dict, *names: str) -> str | None:
@@ -141,14 +174,18 @@ def load_ldn() -> int:
     Devuelve el nº de filas insertadas.
     """
     conn = get_connection()
-    rows = parse_ldn_rows(_download_tap(QUERY_LDN, "ldn.csv").decode("utf-8", errors="replace"))
-    conn.execute("DELETE FROM catalog WHERE catalog = 'ldn'")
-    conn.executemany(
-        "INSERT OR REPLACE INTO catalog (object_id, catalog, messier_num, ngc_num,"
-        " ic_num, name, type, magnitude, ra_hours, dec_deg,"
-        " size_major_arcmin, size_minor_arcmin, constellation)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        rows,
-    )
-    conn.commit()
+    text = _download_tap(QUERY_LDN, "ldn.csv").decode("utf-8")
+    validar_csv(text, (("LDN",), ("_RA_icrs", "_RA.icrs"), ("_DE_icrs", "_DE.icrs")))
+    rows = parse_ldn_rows(text)
+    if not rows:
+        raise ValueError("La descarga LDN no contiene objetos utilizables.")
+    with conn:
+        conn.execute("DELETE FROM catalog WHERE catalog = 'ldn'")
+        conn.executemany(
+            "INSERT OR REPLACE INTO catalog (object_id, catalog, messier_num, ngc_num,"
+            " ic_num, name, type, magnitude, ra_hours, dec_deg,"
+            " size_major_arcmin, size_minor_arcmin, constellation)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            rows,
+        )
     return len(rows)

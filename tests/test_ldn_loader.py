@@ -1,5 +1,8 @@
 """Tests del cargador de nebulosas oscuras LDN (VizieR VII/7A)."""
+import gzip
+import sqlite3
 import sys
+import urllib.request
 from pathlib import Path
 
 import pytest
@@ -7,12 +10,101 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from planners import ldn_loader
+from planners import catalog_loader, ldn_loader
 
 #: Cabecera tal y como la serializa el TAP en CSV (coordenadas con '_').
 TAP_HEADER = "LDN,_RA_icrs,_DE_icrs,Area,Opacity"
 #: Variante con punto, el nombre real en TAP_SCHEMA.
 TAP_HEADER_DOTTED = 'LDN,"_RA.icrs","_DE.icrs",Area,Opacity'
+
+
+@pytest.mark.parametrize("contenido", ["", TAP_HEADER + "\n", TAP_HEADER + "\n621,281.875"])
+def test_ldn_invalido_conserva_catalogo(memory_db, monkeypatch, contenido):
+    """Una respuesta vacía o truncada no borra datos ya confirmados."""
+    memory_db.execute("INSERT INTO catalog (object_id, catalog) VALUES ('LDN 1', 'ldn')")
+    memory_db.commit()
+    monkeypatch.setattr(ldn_loader, "_download_tap", lambda *args: contenido.encode())
+    with pytest.raises(ValueError):
+        ldn_loader.load_ldn()
+    memory_db.commit()
+    assert memory_db.execute("SELECT object_id FROM catalog").fetchone()[0] == "LDN 1"
+
+
+def test_ngc_solo_cabecera_conserva_catalogo(memory_db, monkeypatch):
+    """La cabecera sin objetos no se considera un refresco válido."""
+    memory_db.execute("INSERT INTO catalog (object_id, catalog) VALUES ('M31', 'messier')")
+    memory_db.commit()
+    monkeypatch.setattr(catalog_loader, "_download", lambda url: b"Name;Type\n")
+    with pytest.raises(ValueError):
+        catalog_loader.load_catalog()
+    assert memory_db.execute("SELECT object_id FROM catalog").fetchone()[0] == "M31"
+
+
+def test_ldn_fallo_insert_rollback_directo(memory_db, monkeypatch):
+    """Un fallo tras DELETE no queda pendiente para el próximo commit."""
+    memory_db.execute("INSERT INTO catalog (object_id, catalog) VALUES ('LDN 1', 'ldn')")
+    memory_db.execute("CREATE TRIGGER impedir_insert BEFORE INSERT ON catalog BEGIN SELECT RAISE(ABORT, 'fallo'); END")
+    memory_db.commit()
+    monkeypatch.setattr(ldn_loader, "_download_tap", lambda *args: (TAP_HEADER + "\n621,281.875,3.2,1,4\n").encode())
+    with pytest.raises(sqlite3.IntegrityError):
+        ldn_loader.load_ldn()
+    memory_db.commit()
+    assert memory_db.execute("SELECT object_id FROM catalog").fetchone()[0] == "LDN 1"
+
+
+@pytest.mark.parametrize("text", ["mag,ra,dec\n", "mag,ra,dec\n1,2\n"])
+def test_hyg_invalido_conserva_estrellas(memory_db, monkeypatch, text):
+    """Ni CSV vacío ni fila parcial sustituyen las estrellas guardadas."""
+    memory_db.execute("INSERT INTO stars (name, magnitude, ra_hours, dec_deg) VALUES ('anterior', 1, 2, 3)")
+    memory_db.commit()
+    monkeypatch.setattr(catalog_loader, "_download", lambda url: gzip.compress(text.encode()))
+    with pytest.raises(ValueError):
+        catalog_loader.load_stars()
+    assert memory_db.execute("SELECT name FROM stars").fetchone()[0] == "anterior"
+
+
+def test_refresco_ngc_conserva_ldn(memory_db, monkeypatch):
+    """OpenNGC no borra el catálogo LDN gestionado por otro cargador."""
+    memory_db.execute("INSERT INTO catalog (object_id, catalog) VALUES ('LDN 1', 'ldn')")
+    memory_db.commit()
+    header = ["Name", "Type", "RA", "Dec"] + [f"c{i}" for i in range(4, 29)]
+    fila = ["NGC0001", "G", "00:01:00", "+01:00:00"] + [""] * 25
+    data = (";".join(header) + "\n" + ";".join(fila) + "\n").encode()
+    monkeypatch.setattr(catalog_loader, "_download", lambda url: data)
+    catalog_loader.load_catalog()
+    assert memory_db.execute("SELECT COUNT(*) FROM catalog WHERE catalog='ldn'").fetchone()[0] == 1
+
+
+@pytest.mark.parametrize("tap", [False, True])
+def test_descarga_truncada_no_se_cachea(tmp_path, monkeypatch, tap):
+    """Content-Length permite detectar cortes incluso entre filas completas."""
+    class Respuesta:
+        """Respuesta HTTP simulada que anuncia más bytes de los que entrega."""
+        def __init__(self):
+            """Crea las cabeceras de esta respuesta simulada."""
+            self.headers = {"Content-Length": "100"}
+
+        def __enter__(self):
+            """Abre el contexto del doble."""
+            return self
+
+        def __exit__(self, *args):
+            """Cierra el contexto sin suprimir errores."""
+            return False
+
+        def read(self):
+            """Entrega un cuerpo incompleto."""
+            return b"LDN,RA\n1,2\n"
+
+    modulo = ldn_loader if tap else catalog_loader
+    monkeypatch.setattr(modulo, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *args, **kwargs: Respuesta())
+    with pytest.raises(ValueError):
+        if tap:
+            ldn_loader._download_tap("consulta", "ldn.csv")
+        else:
+            catalog_loader._download("https://ejemplo/catalog.csv")
+    assert not list(tmp_path.iterdir())
 
 
 def test_parse_ldn_rows_builds_catalog_rows():

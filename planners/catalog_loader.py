@@ -53,7 +53,7 @@ def _download(url: str) -> bytes:
         return target.read_bytes()
     request = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
     with urllib.request.urlopen(request, timeout=120) as response:
-        data = response.read()
+        data = ldn_loader.leer_respuesta(response)
     target.write_bytes(data)
     return data
 
@@ -237,16 +237,21 @@ def load_catalog() -> int:
     conn = get_connection()
     all_rows: list[tuple] = []
     for url in (URL_NGC, URL_ADDENDUM):
-        all_rows.extend(parse_ngc_rows(_download(url).decode("utf-8", errors="replace")))
-    conn.execute("DELETE FROM catalog")
-    conn.executemany(
-        "INSERT OR REPLACE INTO catalog (object_id, catalog, messier_num, ngc_num,"
-        " ic_num, name, type, magnitude, ra_hours, dec_deg,"
-        " size_major_arcmin, size_minor_arcmin, constellation)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        all_rows,
-    )
-    conn.commit()
+        text = _download(url).decode("utf-8")
+        ldn_loader.validar_csv(text, (("Name",), ("Type",), ("RA",), ("Dec",)), delimiter=";")
+        rows = parse_ngc_rows(text)
+        if not rows:
+            raise ValueError("La descarga OpenNGC no contiene objetos utilizables.")
+        all_rows.extend(rows)
+    with conn:
+        conn.execute("DELETE FROM catalog WHERE catalog != 'ldn'")
+        conn.executemany(
+            "INSERT OR REPLACE INTO catalog (object_id, catalog, messier_num, ngc_num,"
+            " ic_num, name, type, magnitude, ra_hours, dec_deg,"
+            " size_major_arcmin, size_minor_arcmin, constellation)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            all_rows,
+        )
     return len(all_rows)
 
 
@@ -257,14 +262,19 @@ def load_stars(mag_limit: float = STAR_MAG_LIMIT) -> int:
     no las deduplica el UNIQUE de SQLite al volver a cargar.
     """
     conn = get_connection()
-    rows = parse_hyg_rows(_download(URL_HYG), mag_limit)
-    conn.execute("DELETE FROM stars")
-    conn.executemany(
-        "INSERT OR REPLACE INTO stars (name, magnitude, ra_hours, dec_deg, color, constellation)"
-        " VALUES (?, ?, ?, ?, ?, ?)",
-        rows,
-    )
-    conn.commit()
+    data = _download(URL_HYG)
+    text = gzip.decompress(data).decode("utf-8")
+    ldn_loader.validar_csv(text, (("mag",), ("ra",), ("dec",)))
+    rows = parse_hyg_rows(data, mag_limit)
+    if not rows:
+        raise ValueError("La descarga HYG no contiene estrellas utilizables.")
+    with conn:
+        conn.execute("DELETE FROM stars")
+        conn.executemany(
+            "INSERT OR REPLACE INTO stars (name, magnitude, ra_hours, dec_deg, color, constellation)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            rows,
+        )
     return len(rows)
 
 
