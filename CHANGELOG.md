@@ -15,7 +15,7 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 ### Corregido
 - Arranque sin descargas bloqueantes (B-0005). Configuración incorpora Catálogos: comprobación e instalación consentida de paquetes PASS en segundo plano, con tamaño/SHA-256 y reemplazo transaccional. Los paquetes incluidos rellenan catálogos ausentes sin Internet; no se ha publicado aún ningún paquete.
 - Pruebas independientes de los catálogos personales y de Internet: base sintética aislada, HTTP simulado y tablas astronómicas locales (T-0003, T-0004).
-- Catálogos: se rechazan descargas sin longitud verificable, incluso en la primera carga; se conserva la base anterior. Las cachés requieren tamaño y huella SHA-256 registrados tras una transferencia comprobada; una caché antigua o alterada exige volver a descargar (B-0003).
+- Catálogos: se rechazan descargas sin longitud verificable, incluso en la primera carga; se conserva la base anterior. Se validan CSV/gzip y filas útiles antes de reemplazar datos; los errores de inserción revierten el refresco. Las cachés requieren tamaño y huella SHA-256 registrados tras una transferencia comprobada; una caché antigua o alterada exige volver a descargar (B-0003).
 - Las horas sobre una altura mínima ya no inventan doce horas cuando el observador o el objeto está exactamente en un polo y la altura es constante (P-0004).
 - Las pruebas fuerzan el modo offscreen aunque el entorno tenga otra plataforma Qt configurada (T-0007).
 - Calibración: las carpetas incompletas ya no bloquean reintentos. Al comenzar se eliminan restos fallidos y salidas de sesiones ajenas al último escaneo, incluso calibraciones correctas; se conservan los éxitos actuales y el material global compartido. Limpieza limitada al trabajo de PASS, con rechazo de enlaces y solapes con originales (S-0009).
@@ -40,7 +40,6 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 - Los setups rechazan precios y pesos negativos o no finitos antes de crear o editar; las piezas también rechazan NaN e infinitos en esos campos (E-0005).
 - El plan de captura reconoce las culminaciones de la madrugada del día UTC vecino y evita evaluar la separación lunar en un tránsito diurno cuando hay bordes nocturnos. Se conserva la puntuación provisional hasta el rediseño por tiempo útil ideal (P-0001, P-0003, P-0009).
 - Guardar un equipo confirma juntos sus datos, filtros y adjuntos; un fallo revierte la BD y retira las copias nuevas sin borrar las anteriores. Los errores de copia y SQLite se muestran conservando el formulario (E-0002; decisión E-0012).
-- Las descargas vacías o con CSV incompleto ya no sustituyen el catálogo válido; se comprueba la longitud HTTP cuando está disponible y los errores de inserción revierten el refresco (B-0003, protección parcial).
 - Refrescar OpenNGC ya no elimina las nebulosas LDN previamente cargadas (B-0009).
 - Los lights homónimos de filtros distintos conservan referencias independientes al calibrar (S-0004).
 - Registro y debayer rechazan índices incompletos, duplicados o mal nombrados en lugar de atribuir datos a otro frame (S-0005).
@@ -55,7 +54,6 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 - La calibración rechaza una sesión cuyo origen o cuyas tomas coincidan con la carpeta de salida, para evitar borrar originales al limpiar el área de trabajo.
 - Cada sesión tiene carpeta de salida propia (`calibrados/<nombre>-<hash>` derivado de su ruta): dos sesiones homónimas de proyectos distintos ya no comparten calibrados ni se limpian la una a la otra.
 - Las sesiones se identifican por su ruta de origen en todo el Apilador: una homónima ya no aparece como «calibrada» con la calibración de la otra, ni hereda sus exposiciones, fichas ni avisos, y el pool de lights no se queda solo con una de las dos.
-- Un calibrado antiguo sin atribución se conserva intacto y no se migra por su cuenta: para generar la salida nueva hay que pulsar «Calibrar», y para borrarlo, confirmarlo en la limpieza.
 - Las pruebas del Catálogo Personal y de Sesiones Planificadas ya no insertan ni borran datos en la base del usuario; se ejecutan sobre una base aislada.
 - Las tarjetas de clima ya no provocan un error de SQLite al consultar el pronóstico desde un hilo secundario. Las claves se leen en el hilo principal y se pasan al trabajador; un fallo del proveedor se muestra como falta de datos.
 - Corregidos detalles del Apilador y del Planificador detectados durante la revisión del código, con pruebas de regresión para evitar que reaparezcan.
