@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **91 hallazgos**: 🔴 18 graves · 🟠 46 medios · 🟡 18 bajos · 9 decisiones (8 pendientes).
-Estado: ✅ 36 corregidos · 🟡 5 contenidos · ⏳ 35 pendientes · 🔎 6 sin reproducir.
+Estado: ✅ 37 corregidos · 🟡 5 contenidos · ⏳ 34 pendientes · 🔎 6 sin reproducir.
 
 ---
 
@@ -81,7 +81,7 @@ Estado: ✅ 36 corregidos · 🟡 5 contenidos · ⏳ 35 pendientes · 🔎 6 si
 | **P-0005** | El tránsito se ordena tras el `LIMIT` y desplaza la ventana elegida. | ⏳ |
 | **P-0006** | La noche polar queda truncada en el cálculo de ventanas. | ⏳ |
 | **P-0007** | Alias NGC/IC tratados de forma inconsistente al resolver el objetivo. | ⏳ |
-| **P-0008** | Una duración puede exceder el intervalo de la ventana por un paso. | ⏳ |
+| **P-0008** | Una duración puede exceder el intervalo de la ventana por un paso. | ✅ `6bd5810` |
 | **P-0009** | La separación lunar diurna se usa en el ranking de noches. | 🟡 `97d5787` (evaluación nocturna; pendientes tiempo útil y casos sin bordes) |
 | **P-0010** | La excepción de un proveedor de clima en hilo secundario rompía la consulta (las claves se leían desde el hilo de trabajo). | ✅ `0a04cee` |
 | **P-0012** | Las tarjetas de clima lanzaban una excepción al recibir métricas numéricas del proveedor. | ✅ `0a04cee` |

@@ -7,6 +7,7 @@ Cambios relevantes para quienes usan PASS. Los detalles de implementación y cad
 Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado**; se completará cuando se apruebe el lanzamiento.
 
 ### Corregido
+- El conteo de Captura Ideal usa bloques completos de cinco minutos y Captura Posible recoge los restos válidos sin huecos artificiales. Las bandas coinciden con el resumen y la última muestra no añade tiempo fuera de la curva (P-0008).
 - Los setups rechazan precios y pesos negativos o no finitos antes de crear o editar; las piezas también rechazan NaN e infinitos en esos campos (E-0005).
 - El plan de captura reconoce las culminaciones de la madrugada del día UTC vecino y evita evaluar la separación lunar en un tránsito diurno cuando hay bordes nocturnos. Se conserva la puntuación provisional hasta el rediseño por tiempo útil ideal (P-0001, P-0003, P-0009).
 - Guardar un equipo confirma juntos sus datos, filtros y adjuntos; un fallo revierte la BD y retira las copias nuevas sin borrar las anteriores. Los errores de copia y SQLite se muestran conservando el formulario (E-0002; decisión E-0012).
