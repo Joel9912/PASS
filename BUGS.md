@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **93 hallazgos**: 🔴 18 graves · 🟠 48 medios · 🟡 18 bajos · 9 decisiones (8 pendientes).
-Estado: ✅ 51 corregidos · 🟡 5 contenidos · ⏳ 22 pendientes · 🔎 6 sin reproducir.
+Estado: ✅ 55 corregidos · 🟡 5 contenidos · ⏳ 18 pendientes · 🔎 6 sin reproducir.
 
 ---
 
@@ -87,10 +87,10 @@ Estado: ✅ 51 corregidos · 🟡 5 contenidos · ⏳ 22 pendientes · 🔎 6 si
 | **P-0012** | Las tarjetas de clima lanzaban una excepción al recibir métricas numéricas del proveedor. | ✅ `0a04cee` |
 | **P-0013** | El minuto anterior a la salida lunar se cuenta completo aunque la Luna cruce el horizonte dentro de él e invalide la captura. | ✅ `c21be5f` (cruces interpolados de 0°/5° y margen lunar bajo aprobado) |
 | **P-0014** | El resumen puede extender captura más allá del fin de la noche astronómica al contar completa la última muestra nocturna. | ✅ `f9aef1c` |
-| **U-0002** | Arrastrar la vista no actualiza el encuadre visible antes de guardar. | ⏳ |
-| **U-0003** | Quitar el último target deja el plan y el planetario obsoletos. | ⏳ |
-| **U-0004** | Si la región no está en el cielo, el target anterior queda resaltado. | ⏳ |
-| **U-0005** | Añadir un duplicado recarga la lista y puede cambiar la selección. | ⏳ |
+| **U-0002** | Arrastrar la vista no actualiza el encuadre visible antes de guardar. | ✅ `885ba55` |
+| **U-0003** | Quitar el último target deja el plan y el planetario obsoletos. | ✅ `885ba55` |
+| **U-0004** | Si la región no está en el cielo, el target anterior queda resaltado. | ✅ `885ba55` |
+| **U-0005** | Añadir un duplicado recarga la lista y puede cambiar la selección. | ✅ `885ba55` |
 | **C-0001** | Se admiten umbrales de sub/sobremuestreo contradictorios entre sí. | ⏳ |
 | **C-0002** | Configuración guarda varias claves sin atomicidad: un fallo a mitad deja ajustes a medias. | ⏳ |
 | **C-0003** | Editar la ruta de SirIL deja el ✓ de «encontrado» obsoleto hasta reabrir. | ⏳ |
