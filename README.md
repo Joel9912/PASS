@@ -52,27 +52,24 @@ pytest
 
 ```
 Planning Stacking Suite/
-├── README.md / CHANGELOG.md / PROGRAM.md / MEMORY.md / STRUCTURE.md
+├── README.md / CHANGELOG.md / BUGS.md / LICENSE
 ├── main.py            # Punto de entrada (PyQt6)
-├── db/                # Capa SQLite (conexión y esquema)
+├── db/                # Capa SQLite (conexión, esquema y migraciones)
 ├── planners/          # Búsqueda, tránsito, ranking, clima/seeing
 ├── stacks/            # Integración SirIL (calibrado, pool, auditoría, apilado)
 ├── equipment/         # Modelos y CRUD de equipo/localizaciones
 ├── planetary/         # Planetario (esferas DSS2 y de objetos)
 ├── ui/                # 6 pestañas PyQt6 (una carpeta por pestaña)
 ├── i18n/              # Traducciones Qt (es/en)
+├── scripts/           # Herramientas de mantenimiento
 ├── tests/             # Tests pytest
 └── data/              # Base de datos local (no versionada)
 ```
 
-Detalles de cada carpeta: ver `STRUCTURE.md`.
-
 ## Documentación
 
 - `CHANGELOG.md` — cambios entre versiones (v0.2 todavía sin publicar)
-- `PROGRAM.md` — filosofía y diseño de cada pestaña
-- `MEMORY.md` — estado actual y roadmap
-- `STRUCTURE.md` — árbol de carpetas y convenciones
+- `BUGS.md` — bugs conocidos, con su severidad y estado
 
 ## Licencia
 
