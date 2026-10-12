@@ -2,16 +2,21 @@
 
 Cambios relevantes para quienes usan PASS. Los detalles de implementación y cada corrección pequeña quedan en los commits. Las correcciones registradas citan su ID en [`BUGS.md`](BUGS.md), donde constan su severidad y estado. La documentación se mantiene en español.
 
-## Sin publicar — preparación de v0.2
+## Sin publicar — preparación de v0.2-alpha
 
 Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado**; se completará cuando se apruebe el lanzamiento.
 
+### Añadido
+- Lectura de exposición RAW en metadatos EXIF mediante ExifRead, sin revelar ni modificar originales. Los contenedores no soportados, incluido CR3, siguen sin dato; la ampliación multimarca está pendiente.
+- Captura Posible admite Luna a menos de 5° aun con separación insuficiente, según el criterio del usuario. Captura Ideal mantiene sus requisitos.
+- Captura Ideal usa bloques completos de cinco minutos; sus restos válidos se suman a Captura Posible sin huecos artificiales.
+- Captura Ideal reserva al menos cinco minutos dentro de ambos extremos de la noche astronómica; los márgenes válidos quedan como Posible.
+
 ### Corregido
 - Una exposición FITS textual inválida no aborta la lectura; se busca un alias válido y, si falta, queda desconocida. Se rechazan segundos no finitos o no positivos (S-0015).
-- La exposición RAW se consulta en metadatos EXIF mediante ExifRead, sin revelar ni modificar originales. Los contenedores no soportados, incluido CR3, siguen sin dato (S-0021, soporte parcial).
-- Captura Ideal empieza al menos cinco minutos después del inicio de la noche astronómica y termina al menos cinco minutos antes del alba. Los márgenes válidos quedan como Posible; conteo y bandas se cortan en el cruce solar interpolado, sin prolongar captura al crepúsculo (P-0014).
-- Los cruces lunares de 0° y 5° se interpolan entre muestras para no contar el minuto entero con condiciones caducadas. Captura Posible admite Luna a menos de 5° aun con separación insuficiente, según el criterio del usuario; Captura Ideal mantiene sus requisitos (P-0013).
-- El conteo de Captura Ideal usa bloques completos de cinco minutos y Captura Posible recoge los restos válidos sin huecos artificiales. Las bandas coinciden con el resumen y la última muestra no añade tiempo fuera de la curva (P-0008).
+- Conteo y bandas se cortan en el cruce solar interpolado, sin prolongar captura al crepúsculo (P-0014).
+- Los cruces lunares de 0° y 5° se interpolan entre muestras para no contar el minuto entero con condiciones caducadas (P-0013).
+- Las bandas de captura coinciden con el resumen y la última muestra no añade tiempo fuera de la curva (P-0008).
 - Los setups rechazan precios y pesos negativos o no finitos antes de crear o editar; las piezas también rechazan NaN e infinitos en esos campos (E-0005).
 - El plan de captura reconoce las culminaciones de la madrugada del día UTC vecino y evita evaluar la separación lunar en un tránsito diurno cuando hay bordes nocturnos. Se conserva la puntuación provisional hasta el rediseño por tiempo útil ideal (P-0001, P-0003, P-0009).
 - Guardar un equipo confirma juntos sus datos, filtros y adjuntos; un fallo revierte la BD y retira las copias nuevas sin borrar las anteriores. Los errores de copia y SQLite se muestran conservando el formulario (E-0002; decisión E-0012).
@@ -49,4 +54,4 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 
 - Primera versión etiquetada de PASS, con Planificador, Equipo y asistente de Apilador mediante SirIL externo.
 
-Las fechas y el enlace de `v0.2` se añadirán **solo cuando se publique**.
+La versión se publicará como **pre-release `v0.2-alpha`**, solo cuando se apruebe el lanzamiento. Entonces se añadirán la fecha y el enlace.
