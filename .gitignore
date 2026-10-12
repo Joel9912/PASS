@@ -22,6 +22,10 @@ data/
 .opencode/
 AGENTS.md
 
+# Sistema (Windows)
+Thumbs.db
+desktop.ini
+
 # Documentación de trabajo del proyecto (no se distribuye con el código)
 MEMORY.md
 PROGRAM.md
