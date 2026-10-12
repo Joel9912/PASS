@@ -6,20 +6,15 @@ import sys
 
 from PyQt6.QtWidgets import QApplication
 
-from planners.catalog_loader import ensure_catalog
 from ui.main_window import MainWindow
 from ui.style import apply_style
 
 
 def main() -> None:
-    """Precarga el catálogo, monta la ventana principal y ejecuta el bucle de Qt.
+    """Abre la ventana sin descargas; los catálogos se gestionan en Configuración.
 
     No retorna: termina con ``sys.exit`` cuando el usuario cierra la ventana.
     """
-    # Primera ejecución: descarga y carga OpenNGC + estrellas HYG (~18 MB).
-    # Si no hay red, se imprime un aviso y el programa sigue funcionando.
-    ensure_catalog()
-
     app = QApplication(sys.argv)
     apply_style(app)
     window = MainWindow()

@@ -177,6 +177,13 @@ class PlanetarioVisual(QWidget):
         self._objects = load_objects()
 
     # ------------------------------------------------------------ API pública
+    def reload_catalogs(self) -> None:
+        """Recarga estrellas y objetos tras instalar paquetes sin cambiar el encuadre."""
+        self._stars = load_stars()
+        self._objects = load_objects()
+        self._selected = None
+        self.update()
+
     def set_center(self, ra_hours: float, dec_deg: float, label: str = "") -> None:
         """Centra la vista en (RA en horas, Dec en grados) y opcionalmente etiqueta."""
         self._ra0 = (ra_hours * 15.0) % 360.0

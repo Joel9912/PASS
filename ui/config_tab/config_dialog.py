@@ -1,9 +1,9 @@
 """Diálogo «Configuración General de la Aplicación».
 
-Se abre con el botón ⚙ de la barra lateral. Tres secciones en el nav:
+Se abre con el botón ⚙ de la barra lateral. Cuatro secciones en el nav:
 «General» (motor SirIL y carpeta base de proyectos), «Clima» (API keys
 de Clear Outside y Meteoblue) y «Equipo» (umbrales y margen «Ligero»
-del muestreo del bloque Cálculos). «Guardar» escribe todo de una vez en
+del muestreo del bloque Cálculos) y «Catálogos». «Guardar» escribe todo de una vez en
 la tabla ``settings`` (nunca en código ni en el repositorio); «Cerrar» o
 ✕ descarta los cambios.
 
@@ -40,6 +40,7 @@ from db.settings import PROJECT_ROOT_KEY, get_float, get_setting, set_settings
 from equipment.metrics import validar_orden_umbrales
 from planners.weather.base import load_api_key
 from stacks.siril_finder import SETTINGS_KEY, find_siril, siril_version
+from ui.config_tab.catalogs_page import CatalogsPage
 from ui.style import PALETTE
 
 #: Colores de estado, tomados de la paleta única (A-28).
@@ -91,6 +92,7 @@ class ConfigDialog(QDialog):
     """
 
     saved = pyqtSignal()
+    catalogs_changed = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         """Monta nav + páginas + pie y conecta la comprobación de SirIL."""
@@ -117,7 +119,7 @@ class ConfigDialog(QDialog):
         self._nav.setObjectName("ConfigNav")
         self._nav.setFixedWidth(170)
         self._nav.addItems(
-            ["\U0001f527  General", "\U0001f324  Clima", "\U0001f52d  Equipo"]
+            ["\U0001f527  General", "\U0001f324  Clima", "\U0001f52d  Equipo", "Catálogos"]
         )
         body.addWidget(self._nav)
 
@@ -125,6 +127,9 @@ class ConfigDialog(QDialog):
         self._stack.addWidget(self._build_general_page())
         self._stack.addWidget(self._build_clima_page())
         self._stack.addWidget(self._build_equipo_page())
+        self._catalogs_page = CatalogsPage(self)
+        self._catalogs_page.catalogs_changed.connect(self.catalogs_changed)
+        self._stack.addWidget(self._catalogs_page)
         body.addWidget(self._stack, 1)
         root.addLayout(body, 1)
 
@@ -345,6 +350,7 @@ class ConfigDialog(QDialog):
         self._sampling_over.setValue(get_float("sampling_over_ratio", 0.5))
         self._sampling_light.setValue(get_float("sampling_light_factor", 1.4))
         self._check_siril(path)
+        self._catalogs_page.refresh()
 
     def _on_siril_path_changed(self, _text: str) -> None:
         """Retira el estado anterior al editar; la sonda espera al fin de edición."""

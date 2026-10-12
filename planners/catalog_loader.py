@@ -7,8 +7,7 @@ Fuentes:
 - LDN (VizieR VII/7A/ldn): nebulosas oscuras de Lynds, vía TAP
   (ver :mod:`planners.ldn_loader`). Licencia del catálogo original.
 
-Uso automático: ``ensure_catalog()`` se llama al arrancar el programa y solo
-descarga si las tablas están vacías. Uso manual::
+Uso manual (el arranque usa paquetes incluidos, sin descargar)::
 
     python -m planners.catalog_loader [--force]
 

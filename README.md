@@ -33,7 +33,7 @@ pip install -r requirements.txt
 
 ## Primer arranque
 
-- **La primera ejecución descarga los catálogos astronómicos** (~18 MB: OpenNGC, HYG y LDN) desde internet. Sin conexión el programa abre igualmente, pero la búsqueda del Planificador no tendrá catálogo hasta completar la descarga; Planetario sigue en construcción.
+- **El arranque no espera descargas.** Los paquetes incluidos en la distribución se importan en segundo plano si faltan catálogos. En **Configuración → Catálogos** puedes consultar versiones, comprobar paquetes publicados por PASS y autorizar su actualización. Si no hay paquete incluido ni una release con los adjuntos publicados, la búsqueda permanece sin esos datos; los catálogos existentes se conservan.
 - **SirIL solo es necesario para la pestaña Apilador.** El resto del programa (Planificador, Equipo, etc.) funciona sin él.
 
 ## Ejecución

@@ -313,6 +313,21 @@ class MainWindow(QMainWindow):
         self.sidebar.nav.setCurrentRow(0)
         # Maximizar tras el primer layout: evita el bug de render a tamaño incompleto
         QTimer.singleShot(0, self.showMaximized)
+        QTimer.singleShot(0, self._install_bundled_catalogs)
+
+    def _install_bundled_catalogs(self) -> None:
+        """Importa datos incluidos después de mostrar la ventana, sin red ni conexión Qt compartida."""
+        from db import connection
+        from planners.catalog_packages import install_bundled
+        from ui.config_tab.catalogs_page import CatalogsPage
+
+        folder = connection.ROOT / "catalogs"
+        if not (folder / "catalogs-manifest.json").is_file():
+            return
+        self._catalog_bootstrap = CatalogsPage(self)
+        self._catalog_bootstrap.hide()
+        self._catalog_bootstrap.catalogs_changed.connect(self._on_catalogs_changed)
+        self._catalog_bootstrap._submit(install_bundled, connection.DB_PATH, folder)
 
     def _select_tab(self, index: int) -> None:
         """Cambia la página visible (índice fuera de rango → se ignora)."""
@@ -350,9 +365,22 @@ class MainWindow(QMainWindow):
         if self._config_dialog is None:
             self._config_dialog = ConfigDialog(self)
             self._config_dialog.saved.connect(self._on_settings_saved)
+            self._config_dialog.catalogs_changed.connect(self._on_catalogs_changed)
         else:
             self._config_dialog.reload()
         self._config_dialog.exec()
+
+    def _on_catalogs_changed(self) -> None:
+        """Refresca cartas, búsquedas y objetivos tras confirmar los nuevos catálogos."""
+        from ui.planner_tab.planificacion.planetario_visual import PlanetarioVisual
+
+        for visual in self.findChildren(PlanetarioVisual):
+            visual.reload_catalogs()
+        planner = self._paginas.get("planner_tab")
+        if isinstance(planner, PlannerPage):
+            planner.busqueda.refresh()
+            planner.catalogo.refresh()
+            planner.planificacion.reload_targets()
 
     def _on_settings_saved(self) -> None:
         """Si cambiaron las API keys, el clima de Búsqueda se refresca ya."""
