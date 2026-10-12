@@ -26,6 +26,22 @@ def test_main_imports_and_tabs():
     ]
 
 
+def test_tests_fuerzan_offscreen_en_entorno_ajeno():
+    """T-0007: conftest impone offscreen antes de cargar widgets de Qt."""
+    import os
+    import subprocess
+
+    entorno = dict(os.environ, QT_QPA_PLATFORM="plataforma_inexistente")
+    resultado = subprocess.run(
+        [sys.executable, "-c",
+         ("import runpy, os; runpy.run_path('tests/conftest.py'); "
+          "print(os.environ['QT_QPA_PLATFORM'])")],
+        cwd=ROOT, env=entorno, capture_output=True, text=True, timeout=30,
+    )
+    assert resultado.returncode == 0, resultado.stderr
+    assert resultado.stdout.strip() == "offscreen"
+
+
 def test_root_docs_exist():
     """Los documentos de nivel raíz están; los de trabajo, si los incluye la copia."""
     for doc in ("README.md", "LICENSE", "requirements.txt", ".gitignore"):

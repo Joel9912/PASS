@@ -17,7 +17,7 @@ from db import connection as db_connection
 ROOT = Path(__file__).resolve().parent.parent
 
 #: Los tests de UI nunca piden pantalla real: offscreen para todo el proceso.
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
 #: QApplication retenida a nivel de módulo: si la última referencia Python se
 #: descarta, PyQt6 la destruye al hacer GC y el siguiente widget crashea la
