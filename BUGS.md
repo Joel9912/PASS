@@ -24,8 +24,8 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 
 ## Resumen
 
-**89 hallazgos**: 🔴 17 graves · 🟠 46 medios · 🟡 17 bajos · 9 pendientes de decisión.
-Estado: ✅ 23 corregidos · 🟡 3 contenidos · ⏳ 48 pendientes · 🔎 6 sin reproducir.
+**90 hallazgos**: 🔴 17 graves · 🟠 46 medios · 🟡 18 bajos · 9 pendientes de decisión.
+Estado: ✅ 28 corregidos · 🟡 3 contenidos · ⏳ 44 pendientes · 🔎 6 sin reproducir.
 
 ---
 
@@ -96,10 +96,10 @@ Estado: ✅ 23 corregidos · 🟡 3 contenidos · ⏳ 48 pendientes · 🔎 6 si
 | **T-0005** | Symlinks en fixtures: no portables en Windows. | ⏳ |
 | **T-0006** | Tests con geometría dependiente de temporizadores o DPI de la pantalla. | ⏳ |
 | **T-0007** | El modo offscreen se activa con `setdefault` y puede no aplicarse. | ⏳ |
-| **X-0001** | El README raíz contradice la GPL al prohibir la venta. | ⏳ |
-| **X-0002** | El README raíz describe un ranking de objetos que no existe. | ⏳ |
-| **X-0003** | El README raíz presenta el Planetario como dependiente de red. | ⏳ |
-| **X-0004** | `planners/README.md` mantiene como pendiente un CRUD ya implementado. | ⏳ |
+| **X-0001** | El README raíz contradice la GPL al prohibir la venta. | ✅ `18c384e` |
+| **X-0002** | El README raíz describe un ranking de objetos que no existe. | ✅ `18c384e` |
+| **X-0003** | El README raíz presenta el Planetario como dependiente de red. | ✅ `18c384e` |
+| **X-0004** | `planners/README.md` mantiene como pendiente un CRUD ya implementado. | ✅ `18c384e` |
 | **X-0007** | `tests/README.md` describe la UI offscreen y la cobertura del README de forma errónea. | ⏳ |
 
 ## 🟡 Bajos
@@ -123,6 +123,7 @@ Estado: ✅ 23 corregidos · 🟡 3 contenidos · ⏳ 48 pendientes · 🔎 6 si
 | **X-0013** | Roadmap histórico obsoleto en `MEMORY.md`. | ✅ |
 | **X-0014** | Errata «conversión» en el README de planificación. | ✅ |
 | **X-0015** | Prosas extensas en la documentación frente a la regla de brevedad. | ⏳ poda continua |
+| **X-0016** | El README público citaba documentos de trabajo que no se distribuyen. | ✅ `0da24f5` |
 
 ## ⏳ Pendientes de decisión
 
