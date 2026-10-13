@@ -20,6 +20,8 @@ data/
 # Entorno de desarrollo (no forma parte del proyecto distribuido)
 .idea/
 .opencode/
+.agents/
+skills-lock.json
 AGENTS.md
 
 # Sistema (Windows)
