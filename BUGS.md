@@ -24,7 +24,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 
 ## Resumen
 
-**94 hallazgos**: 🔴 18 graves · 🟠 49 medios · 🟡 18 bajos · 9 decisiones (8 pendientes).
+**94 hallazgos**: 🔴 18 graves · 🟠 49 medios · 🟡 18 bajos · 9 decisiones (7 pendientes).
 Estado: ✅ 75 corregidos · 🟡 3 contenidos · ⏳ 6 pendientes · 🔎 1 sin reproducir.
 
 ---
@@ -138,7 +138,7 @@ Cuestiones que requieren decidir el comportamiento; las resueltas indican su acu
 | **B-0008** | Añadir una región con un nombre repetido se descarta en silencio (`INSERT OR IGNORE`). |
 | **E-0011** | Migración aprobada: separar datos de equipo v1 en piezas independientes y vincularlas a equipos, sin inventar características ni fusionar por nombre. ⏳ Implementación y verificación pendientes. |
 | **E-0012** | ✅ Todo o nada para guardar setups: BD y adjuntos; aplicado en `e5bf105`. |
-| **E-0013** | Aprobado: total de ediciones como previsualización sin guardar; guardar confirma y cancelar recupera el total persistido. ⏳ Implementación y verificación pendientes. |
+| **E-0013** | ✅ Total guardado y previsualización diferenciados; Guardar/Descartar/Cancelar con guardados separados de piezas y equipo. Descartar recupera lo persistido; Cancelar mantiene ediciones. Aplicado en `f5d02d7`. |
 | **S-0010** | Una secuencia nueva pide métricas `wfwhm`/`nbstars` que SirIL no vuelve a calcular. |
 | **P-0011** | Las horas se calculan con un offset fijo por ubicación: no se tiene en cuenta el cambio de hora (DST). |
 | **U-0007** | Al planificar no está decidido si se selecciona la noche sugerida o la fecha guardada por el usuario. |
