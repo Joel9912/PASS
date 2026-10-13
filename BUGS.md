@@ -143,4 +143,4 @@ Cuestiones que requieren decidir el comportamiento; las resueltas indican su acu
 | **P-0011** | Las horas se calculan con un offset fijo por ubicación: no se tiene en cuenta el cambio de hora (DST). |
 | **U-0007** | Al planificar no está decidido si se selecciona la noche sugerida o la fecha guardada por el usuario. |
 | **U-0008** | No está definida la precedencia del FOV entre la región del objetivo y el encuadre del equipo. |
-| **C-0004** | No está definida la precedencia entre la ruta de SirIL guardada por el usuario y la detección del PATH. |
+| **C-0004** | Precedencia aprobada: ruta elegida de SirIL primero; PATH solo sin ruta configurada. Ruta elegida inválida produce aviso, sin fallback silencioso. ⏳ Implementación y verificación pendientes. |
