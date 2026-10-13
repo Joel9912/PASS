@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **94 hallazgos**: 🔴 18 graves · 🟠 49 medios · 🟡 18 bajos · 9 decisiones (8 pendientes).
-Estado: ✅ 74 corregidos · 🟡 3 contenidos · ⏳ 7 pendientes · 🔎 1 sin reproducir.
+Estado: ✅ 75 corregidos · 🟡 3 contenidos · ⏳ 6 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -112,7 +112,7 @@ Estado: ✅ 74 corregidos · 🟡 3 contenidos · ⏳ 7 pendientes · 🔎 1 sin
 |---|---|---|
 | **B-0007** | `_download_tap` referencia `urllib.request` sin import directo: `NameError` latente. | ✅ `ef62ef6` (import explícito; hipótesis antigua no reproducida) |
 | **S-0017** | Las previews de auditoría cargan el FITS entero en el hilo de UI. | ⏳ medido; optimización diferida de baja prioridad |
-| **S-0018** | El stdout de SirIL y la terminal crecen sin límite en corridas largas. | ⏳ crecimiento medido; pendiente política de retención |
+| **S-0018** | El stdout de SirIL y la terminal crecen sin límite en corridas largas. | ✅ `4862c86` (historial en disco; terminal/resultado acotados) |
 | **S-0019** | Código muerto (símbolos sin consumidores) acumulado en `stacks/` y `ui/`. | ✅ |
 | **L-0001** | QMenu y paneles efímeros con parent retenidos: posible fuga de widgets. | ✅ `afe3a09` |
 | **L-0002** | Los diálogos acumulaban hijos ocultos al cerrar (fuga medida 20/20). | ✅ |
