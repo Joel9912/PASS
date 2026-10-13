@@ -24,8 +24,8 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 
 ## Resumen
 
-**93 hallazgos**: 🔴 18 graves · 🟠 48 medios · 🟡 18 bajos · 9 decisiones (8 pendientes).
-Estado: ✅ 66 corregidos · 🟡 3 contenidos · ⏳ 9 pendientes · 🔎 6 sin reproducir.
+**94 hallazgos**: 🔴 18 graves · 🟠 49 medios · 🟡 18 bajos · 9 decisiones (8 pendientes).
+Estado: ✅ 68 corregidos · 🟡 3 contenidos · ⏳ 8 pendientes · 🔎 6 sin reproducir.
 
 ---
 
@@ -68,6 +68,7 @@ Estado: ✅ 66 corregidos · 🟡 3 contenidos · ⏳ 9 pendientes · 🔎 6 sin
 | **S-0015** | Un `EXPTIME` textual puede hacer fallar el escaneo completo de la sesión. | ✅ `ab37304` |
 | **S-0016** | `exportar_apilados` acepta un origen arbitrario por API aunque la UI pase la carpeta de trabajo. | ✅ `f09085f` (origen acotado y resuelto) |
 | **S-0020** | La limpieza de salidas anteriores podía dejar restos y la corrida nueva los mezclaba con sus resultados. | ✅ `4e1e5c0` |
+| **S-0022** | El registro rechaza hardlinks válidos cuando Windows no permite crear symlinks. | ✅ `265d35c` |
 | **E-0003** | Una pieza usada en dos roles deja el formulario y los totales desactualizados tras editar o borrar. | ✅ `dbc82e4` |
 | **E-0004** | El precio de un filtro editado no repinta el total hasta otra interacción. | ✅ `dbc82e4` |
 | **E-0005** | `NaN`/infinito y precio o peso negativos no se filtran antes de persistir un setup. | ✅ `a491664` |
@@ -96,7 +97,7 @@ Estado: ✅ 66 corregidos · 🟡 3 contenidos · ⏳ 9 pendientes · 🔎 6 sin
 | **C-0003** | Editar la ruta de SirIL deja el ✓ de «encontrado» obsoleto hasta reabrir. | ✅ `600200c` |
 | **T-0003** | La suite depende de los catálogos reales del usuario; faltan fixtures offline sintéticos. | ✅ `39593f3` |
 | **T-0004** | Fixtures que usan red o estrellas reales: inestables según el día y la ubicación. | ✅ `39593f3` |
-| **T-0005** | Symlinks en fixtures: no portables en Windows. | ⏳ |
+| **T-0005** | Symlinks en fixtures: no portables en Windows. | ✅ `265d35c` |
 | **T-0006** | Tests con geometría dependiente de temporizadores o DPI de la pantalla. | ✅ `09d0a8f` |
 | **T-0007** | El modo offscreen se activa con `setdefault` y puede no aplicarse. | ✅ `8930f6d` |
 | **X-0001** | El README raíz contradice la GPL al prohibir la venta. | ✅ `18c384e` |
