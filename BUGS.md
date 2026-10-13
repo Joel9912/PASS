@@ -104,7 +104,7 @@ Estado: ✅ 74 corregidos · 🟡 3 contenidos · ⏳ 7 pendientes · 🔎 1 sin
 | **X-0002** | El README raíz describe un ranking de objetos que no existe. | ✅ `18c384e` |
 | **X-0003** | El README raíz presenta el Planetario como dependiente de red. | ✅ `18c384e` |
 | **X-0004** | `planners/README.md` mantiene como pendiente un CRUD ya implementado. | ✅ `18c384e` |
-| **X-0007** | `tests/README.md` describe la UI offscreen y la cobertura del README de forma errónea. | ✅ documentación interna cotejada |
+| **X-0007** | `tests/README.md` describe la UI offscreen y la cobertura del README de forma errónea. | ✅ `bd7211b` (documentación interna cotejada) |
 
 ## 🟡 Bajos
 
@@ -119,8 +119,8 @@ Estado: ✅ 74 corregidos · 🟡 3 contenidos · ⏳ 7 pendientes · 🔎 1 sin
 | **U-0006** | El `QDateEdit` de «Editar sesión» no reflejaba la fecha seleccionada. | ✅ |
 | **X-0005** | `i18n/` declara traducciones vacías como si fueran válidas. | ⏳ (carpeta aún sin implementar) |
 | **X-0006** | Búsqueda decía «sin datos hasta que haya API key» aunque hubiera claves. | ✅ |
-| **X-0008** | `tests/README.md` atribuía la BD a `siril_finder`. | ✅ documentación interna cotejada |
-| **X-0009** | `tests/README.md` citaba rutas y tests equivocados. | ✅ documentación interna cotejada |
+| **X-0008** | `tests/README.md` atribuía la BD a `siril_finder`. | ✅ `bd7211b` (documentación interna cotejada) |
+| **X-0009** | `tests/README.md` citaba rutas y tests equivocados. | ✅ `bd7211b` (documentación interna cotejada) |
 | **X-0010** | El README de Configuración atribuía la persistencia a `siril_finder`. | ✅ |
 | **X-0011** | Resumen y `STRUCTURE.md` presentaban como actual un flujo aún futuro. | ✅ |
 | **X-0012** | Los totales del catálogo se repetían en `MEMORY.md`. | ✅ |
