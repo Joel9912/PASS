@@ -20,8 +20,8 @@ para no quedar debajo de la cabecera.
 
 Regla UX global (§9): **nada se persiste hasta «Guardar equipo»**: lo que
 toca las piezas globales lo decide su propio botón «Guardar componente»
-(``componentes.py``). Cambiar de fila en la lista sin guardar descarta lo
-tecleado (es el «cancelar» de D-5). El bloque «Cálculos» sí se recalcula en
+(``componentes.py``). Abandonar ediciones ofrece guardar, descartar o cancelar.
+El bloque «Cálculos» sí se recalcula en
 vivo: es estado en memoria de lo que hay en pantalla, no una lectura de la
 base.
 """
@@ -61,6 +61,7 @@ from .componentes import (
     MountForm,
     PartEditor,
     TelescopeForm,
+    confirmar_cambios,
     spin_peso,
     spin_precio,
 )
@@ -248,6 +249,7 @@ class EquiposTab(QWidget):
         self._setup_id: int | None = None
         self._imagenes_setup: list[str] = []
         self._cargando = False
+        self._base_equipo = None
         self._editores: list[PartEditor] = []
 
         layout = QVBoxLayout(self)
@@ -294,6 +296,8 @@ class EquiposTab(QWidget):
         self._nombre.textChanged.connect(
             lambda _texto: self._recalcular() if not self._cargando else None
         )
+        self._notas.textChanged.connect(self._actualizar_estado)
+        self._categoria.currentIndexChanged.connect(self._actualizar_estado)
         self._recargar_lista(select_id=None)
 
     def resizeEvent(self, ev: QResizeEvent) -> None:
@@ -368,6 +372,9 @@ class EquiposTab(QWidget):
         titulo = QLabel("Equipo")
         titulo.setObjectName("PanelTitle")
         fila_titulo.addWidget(titulo)
+        self._estado_guardado = QLabel("Guardado")
+        self._estado_guardado.setObjectName("HintLabel")
+        fila_titulo.addWidget(self._estado_guardado)
         fila_titulo.addStretch(1)
         self._boton_guardar = QPushButton("Guardar equipo")
         self._boton_guardar.setObjectName("PrimaryButton")
@@ -388,13 +395,13 @@ class EquiposTab(QWidget):
         self._precio = spin_precio()
         self._precio.setReadOnly(True)
         self._precio.setToolTip(
-            "Suma del precio de las piezas y los filtros marcados "
-            "(se guarda con «Guardar equipo»)."
+            "Total guardado al cargar el equipo. Al editar se previsualiza "
+            "la suma de piezas y filtros; «Guardar equipo» confirma el total."
         )
         self._peso = spin_peso()
         self._peso.setReadOnly(True)
         self._peso.setToolTip(
-            "Suma del peso de las piezas en pantalla: +0,5 kg por cada "
+            "Total guardado al cargar; al editar se previsualiza la suma: +0,5 kg por cada "
             "telescopio con la casilla «Aplanador/Reductor/Coma» (el "
             "accesorio pesa aunque la óptica no informe su peso)."
         )
@@ -601,7 +608,66 @@ class EquiposTab(QWidget):
         if self._cargando:
             return
         item = self._lista.item(fila)
-        self._cargar(item.data(Qt.ItemDataRole.UserRole) if item else None)
+        objetivo = item.data(Qt.ItemDataRole.UserRole) if item else None
+        if objetivo == self._setup_id:
+            return
+        if not self.preparar_salida():
+            self._seleccionar_actual()
+            return
+        self._cargar(objetivo)
+        self._seleccionar_actual()
+
+    def _seleccionar_actual(self) -> None:
+        """Sin señales, sincroniza la fila con el equipo que conserva el editor."""
+        fila = -1
+        for indice in range(self._lista.count()):
+            if self._lista.item(indice).data(Qt.ItemDataRole.UserRole) == self._setup_id:
+                fila = indice
+                break
+        self._lista.blockSignals(True)
+        self._lista.setCurrentRow(fila)
+        self._lista.blockSignals(False)
+
+    def _estado_equipo(self) -> tuple:
+        """Captura únicamente los datos que persiste Guardar equipo."""
+        return (
+            self._nombre.text().strip(), self._categoria.currentData(),
+            self._ubicacion.currentData(), self._notas.text().strip(),
+            tuple(editor.selected_id() for editor in self._editores),
+            tuple(self._filtros.filter_ids()), tuple(self._imagenes_setup),
+            self._precio.value(), self._peso.value(),
+        )
+
+    def _actualizar_estado(self, *_args) -> None:
+        """Distingue el total previsualizado del equipo confirmado sin usar solo color."""
+        if self._cargando or self._base_equipo is None:
+            return
+        pendiente = self._estado_equipo() != self._base_equipo or any(
+            editor.tiene_cambios() for editor in self._editores
+        )
+        self._estado_guardado.setText(
+            "Previsualización · sin guardar" if pendiente else
+            ("Guardado" if self._setup_id is not None else "Equipo nuevo")
+        )
+
+    def preparar_salida(self) -> bool:
+        """Resuelve primero piezas y luego equipo, deteniéndose si se cancela o falla."""
+        for editor in self._editores:
+            if not editor.preparar_salida():
+                return False
+        if self._estado_equipo() == self._base_equipo:
+            return True
+        boton = QMessageBox.StandardButton
+        respuesta = confirmar_cambios(
+            self, "Hay cambios sin guardar en este equipo.\n\n"
+            "Descartar no deshace componentes ni filtros ya guardados.",
+        )
+        if respuesta == boton.Save:
+            return self._guardar()
+        if respuesta == boton.Discard:
+            self._cargar(self._setup_id)
+            return True
+        return False
 
     def _cargar(self, setup_id: int | None) -> None:
         """Vierte un equipo de la base en todo el panel (None = en blanco)."""
@@ -641,6 +707,11 @@ class EquiposTab(QWidget):
             self._cargando = False
         self._boton_eliminar.setEnabled(self._setup_id is not None)
         self._recalcular()
+        if fila is not None:
+            self._precio.setValue(float(fila.get("price_eur") or 0.0))
+            self._peso.setValue(float(fila.get("weight_kg") or 0.0))
+        self._base_equipo = self._estado_equipo()
+        self._actualizar_estado()
 
     def _asegurar_categoria(self, categoria: str) -> None:
         """Selecciona la categoría en el combo (y la añade si venía de otra BD)."""
@@ -656,23 +727,13 @@ class EquiposTab(QWidget):
         Sin diálogo de nombre (afine A): el texto se teclea en la propia
         ficha y nada se persiste hasta «Guardar equipo» (§9).
         """
-        self._cargando = True
-        self._lista.setCurrentRow(-1)  # ninguna fila seleccionada
-        self._cargando = False
-        self._setup_id = None
-        self._imagenes_setup = []
-        self._nombre.clear()
-        self._categoria.setCurrentIndex(max(0, self._categoria.findData("general")))
-        self._ubicacion.setCurrentIndex(0)
-        self._notas.clear()
-        for editor in self._editores:
-            editor.cargar(None)
-        self._filtros.set_filter_ids([])
-        self._boton_eliminar.setEnabled(False)
-        self._recalcular()
+        if not self.preparar_salida():
+            return
+        self._cargar(None)
+        self._seleccionar_actual()
         self._nombre.setFocus()
 
-    def _guardar(self) -> None:
+    def _guardar(self) -> bool:
         """Persiste el equipo: create si es nuevo, update si venía de la base.
 
         Afine A: sin nombre no se persiste nada y la cabecera enseña el
@@ -682,7 +743,11 @@ class EquiposTab(QWidget):
         if not self._nombre.text().strip():
             self._falta_nombre.show()
             self._nombre.setFocus()
-            return
+            return False
+        for editor in self._editores:
+            if not editor.preparar_salida():
+                return False
+        self._repinta_totales()
         setup = EquipmentSetup(
             id=self._setup_id,
             name=self._nombre.text().strip(),
@@ -706,13 +771,16 @@ class EquiposTab(QWidget):
                 manager.update(setup)
         except (ValueError, OSError, sqlite3.Error) as exc:
             QMessageBox.warning(self, "No se pudo guardar", str(exc))
-            return
+            return False
         self._recargar_lista(select_id=setup.id)
         self.setups_changed.emit()
+        return True
 
     def _eliminar(self) -> None:
         """Borra el equipo (no sus componentes) tras avisar de sesiones e imágenes."""
         if self._setup_id is None:
+            return
+        if not self.preparar_salida():
             return
         nombre = self._nombre.text().strip() or "este equipo"
         sesiones = manager.count_sessions(self._setup_id)
@@ -813,6 +881,7 @@ class EquiposTab(QWidget):
         precio += sum(self._filtros.precios_marcados())
         self._precio.setValue(precio)
         self._peso.setValue(peso)
+        self._actualizar_estado()
 
     def _tras_pieza_guardada(self, pieza_id: int) -> None:
         """Una pieza cambió en la base: refresca los roles que la usan y avisa.

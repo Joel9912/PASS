@@ -38,6 +38,8 @@ class EquipmentPage(QWidget):
         self.ubicaciones = UbicacionesTab()
         tabs.addTab(self.equipos, "Equipos")
         tabs.addTab(self.ubicaciones, "Ubicaciones")
+        self._tabs = tabs
+        tabs.currentChanged.connect(self._al_cambiar_pestana)
         layout.addWidget(tabs, 1)
 
         # Externo: reemitir hacia la ventana principal.
@@ -46,3 +48,10 @@ class EquipmentPage(QWidget):
         # Interno: una ubicación nueva/al actualizada refresca el combo de
         # Ubicación de la cabecera de Equipos.
         self.locations_changed.connect(self.equipos.reload_locations)
+
+    def _al_cambiar_pestana(self, indice: int) -> None:
+        """Protege ediciones al salir hacia Ubicaciones y restaura Equipos al cancelar."""
+        if indice != 0 and not self.equipos.preparar_salida():
+            self._tabs.blockSignals(True)
+            self._tabs.setCurrentIndex(0)
+            self._tabs.blockSignals(False)

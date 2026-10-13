@@ -7,12 +7,12 @@ combina el combo de piezas globales con sus botones.
 Regla de los **dos niveles de guardado** (§9 del plan): las piezas globales
 se persisten con «Guardar componente» (create si el formulario venía vacío,
 update si venía de la base) y las asignaciones al equipo con «Guardar
-equipo» de la cabecera. Cambiar de pieza en el combo sin guardar descarta
-lo tecleado: es el «cancelar» de la regla D-5 (nada llega a la BD ni a
-`data/` hasta que se pulsa su botón).
+equipo» de la cabecera. Antes de abandonar ediciones se ofrece guardar,
+descartar o cancelar; descartar nunca revierte cambios ya persistidos.
 """
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 from PyQt6.QtCore import QSize, Qt, pyqtSignal
@@ -58,6 +58,25 @@ from equipment.models import (
 
 #: Ficheros de imagen admitidos para charts/ganancia (solo visuales).
 _FILTRO_IMAGENES = "Imágenes (*.png *.jpg *.jpeg *.bmp);;Todos los archivos (*)"
+
+
+def confirmar_cambios(parent: QWidget, detalle: str) -> int:
+    """Ofrece tres salidas explícitas; Escape conserva las ediciones."""
+    boton = QMessageBox.StandardButton
+    dialogo = QMessageBox(parent)
+    dialogo.setWindowTitle("Cambios sin guardar")
+    dialogo.setIcon(QMessageBox.Icon.Question)
+    dialogo.setText(detalle)
+    dialogo.setStandardButtons(boton.Save | boton.Discard | boton.Cancel)
+    dialogo.button(boton.Save).setText("Guardar")
+    dialogo.button(boton.Discard).setText("Descartar")
+    dialogo.button(boton.Cancel).setText("Cancelar")
+    dialogo.setDefaultButton(boton.Cancel)
+    dialogo.setEscapeButton(boton.Cancel)
+    try:
+        return dialogo.exec()
+    finally:
+        dialogo.deleteLater()
 
 #: Ruta de cada tipo de pieza hacia su CRUD en ``equipment.components`` y su
 #: modelo. El mapa vive aquí porque solo lo necesita el cableado del
@@ -543,8 +562,7 @@ class PartEditor(QWidget):
     «Guardar componente» persiste lo del formulario (create/update) y
     «Eliminar» borra la pieza tras avisar con ``count_setups_using``; las
     asignaciones al equipo las decide «Guardar equipo» en la cabecera.
-    Recargar el combo con una pieza distinta descarta lo no guardado en el
-    formulario: cancelar nunca toca la base (D-5).
+    Cambiar de pieza consulta las ediciones pendientes sin deshacer lo guardado.
     """
 
     changed = pyqtSignal()  # formulario/selección cambiaron → bloque Cálculos
@@ -557,6 +575,7 @@ class PartEditor(QWidget):
         super().__init__(parent)
         self.setObjectName("GroupFrame")
         self._kind = kind
+        self._titulo = titulo
         self._pieza = _PIEZAS[kind]
         self.form = form
 
@@ -567,7 +586,9 @@ class PartEditor(QWidget):
         layout.addWidget(self.picker)
         layout.addWidget(form)
 
-        self.picker.seleccion_cambiada.connect(self._cargar_formulario)
+        self._base_formulario = self.form.a_modelo()
+        self._pieza_actual = None
+        self.picker.seleccion_cambiada.connect(self._al_cambiar_pieza)
         self.picker.nuevo_solicitado.connect(self._nuevo)
         self.picker.guardar_solicitado.connect(self._guardar)
         self.picker.eliminar_solicitado.connect(self._eliminar)
@@ -578,6 +599,37 @@ class PartEditor(QWidget):
     def selected_id(self) -> int | None:
         """Pieza seleccionada = asignación que «Guardar equipo» escribirá."""
         return self.picker.selected_id()
+
+    def tiene_cambios(self) -> bool:
+        """Compara valores e imágenes con la última carga o guardado."""
+        return self.form.a_modelo() != self._base_formulario
+
+    def preparar_salida(self) -> bool:
+        """Resuelve solo el componente, sin guardar asignaciones del equipo."""
+        if not self.tiene_cambios():
+            return True
+        boton = QMessageBox.StandardButton
+        respuesta = confirmar_cambios(
+            self,
+            f"Hay cambios sin guardar en {self._pieza['nombre']} ({self._titulo}).\n\n"
+            "Guardar modifica la pieza global y puede afectar a otros equipos. "
+            "Descartar solo elimina estas ediciones pendientes.",
+        )
+        if respuesta == boton.Save:
+            return self._guardar()
+        if respuesta == boton.Discard:
+            self._cargar_formulario()
+            self.changed.emit()
+            return True
+        return False
+
+    def _al_cambiar_pieza(self) -> None:
+        """Restaura la selección anterior antes de consultar para guardar la pieza correcta."""
+        objetivo = self.selected_id()
+        self.picker.reload(select_id=self._pieza_actual)
+        if self.preparar_salida():
+            self.cargar(objetivo)
+        self.changed.emit()
 
     def cargar(self, pieza_id: int | None) -> None:
         """Selección programática (al cargar un equipo): combo + formulario."""
@@ -597,7 +649,9 @@ class PartEditor(QWidget):
         pantalla y en la suma de la cabecera (E-0003). Si la pieza ya no
         existe, el combo cae en «(sin …)» y el formulario queda limpio.
         """
-        if self.selected_id() == pieza_id:
+        if self.tiene_cambios():
+            self.reload()
+        elif self.selected_id() == pieza_id:
             self.cargar(pieza_id)
         else:
             self.reload()
@@ -609,14 +663,17 @@ class PartEditor(QWidget):
         pieza_id = self.picker.selected_id()
         fila = self._pieza["obtener"](pieza_id) if pieza_id is not None else None
         self.form.cargar(fila)
+        self._pieza_actual = pieza_id
+        self._base_formulario = self.form.a_modelo()
 
     def _nuevo(self) -> None:
         """Formulario en blanco para crear una pieza nueva (sin id)."""
-        self.picker.reload(select_id=None)
-        self.form.limpiar()
+        if not self.preparar_salida():
+            return
+        self.cargar(None)
         self.changed.emit()
 
-    def _guardar(self) -> None:
+    def _guardar(self) -> bool:
         """Persiste el formulario: create si no venía de la base, update si sí."""
         try:
             modelo = self.form.a_modelo()
@@ -625,17 +682,20 @@ class PartEditor(QWidget):
             else:
                 self._pieza["actualizar"](modelo)
                 nuevo_id = modelo.id
-        except ValueError as exc:
+        except (ValueError, OSError, sqlite3.Error) as exc:
             QMessageBox.warning(self, "No se pudo guardar", str(exc))
-            return
+            return False
         self.cargar(nuevo_id)  # releer de la base: ids y valores canónicos
         self.saved.emit(nuevo_id)
         self.changed.emit()
+        return True
 
     def _eliminar(self) -> None:
         """Borra la pieza global tras avisar del número de equipos afectados."""
         pieza_id = self.picker.selected_id()
         if pieza_id is None:
+            return
+        if not self.preparar_salida():
             return
         nombre = self.picker.selected_name()
         afectados = manager.count_setups_using(self._kind, pieza_id)
@@ -654,8 +714,7 @@ class PartEditor(QWidget):
         ):
             return
         self._pieza["borrar"](pieza_id)
-        self.picker.reload()
-        self.form.limpiar()
+        self.cargar(None)
         self.saved.emit(pieza_id)  # el id permite refrescar el otro rol
         self.changed.emit()
 

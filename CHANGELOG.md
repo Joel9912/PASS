@@ -7,6 +7,7 @@ Cambios relevantes para quienes usan PASS. Los detalles de implementación y cad
 Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado**; se completará cuando se apruebe el lanzamiento.
 
 ### Añadido
+- Equipo avisa de cambios sin guardar al cambiar de equipo o componente, iniciar otro, salir de la pestaña o cerrar PASS: Guardar, Descartar o Cancelar. Piezas globales y equipo se guardan por separado; los errores mantienen las ediciones. La cabecera distingue el total guardado de la previsualización y descartar no revierte piezas o filtros ya guardados.
 - Registro local persistente en `data/logs/pass.log` y `data/logs/apilador.log`: acciones, avisos y errores con fecha y origen; el del Apilador incluye la salida completa de SirIL, incluso mensajes no mostrados en pantalla. Se continúa al reabrir, sin borrar el historial automáticamente; se ocultan credenciales etiquetadas.
 - Configuración → 📚 Catálogos sigue el diseño de las otras secciones: panel con título azul, tabla compacta de filas alternas y estados diferenciados por texto/color. Botones en una fila, progreso solo durante operaciones y avisos compactos con detalle en tooltip; sin cambiar el consentimiento ni descargar al abrir.
 - Lectura de exposición RAW en metadatos EXIF mediante la librería Python ExifRead, sin revelar ni modificar originales ni necesitar programas externos. Los contenedores no soportados, incluido CR3, quedan sin dato.

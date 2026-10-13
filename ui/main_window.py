@@ -332,7 +332,25 @@ class MainWindow(QMainWindow):
     def _select_tab(self, index: int) -> None:
         """Cambia la página visible (índice fuera de rango → se ignora)."""
         if 0 <= index < self.content.count():
+            actual = self.content.currentWidget()
+            if (
+                index != self.content.currentIndex()
+                and isinstance(actual, EquipmentPage)
+                and not actual.equipos.preparar_salida()
+            ):
+                self.sidebar.nav.blockSignals(True)
+                self.sidebar.nav.setCurrentRow(self.content.currentIndex())
+                self.sidebar.nav.blockSignals(False)
+                return
             self.content.setCurrentIndex(index)
+
+    def closeEvent(self, evento) -> None:
+        """No cierra la aplicación si quedan ediciones de Equipo sin resolver."""
+        equipo = self._paginas.get("equipment_tab")
+        if isinstance(equipo, EquipmentPage) and not equipo.equipos.preparar_salida():
+            evento.ignore()
+            return
+        super().closeEvent(evento)
 
     def _wire_equipo(self) -> None:
         """Une la pestaña Equipo con el Planificador (paso 3, §7 del plan).

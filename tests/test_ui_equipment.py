@@ -699,6 +699,7 @@ def test_pieza_compartida_por_dos_roles_se_refresca_al_editar_o_borrar(
     )
     manager.create(EquipmentSetup(
         name="Doble rol", camera_id=camera_id, guide_camera_id=camera_id,
+        price_eur=3100.0, weight_kg=1.4,
     ))
 
     _app = qt_app
