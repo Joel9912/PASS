@@ -13,6 +13,8 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 - Captura Ideal reserva al menos cinco minutos dentro de ambos extremos de la noche astronómica; los márgenes válidos quedan como Posible.
 
 ### Corregido
+- Los fallos al enviar comandos, cerrar stdin o recibir logs de SirIL terminan y recolectan el proceso hijo, y cierran sus pipes (S-0013).
+- Los menús de obstrucciones y paneles de contaminación lumínica liberan sus widgets al cerrarse, sin acumular hijos ocultos ni perder datos del sitio (L-0001).
 - El registro reconoce hardlinks válidos cuando Windows no permite crear symlinks; mantiene el rechazo de índices duplicados o ajenos. Las pruebas de secuencias ya no exigen privilegios de symlink; solo los casos específicos de enlaces simbólicos reales se omiten si el sistema no los permite (S-0022, T-0005).
 - Tests de interfaz estables con escalado de pantalla: la prueba de la rosácea no confunde una línea de rejilla con el fondo y la de Efemérides controla la maximización diferida antes de fijar su tamaño (T-0006).
 - Arranque sin descargas bloqueantes (B-0005). Configuración incorpora Catálogos: comprobación e instalación consentida de paquetes PASS en segundo plano, con tamaño/SHA-256 y reemplazo transaccional. Los paquetes incluidos rellenan catálogos ausentes sin Internet; no se ha publicado aún ningún paquete.

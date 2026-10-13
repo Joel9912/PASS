@@ -207,8 +207,21 @@ def ejecutar_script(
             resultado.motivo = _motivo_fallo(proc.returncode, resultado.lineas, esperados)
         return resultado
     finally:
-        # Cancelada o normal: nunca dejar el proceso colgado como actual.
-        _proc_actual = None
+        try:
+            if proc.poll() is None:
+                try:
+                    proc.kill()
+                except ProcessLookupError:
+                    pass
+                proc.wait(timeout=5)
+        finally:
+            for pipe in (proc.stdin, proc.stdout):
+                if pipe is not None:
+                    try:
+                        pipe.close()
+                    except OSError:
+                        pass
+            _proc_actual = None
 
 
 def _marcado_ok(returncode: int, lineas: list[str], esperados: list[Path] | None) -> bool:

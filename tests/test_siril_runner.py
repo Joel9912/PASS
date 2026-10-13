@@ -22,6 +22,105 @@ class _ProcFalso:
     def wait(self):
         return self.returncode
 
+    def poll(self):
+        """Expone el estado del proceso simulado como Popen."""
+        return self.returncode
+
+
+@pytest.mark.parametrize("fallo", ["write", "close", "callback"])
+def test_fallo_de_io_no_deja_proceso_vivo(monkeypatch, fallo):
+    """S-0013: los fallos tras Popen matan/recolectan al hijo y liberan sus pipes."""
+    proc = _ProcFalso("log: trabajando\n", returncode=None)
+    pipes = []
+    waits = []
+
+    class Entrada(io.StringIO):
+        """Pipe capaz de fallar al enviar o cerrar stdin."""
+        def write(self, texto):
+            """Reproduce un pipe roto sin ocultarlo en el doble."""
+            if fallo == "write":
+                raise BrokenPipeError("write roto")
+            return super().write(texto)
+
+        def close(self):
+            """Falla una vez y permite el cierre posterior de limpieza."""
+            if fallo == "close" and not pipes:
+                pipes.append(True)
+                raise BrokenPipeError("close roto")
+            super().close()
+
+    proc.stdin = Entrada()
+
+    def kill():
+        """El hijo continúa vivo hasta que alguien lo mata."""
+        proc.returncode = -9
+
+    def wait(*args, **kwargs):
+        """Registra la recolección del hijo."""
+        waits.append(True)
+        return proc.returncode
+
+    def log(texto):
+        """Falla solo al recibir stdout, después de lanzar el proceso."""
+        if fallo == "callback" and texto == "log: trabajando":
+            raise RuntimeError("callback roto")
+
+    proc.kill, proc.wait = kill, wait
+    monkeypatch.setattr(siril_runner, "find_siril", lambda: "siril-falso")
+    monkeypatch.setattr(siril_runner.subprocess, "Popen", lambda *args, **kwargs: proc)
+    with pytest.raises((BrokenPipeError, RuntimeError)):
+        siril_runner.ejecutar_script(["comando"], log_cb=log)
+    assert proc.returncode == -9
+    assert waits
+    assert proc.stdin.closed and proc.stdout.closed
+    assert siril_runner._proc_actual is None
+
+
+def test_stdin_roto_recolecta_hijo_real(monkeypatch):
+    """Comprueba la terminación de un hijo Python propio, sin invocar SirIL real."""
+    import subprocess
+    import sys
+
+    popen = subprocess.Popen
+    children = []
+
+    class PipeRoto:
+        """Provoca el fallo conservando el pipe real para su cierre."""
+        def __init__(self, pipe):
+            """Retiene únicamente el stdin del hijo de prueba."""
+            self.pipe = pipe
+
+        def write(self, text):
+            """Simula que SirIL deja de aceptar comandos."""
+            raise BrokenPipeError("stdin roto")
+
+        def close(self):
+            """Cierra el descriptor real al limpiar."""
+            self.pipe.close()
+
+    def start(*args, **kwargs):
+        """Lanza un hijo controlado que permanecería vivo sin el finally correcto."""
+        proc = popen([sys.executable, "-c", "import time; time.sleep(60)"],
+                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        proc.stdin = PipeRoto(proc.stdin)
+        children.append(proc)
+        return proc
+
+    monkeypatch.setattr(siril_runner, "find_siril", lambda: "hijo-python-controlado")
+    monkeypatch.setattr(siril_runner.subprocess, "Popen", start)
+    try:
+        with pytest.raises(BrokenPipeError):
+            siril_runner.ejecutar_script(["comando"])
+        assert children[0].poll() is not None
+        assert children[0].stdout.closed
+    finally:
+        for proc in children:
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait(timeout=5)
+            proc.stdin.close()
+            proc.stdout.close()
+
 
 def _siril(monkeypatch, lineas, returncode=0):
     """Parchea find_siril y Popen: devuelve un procio fijo con esas líneas."""

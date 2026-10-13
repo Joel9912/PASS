@@ -4,6 +4,40 @@ La ``QApplication`` viene del fixture ``qt_app`` de ``conftest.py``.
 """
 
 
+def test_menus_obstrucciones_no_se_acumulan(qt_app, monkeypatch):
+    """L-0001: cada menú cerrado libera sus acciones y no queda retenido por el disco."""
+    from PyQt6.QtCore import QCoreApplication, QEvent, QPoint
+    from PyQt6.QtWidgets import QMenu
+
+    from ui.equipment_tab.rosaceas import DiscoObstrucciones
+
+    monkeypatch.setattr(QMenu, "exec", lambda *args: None)
+    disco = DiscoObstrucciones()
+    for _ in range(30):
+        disco._abrir("N", QPoint())
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert disco.findChildren(QMenu) == []
+    disco.deleteLater()
+
+
+def test_paneles_lumen_no_se_acumulan(qt_app, monkeypatch):
+    """L-0001: cerrar paneles preserva datos y no deja referencias Qt destruidas."""
+    from PyQt6.QtCore import QCoreApplication, QEvent, QPoint
+
+    from ui.equipment_tab.rosaceas import DiscoLumen, _PanelLumen
+
+    monkeypatch.setattr(_PanelLumen, "show", lambda self: None)
+    disco = DiscoLumen()
+    for _ in range(30):
+        disco._abrir("N", QPoint())
+        disco._panel.close()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert disco.findChildren(_PanelLumen) == []
+    assert disco._panel is None
+    assert disco.lp()["N"] == {"fuente": None, "km": 0.0}
+    disco.deleteLater()
+
+
 def test_guardado_fallido_avisa_y_conserva_formulario(qt_app, memory_db, monkeypatch):
     """Errores de copia o SQLite no se escapan ni anuncian un guardado exitoso."""
     import sqlite3

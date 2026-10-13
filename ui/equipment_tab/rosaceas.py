@@ -444,7 +444,10 @@ class DiscoObstrucciones(_DiscoBase):
             accion.triggered.connect(
                 lambda _=False, d=direccion, g=grados: self._fijar(d, g)
             )
-        menu.exec(self.mapToGlobal(posicion))
+        try:
+            menu.exec(self.mapToGlobal(posicion))
+        finally:
+            menu.deleteLater()
 
     def _fijar(self, direccion: str, grados: int) -> None:
         """Aplica la altura elegida y avisa para repintar la salida."""
@@ -626,6 +629,8 @@ class DiscoLumen(_DiscoBase):
         if self._panel is not None:
             self._panel.close()
         panel = _PanelLumen(direccion, self._lp[direccion], self)
+        panel.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        panel.destroyed.connect(lambda _obj=None, p=panel: self._liberar_panel(p))
         panel.cambio.connect(lambda p=panel, d=direccion: self._aplicar(p, d))
         panel.adjustSize()
         destino = self.mapToGlobal(posicion + QPointF(8, 8).toPoint())
@@ -639,6 +644,11 @@ class DiscoLumen(_DiscoBase):
         panel.move(destino)
         panel.show()
         self._panel = panel
+
+    def _liberar_panel(self, panel: _PanelLumen) -> None:
+        """Olvida solo el panel destruido, sin borrar la referencia a uno recién abierto."""
+        if self._panel is panel:
+            self._panel = None
 
     def _aplicar(self, panel: _PanelLumen, direccion: str) -> None:
         """Vuelca el panel al sector y avisa para repintar la salida."""
