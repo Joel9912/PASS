@@ -4,6 +4,7 @@ Aíslan la base del usuario, las descargas y el área de trabajo en un sandbox
 temporal (ver ``pytest_configure``), y retienen una ``QApplication`` única
 para toda la sesión.
 """
+import errno
 import os
 import sqlite3
 import tempfile
@@ -141,3 +142,18 @@ def memory_db(monkeypatch):
 def memory_settings(memory_db):
     """Tabla ``settings`` en memoria: alias de ``memory_db`` (mismo esquema)."""
     return memory_db
+
+
+@pytest.fixture()
+def crear_symlink():
+    """Omite solo pruebas de symlinks reales cuando el sistema no ofrece esa capacidad."""
+    def crear(destino, origen, *, directorio=False):
+        """No oculta errores de rutas, archivos existentes ni otros fallos inesperados."""
+        try:
+            destino.symlink_to(origen, target_is_directory=directorio)
+        except OSError as error:
+            if (getattr(error, "winerror", None) == 1314
+                    or error.errno in (errno.EPERM, errno.EACCES, errno.ENOSYS, errno.ENOTSUP)):
+                pytest.skip("Esta prueba exige un symlink real que el sistema no permite crear.")
+            raise
+    return crear

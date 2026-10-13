@@ -1,11 +1,13 @@
 """registration: auditoría y registro final con SirIL mockeado.
 
 El doble reproduce lo que SirIL hace de verdad (link renombra por índice y
-sus symlinks apuntan al original; register deja las filas R en el .seq;
+sus enlaces conservan el archivo original; register deja las filas R en el .seq;
 seqapplyreg crea los r_*; calibrate crea la salida pp_), para poder probar
 el mapeo sesión↔frame y los comandos sin el binario. La validación con
 SirIL real vive fuera de pytest.
 """
+import os
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -25,7 +27,7 @@ def test_mapeo_rechaza_indices_invalidos(tmp_path, defecto):
     destino = tmp_path / "indices"
     destino.mkdir()
     for i, ref in enumerate(pool.entries, 1):
-        (destino / f"registro_{i:05d}.fit").symlink_to(ref.ruta)
+        os.link(ref.ruta, destino / f"registro_{i:05d}.fit")
     ultimo = destino / "registro_00005.fit"
     if defecto == "falta":
         ultimo.unlink()
@@ -33,7 +35,7 @@ def test_mapeo_rechaza_indices_invalidos(tmp_path, defecto):
         ultimo.rename(destino / "registro_incorrecto.fit")
     else:
         ultimo.unlink()
-        ultimo.symlink_to(pool.entries[0].ruta)
+        os.link(pool.entries[0].ruta, ultimo)
     with pytest.raises(SirilError):
         registration._mapear(destino, "registro_", pool.entries)
 
@@ -100,7 +102,7 @@ class _SirilFalso:
                 if p.suffix == ".fit" and not p.name.startswith(f"{prefijo}_")
             )
             for i, fuente in enumerate(fuentes, start=1):
-                (cwd / f"{prefijo}_{i:05d}.fit").symlink_to(fuente.resolve())
+                os.link(fuente, cwd / f"{prefijo}_{i:05d}.fit")
             (cwd / f"{prefijo}_.seq").write_text(
                 f"S '{prefijo}_' 1 0 0 0 0 6 0 0 0\n"
             )
@@ -112,13 +114,13 @@ class _SirilFalso:
         elif orden == "seqapplyreg":
             prefijo = resto[0].rstrip("_")
             for enlace in sorted(cwd.glob(f"{prefijo}_*.fit")):
-                (cwd / f"r_{enlace.name}").symlink_to(enlace)
+                shutil.copyfile(enlace, cwd / f"r_{enlace.name}")
         elif orden == "calibrate":
             # Como SirIL real (vía ``calibrate … -debayer``): la salida es
             # pp_ + el nombre de la entrada (d_00001.fit → pp_d_00001.fit).
             prefijo = resto[0].rstrip("_")
             for fuente in sorted(cwd.glob(f"{prefijo}_*.fit")):
-                (cwd / f"pp_{fuente.name}").symlink_to(fuente)
+                shutil.copyfile(fuente, cwd / f"pp_{fuente.name}")
         return None
 
 
@@ -176,6 +178,19 @@ def test_mapea_frames_a_su_sesion(tmp_path, siril_falso, monkeypatch):
         "pp_light_00001.fit", "pp_light_00002.fit", "pp_light_00003.fit",
     ]
     assert registro.ruta_seq.exists()
+
+
+def test_registro_sin_privilegios_symlink(tmp_path, siril_falso, monkeypatch):
+    """Los hardlinks conservan identidad de frames sin requerir permisos de symlink."""
+    def negar(*args, **kwargs):
+        """Simula Windows sin privilegio para crear enlaces simbólicos."""
+        raise PermissionError("symlink no permitido")
+
+    monkeypatch.setattr(Path, "symlink_to", negar)
+    monkeypatch.setattr(registration, "WORKING_FOLDER", tmp_path / "working")
+    pool = _pool(tmp_path)
+    registro = register_pool(pool, "sin_privilegios")
+    assert [ref.ruta for ref in registro.frames] == [ref.ruta for ref in pool.entries]
 
 
 def test_auditoria_guardada_reutiliza_solo_pool_identico(tmp_path, siril_falso, monkeypatch):
@@ -271,7 +286,7 @@ def test_no_toca_los_originales(tmp_path, siril_falso, monkeypatch):
     trabajo = tmp_path / "working" / "registrados" / "apilado1"
     # La entrada vive de enlaces al original (nuestro código); la salida r_*
     # es la transformación que SirIL escribe por su cuenta.
-    assert all(p.is_symlink() for p in trabajo.glob("registro_*.fit"))
+    assert all(p.is_symlink() or p.stat().st_nlink >= 2 for p in trabajo.glob("registro_*.fit"))
     assert len(list(trabajo.glob("r_*.fit"))) == 5
 
 

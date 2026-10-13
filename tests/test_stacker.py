@@ -4,6 +4,7 @@ El doble simula SirIL fiel (link renumera; stack/rgbcomp escriben el -out=):
 aquí se prueba la traducción de opciones, el apilado por canal y los
 fallos; la validación con el binario real vive fuera de pytest.
 """
+import os
 import shlex
 from pathlib import Path
 
@@ -48,7 +49,7 @@ class _SirilFalso:
     def _link(self, base: str, cwd: Path) -> None:
         fuentes = sorted(p for p in cwd.iterdir() if p.suffix == ".fit")
         for i, fuente in enumerate(fuentes, start=1):
-            (cwd / f"{base}_{i:05d}.fit").symlink_to(fuente.resolve())
+            os.link(fuente, cwd / f"{base}_{i:05d}.fit")
         (cwd / f"{base}_.seq").write_text(f"S '{base}_' 1 0 0 0 0 6 0 0 0\n")
 
 
@@ -291,7 +292,7 @@ def test_canal_por_enlaces_sin_copias(tmp_path, siril_falso, apilados):
     apilar_pool(registro, "mi_rgb")
 
     canal = registro.dir / "secuencias" / "R"
-    assert all(p.is_symlink() for p in canal.glob("*.fit"))
+    assert all(p.is_symlink() or p.stat().st_nlink >= 2 for p in canal.glob("*.fit"))
     assert canal.joinpath("canal_.seq").exists()
 
 
@@ -370,7 +371,8 @@ def test_exportacion_sin_sobrescritura_ni_copias_parciales(tmp_path, apilados):
     assert (madre / "a.fit").read_bytes() == b"a.fit"
 
 
-def test_exportacion_rechaza_origen_fuera_de_la_carpeta_de_trabajo(tmp_path, apilados):
+@pytest.mark.parametrize("por_enlace", [False, True])
+def test_exportacion_rechaza_origen_fuera_de_la_carpeta_de_trabajo(tmp_path, apilados, crear_symlink, por_enlace):
     """No se exportan ficheros que PASS no generó en su carpeta de apilados."""
     from stacks.siril_runner import SirilError
     from stacks.stacker import APILADOS_DIR, exportar_apilados
@@ -383,8 +385,10 @@ def test_exportacion_rechaza_origen_fuera_de_la_carpeta_de_trabajo(tmp_path, api
     secreto.write_bytes(b"privado")
     escapado = apilados / APILADOS_DIR / "externo.fit"
     escapado.parent.mkdir(parents=True, exist_ok=True)
-    escapado.symlink_to(secreto)
-    for ruta in (secreto, escapado):
-        with pytest.raises(SirilError, match="carpeta de trabajo"):
-            exportar_apilados([ruta], madre)
+    ruta = secreto
+    if por_enlace:
+        crear_symlink(escapado, secreto)
+        ruta = escapado
+    with pytest.raises(SirilError, match="carpeta de trabajo"):
+        exportar_apilados([ruta], madre)
     assert not (madre / "secreto.fit").exists()

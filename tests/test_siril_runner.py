@@ -206,11 +206,7 @@ def test_eliminar_todo_working_solo_desvincula_originales(monkeypatch, tmp_path)
     origen.write_bytes(b"original")
     (raiz / "apilado.fit").write_bytes(b"salida")
     enlace = raiz / "light.fit"
-    try:
-        enlace.symlink_to(origen)
-    except OSError:
-        import os
-        os.link(origen, enlace)
+    siril_runner.enlazar(origen, enlace)
     monkeypatch.setattr(siril_runner, "WORKING_FOLDER", raiz)
     with pytest.raises(SirilError):
         siril_runner.eliminar_salidas_trabajo(tmp_path)

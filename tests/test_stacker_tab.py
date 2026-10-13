@@ -323,7 +323,7 @@ def test_limpieza_calibrados_rechaza_solape_original(tmp_path, monkeypatch):
     assert original.read_bytes() == b"original"
 
 
-def test_limpieza_calibrados_no_sigue_enlaces(tmp_path, monkeypatch):
+def test_limpieza_calibrados_no_sigue_enlaces(tmp_path, monkeypatch, crear_symlink):
     """S-0009: una salida enlazada al exterior bloquea el borrado completo."""
     from stacks import calibrator
 
@@ -335,10 +335,7 @@ def test_limpieza_calibrados_no_sigue_enlaces(tmp_path, monkeypatch):
     calibrados = raiz / "calibrados"
     calibrados.mkdir(parents=True)
     enlace = calibrados / "enlace"
-    try:
-        enlace.symlink_to(fuera, target_is_directory=True)
-    except OSError:
-        pytest.skip("El sistema no permite crear enlaces simbólicos")
+    crear_symlink(enlace, fuera, directorio=True)
     parcial = calibrados / "parcial"
     parcial.mkdir()
     with pytest.raises(ValueError, match="segura"):

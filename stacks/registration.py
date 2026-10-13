@@ -344,25 +344,34 @@ def _debayerizar(
 
 
 def _mapear(destino: Path, seq: str, refs: list[LightRef]) -> list[LightRef]:
-    """LightRef de cada índice de la secuencia, resolviendo los symlinks de ``link``.
+    """Asocia cada índice a su archivo físico, tanto con symlinks como con hardlinks.
 
     ``link`` renombra por índice (``registro_00001.fit``…) y el ``.seq`` no
-    guarda nombres: la verdad está en el destino de cada symlink (el light
+    guarda nombres: la verdad está en la identidad del archivo enlazado (el light
     calibrado original — o su versión debayerizada). Si un destino no está
     en la lista, hay basura en la carpeta y se rinde en lugar de atribuir
     a la sesión equivocada.
     """
-    por_destino = {ref.ruta.resolve(): ref for ref in refs}
+    def identidad(path: Path) -> tuple[int, int]:
+        """stat sigue symlinks y reconoce hardlinks sin confundirlos con copias."""
+        stat = path.stat()
+        if not stat.st_ino:
+            raise SirilError("El sistema no permite identificar de forma segura los frames.")
+        return stat.st_dev, stat.st_ino
+
+    por_destino = {identidad(ref.ruta): ref for ref in refs}
+    if len(por_destino) != len(refs):
+        raise SirilError("El pool contiene referencias duplicadas al mismo archivo.")
     enlaces = sorted(destino.glob(f"{seq}*.fit"))
     esperados = {f"{seq}{i:05d}.fit" for i in range(1, len(refs) + 1)}
     if {p.name for p in enlaces} != esperados:
         raise SirilError("Índices de registro incompletos o mal nombrados.")
-    if Counter(p.resolve() for p in enlaces) != Counter(r.ruta.resolve() for r in refs):
+    if Counter(identidad(p) for p in enlaces) != Counter(identidad(r.ruta) for r in refs):
         raise SirilError("Los enlaces de registro no corresponden uno a uno al pool.")
     try:
-        return [por_destino[enlace.resolve()] for enlace in enlaces]
+        return [por_destino[identidad(enlace)] for enlace in enlaces]
     except KeyError as exc:
         raise SirilError(
-            f"El enlace {exc.args[0].name} no apunta a ningún light registrado: "
+            f"El enlace {exc.args[0]} no apunta a ningún light registrado: "
             "carpeta de registro sucia."
         ) from None

@@ -27,7 +27,9 @@ def test_enlaza_lights_homonimos_de_filtros_distintos(tmp_path, siril_falso):
     calibrator._enlazar_frames(fuentes, trabajo, "light")
     enlaces = list(trabajo.glob("*.fit"))
     assert len(enlaces) == 2
-    assert {p.resolve() for p in enlaces} == {p.resolve() for p in fuentes}
+    assert {(p.stat().st_dev, p.stat().st_ino) for p in enlaces} == {
+        (p.stat().st_dev, p.stat().st_ino) for p in fuentes
+    }
 
 
 @pytest.mark.parametrize("base", ["light", "flat", "dark"])
