@@ -7,12 +7,15 @@ Cambios relevantes para quienes usan PASS. Los detalles de implementación y cad
 Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado**; se completará cuando se apruebe el lanzamiento.
 
 ### Añadido
+- Registro local persistente en `data/logs/pass.log` y `data/logs/apilador.log`: acciones, avisos y errores con fecha y origen; el del Apilador incluye la salida completa de SirIL, incluso mensajes no mostrados en pantalla. Se continúa al reabrir, sin borrar el historial automáticamente; se ocultan credenciales etiquetadas.
+- Configuración → 📚 Catálogos muestra la tabla Catálogo/Versión/Actualizado, los botones de comprobación y actualización en una fila y el progreso debajo, sin cambiar el consentimiento ni descargar al abrir.
 - Lectura de exposición RAW en metadatos EXIF mediante la librería Python ExifRead, sin revelar ni modificar originales ni necesitar programas externos. Los contenedores no soportados, incluido CR3, quedan sin dato.
 - Captura Posible admite Luna a menos de 5° aun con separación insuficiente, según el criterio del usuario. Captura Ideal mantiene sus requisitos.
 - Captura Ideal usa bloques completos de cinco minutos; sus restos válidos se suman a Captura Posible sin huecos artificiales.
 - Captura Ideal reserva al menos cinco minutos dentro de ambos extremos de la noche astronómica; los márgenes válidos quedan como Posible.
 
 ### Corregido
+- Terminal y resultados de SirIL acotados en memoria, conservando marcadores de fallo/identidad aunque aparezcan al principio y el historial completo en disco (S-0018).
 - Los fallos al enviar comandos, cerrar stdin o recibir logs de SirIL terminan y recolectan el proceso hijo, y cierran sus pipes (S-0013).
 - Los menús de obstrucciones y paneles de contaminación lumínica liberan sus widgets al cerrarse, sin acumular hijos ocultos ni perder datos del sitio (L-0001).
 - El registro reconoce hardlinks válidos cuando Windows no permite crear symlinks; mantiene el rechazo de índices duplicados o ajenos. Las pruebas de secuencias ya no exigen privilegios de symlink; solo los casos específicos de enlaces simbólicos reales se omiten si el sistema no los permite (S-0022, T-0005).

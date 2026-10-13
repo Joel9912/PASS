@@ -114,7 +114,7 @@ def test_update_requires_consent(qt_app, monkeypatch):
     monkeypatch.setattr(page, "_submit", lambda *args: pytest.fail("Sin consentimiento"))
     page.start_update()
     page._finished(None, "Sin red")
-    assert "Actualizado" not in page._labels["hyg"].text()
+    assert page._table.item(list(packages.GROUPS).index("hyg"), 0).toolTip() != "Actualizado"
     assert not page._update.isEnabled()
     page.deleteLater()
 
@@ -126,7 +126,29 @@ def test_catalog_config_no_network_on_open(qt_app, monkeypatch):
     monkeypatch.setattr(packages, "check_manifest", lambda: pytest.fail("No debe consultar la red"))
     page = CatalogsPage()
     assert not page._update.isEnabled()
-    assert "sin identificar" in page._labels["hyg"].text()
+    assert "sin identificar" in page._table.item(list(packages.GROUPS).index("hyg"), 1).text()
+    page.deleteLater()
+
+
+def test_catalogos_tabla_botones_y_progreso(qt_app):
+    """El diseño aprobado muestra columnas, botones en una fila y progreso honesto."""
+    from PyQt6.QtWidgets import QHBoxLayout
+
+    from ui.config_tab.catalogs_page import CatalogsPage
+
+    page = CatalogsPage()
+    assert [page._table.horizontalHeaderItem(i).text() for i in range(3)] == [
+        "Catálogo", "Versión", "Actualizado",
+    ]
+    assert page._table.rowCount() == len(packages.GROUPS)
+    rows = [page.layout().itemAt(i).layout() for i in range(page.layout().count())]
+    buttons = next(row for row in rows if isinstance(row, QHBoxLayout))
+    assert buttons.itemAt(0).widget() is page._check
+    assert buttons.itemAt(1).widget() is page._update
+    page._busy = True
+    page._progress.setRange(0, 0)
+    page._finished({}, "Sin red")
+    assert page._progress.maximum() == 1 and page._progress.value() == 0
     page.deleteLater()
 
 
@@ -162,6 +184,8 @@ def test_main_no_download_before_window(monkeypatch):
 
     monkeypatch.setattr(catalog_loader, "ensure_catalog", download)
     monkeypatch.setattr(main, "ensure_catalog", download, raising=False)
+    monkeypatch.setattr(main, "ActionLogger", lambda app: None)
+    monkeypatch.setattr(main, "install_exception_hooks", lambda: None)
     monkeypatch.setattr(main, "QApplication", Application)
     monkeypatch.setattr(main, "MainWindow", Window)
     monkeypatch.setattr(main, "apply_style", lambda app: None)

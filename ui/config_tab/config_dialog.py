@@ -119,7 +119,7 @@ class ConfigDialog(QDialog):
         self._nav.setObjectName("ConfigNav")
         self._nav.setFixedWidth(170)
         self._nav.addItems(
-            ["\U0001f527  General", "\U0001f324  Clima", "\U0001f52d  Equipo", "Catálogos"]
+            ["\U0001f527  General", "\U0001f324  Clima", "\U0001f52d  Equipo", "📚 Catálogos"]
         )
         body.addWidget(self._nav)
 

@@ -29,11 +29,14 @@ import os
 import re
 import shutil
 import subprocess
+from collections import deque
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from pass_logging import LOG_PERSISTED, MAX_LOG_LINES, record_action
 
 from .siril_finder import find_siril
 
@@ -86,7 +89,7 @@ class SirilResult:
 
     ok: bool
     comandos: list[str]                       # guion enviado, para diagnóstico
-    lineas: list[str] = field(default_factory=list)  # log completo (sin «log: »)
+    lineas: list[str] = field(default_factory=list)  # cola reciente y marcadores; completo en apilador.log
     progreso: float | None = None             # 0..1, último porcentaje leído
     motivo: str = ""                          # por qué ok=False (resumen)
 
@@ -164,8 +167,13 @@ def ejecutar_script(
         raise SirilError("SirIL no está instalado o no se encontró en el PATH.")
 
     script = construir_script(comandos, cwd)
+    record_action("apilador", f"Guion SirIL ({cwd or 'sin directorio'}): {script.strip()}")
     if log_cb is not None:
-        log_cb(f"Guion SirIL ({cwd or 'sin directorio'}): {script.strip()}")
+        token = LOG_PERSISTED.set(True)
+        try:
+            log_cb(f"Guion SirIL ({cwd or 'sin directorio'}): {script.strip()}")
+        finally:
+            LOG_PERSISTED.reset(token)
     try:
         proc = subprocess.Popen(
             [binario, "-i", str(ini_path()), "-s", "-"],
@@ -187,14 +195,24 @@ def ejecutar_script(
         proc.stdin.close()  # type: ignore[union-attr]
 
         resultado = SirilResult(ok=True, comandos=comandos)
+        recientes = deque(maxlen=MAX_LOG_LINES)
+        marcadores = {}
         for linea in proc.stdout:  # type: ignore[union-attr]
             texto = linea.rstrip("\n")
-            resultado.lineas.append(texto)
+            record_action("apilador", "SirIL: " + texto)
+            recientes.append(texto)
+            for marca in (*MARCAS_FALLO, "identity matrices"):
+                if marca in texto.lower():
+                    marcadores[marca] = texto
             visible = _RE_CONTROL_ANSI.sub("", texto).strip()
             if log_cb is not None and visible and not re.fullmatch(
                 r"HDU \d+: type=\d+, EXTNAME=.*", visible
             ):
-                log_cb(visible)
+                token = LOG_PERSISTED.set(True)
+                try:
+                    log_cb(visible)
+                finally:
+                    LOG_PERSISTED.reset(token)
             porcentaje = _RE_PROGRESO.search(texto)
             if porcentaje:
                 resultado.progreso = min(max(float(porcentaje.group(1).replace(",", ".")) / 100.0, 0.0), 1.0)
@@ -202,10 +220,15 @@ def ejecutar_script(
                     progress_cb(resultado.progreso)
 
         proc.wait()
+        resultado.lineas = list(marcadores.values()) + list(recientes)
         resultado.ok = _marcado_ok(proc.returncode, resultado.lineas, esperados)
         if not resultado.ok:
             resultado.motivo = _motivo_fallo(proc.returncode, resultado.lineas, esperados)
+        record_action("apilador", f"SirIL finalizado: ok={resultado.ok}; {resultado.motivo}")
         return resultado
+    except Exception as exc:
+        record_action("apilador", f"Error durante SirIL: {type(exc).__name__}: {exc}")
+        raise
     finally:
         try:
             if proc.poll() is None:

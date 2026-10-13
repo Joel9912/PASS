@@ -95,6 +95,9 @@ def sin_red_real(monkeypatch):
 
 def pytest_unconfigure() -> None:
     """Cierra SQLite para poder retirar la copia temporal también en Windows."""
+    from pass_logging import close_logging
+
+    close_logging()
     if db_connection._connection is not None:
         db_connection._connection.close()
         db_connection._connection = None

@@ -6,10 +6,12 @@ La cancelación mata el proceso SirIL en curso (``siril_runner.cancelar_siril``)
 si la tarea terminó con la cancelación ya pedida se emite ``fallo`` con el
 motivo de cancelación, nunca ``fin``: el resultado ya no es fiable.
 """
+import logging
 from collections.abc import Callable
 
 from PyQt6.QtCore import QObject, Qt, QThread, pyqtSignal, pyqtSlot
 
+from pass_logging import LOG_PERSISTED, record_action
 from stacks.siril_runner import cancelar_siril
 
 #: Motivo de fallo cuando la parada la pidió el usuario (no un error real).
@@ -68,11 +70,15 @@ class SirilWorker(QObject):
 
         def _log(linea: str) -> None:
             _exigir_vivo()
+            if not LOG_PERSISTED.get():
+                record_action("apilador", linea)
             self.log.emit(linea)
 
         try:
+            record_action("apilador", "Inicio de tarea")
             resultado = self._tarea(progress_cb=_progreso, log_cb=_log)
         except Exception as exc:
+            logging.getLogger(__name__).exception("Tarea cancelada" if self._cancelado else "Error de tarea")
             # El error viaja como texto: la UI lo pinta en el log/estado.
             motivo = (
                 CANCELADO
@@ -81,6 +87,7 @@ class SirilWorker(QObject):
             )
             self.fallo.emit(motivo)
         else:
+            record_action("apilador", "Tarea cancelada" if self._cancelado else "Tarea finalizada")
             if self._cancelado:
                 self.fallo.emit(CANCELADO)
             else:

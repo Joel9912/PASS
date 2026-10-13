@@ -42,6 +42,9 @@ pip install -r requirements.txt
 python main.py
 ```
 
+## Registros locales
+Los registros locales están en `data/logs/pass.log` (acciones y errores generales) y `data/logs/apilador.log` (Apilador y salida completa de SirIL). Se crean automáticamente y se continúa el historial al reabrir; no se borran automáticamente. Pueden contener rutas y datos de tu equipo: revísalos antes de compartirlos. La terminal muestra solo los mensajes recientes.
+
 ## Tests
 
 ```powershell

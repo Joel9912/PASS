@@ -213,6 +213,9 @@ class StackerPage(QWidget):
         layout.addLayout(nav)
 
         self._terminal = QPlainTextEdit()
+        from pass_logging import MAX_LOG_LINES
+
+        self._terminal.setMaximumBlockCount(MAX_LOG_LINES)
         self._terminal.setReadOnly(True)
         self._terminal.setMaximumHeight(150)
         self._terminal.setPlaceholderText(
@@ -1027,3 +1030,6 @@ class StackerPage(QWidget):
     def _decir(self, texto: str) -> None:
         """Actualiza la línea de estado bajo la navegación."""
         self._estado.setText(texto)
+        from pass_logging import record_action
+
+        record_action("apilador", texto)

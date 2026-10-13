@@ -27,6 +27,26 @@ class _ProcFalso:
         return self.returncode
 
 
+def test_log_completo_en_disco_y_resultado_acotado(monkeypatch):
+    """S-0018: persiste incluso ruido filtrado y conserva marcadores tempranos."""
+    from db import connection
+    from pass_logging import MAX_LOG_LINES
+
+    inicio = "log: identity matrices; script execution failed"
+    oculto = "HDU 1: type=0, EXTNAME=LIGHT"
+    lineas = [inicio, oculto] + [f"log: frame {i}" for i in range(MAX_LOG_LINES + 100)]
+    _siril(monkeypatch, "\n".join(lineas) + "\n")
+    visible = []
+    resultado = siril_runner.ejecutar_script(["comando"], log_cb=visible.append)
+    assert not resultado.ok
+    assert len(resultado.lineas) <= MAX_LOG_LINES + 3
+    assert any("identity matrices" in linea for linea in resultado.lineas)
+    assert oculto not in visible
+    completo = (connection.DATA_DIR / "logs" / "apilador.log").read_text(encoding="utf-8")
+    assert inicio in completo and oculto in completo
+    assert "log: frame 0" in completo and lineas[-1] in completo
+
+
 @pytest.mark.parametrize("fallo", ["write", "close", "callback"])
 def test_fallo_de_io_no_deja_proceso_vivo(monkeypatch, fallo):
     """S-0013: los fallos tras Popen matan/recolectan al hijo y liberan sus pipes."""
