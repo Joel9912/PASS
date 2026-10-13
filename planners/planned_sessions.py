@@ -31,6 +31,7 @@ def add(
     tiles_x: int | None = None,
     tiles_y: int | None = None,
     notes: str = "",
+    draft_revision: str | None = None,
 ) -> int:
     """Crea una sesión planificada y devuelve su id.
 
@@ -39,16 +40,25 @@ def add(
     el encuadre son los del momento de guardar.
     """
     conn = get_connection()
-    cur = conn.execute(
-        "INSERT INTO planned_sessions (object_id, target_name, setup_id,"
-        " session_date, planned_exposure_s, target_kind, ra_hours, dec_deg,"
-        " fov_major_arcmin, fov_minor_arcmin, tiles_x, tiles_y, notes)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (object_id, target_name, setup_id, session_date, planned_exposure_s,
-         target_kind, ra_hours, dec_deg, fov_major_arcmin, fov_minor_arcmin,
-         tiles_x, tiles_y, notes),
-    )
-    conn.commit()
+    with conn:
+        if draft_revision is not None:
+            from db.work_drafts import DraftError
+
+            deleted = conn.execute(
+                "DELETE FROM work_drafts WHERE workflow='planner' AND revision=?",
+                (draft_revision,),
+            )
+            if deleted.rowcount != 1:
+                raise DraftError("El borrador cambió; no se creará una sesión duplicada.")
+        cur = conn.execute(
+            "INSERT INTO planned_sessions (object_id, target_name, setup_id,"
+            " session_date, planned_exposure_s, target_kind, ra_hours, dec_deg,"
+            " fov_major_arcmin, fov_minor_arcmin, tiles_x, tiles_y, notes)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (object_id, target_name, setup_id, session_date, planned_exposure_s,
+             target_kind, ra_hours, dec_deg, fov_major_arcmin, fov_minor_arcmin,
+             tiles_x, tiles_y, notes),
+        )
     return cur.lastrowid
 
 

@@ -193,6 +193,14 @@ CREATE TABLE IF NOT EXISTS calibrated_sessions (
     created_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS work_drafts (
+    workflow TEXT PRIMARY KEY CHECK(workflow IN ('planner', 'stacker')),
+    format_version INTEGER NOT NULL,
+    revision TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL

@@ -7,6 +7,7 @@ Cambios relevantes para quienes usan PASS. Los detalles de implementación y cad
 Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado**; se completará cuando se apruebe el lanzamiento.
 
 ### Añadido
+- Planificación conserva automáticamente un borrador separado de las sesiones guardadas, con parámetros, encuadre y ubicación. Al volver ofrece Continuar, Más tarde o Descartar borrador; no sustituye referencias desaparecidas ni crea sesiones automáticamente. Un fallo de guardado deja aviso y cancela el cierre.
 - Equipo avisa de cambios sin guardar al cambiar de equipo o componente, iniciar otro, salir de la pestaña o cerrar PASS: Guardar, Descartar o Cancelar. Piezas globales y equipo se guardan por separado; los errores mantienen las ediciones. La cabecera distingue el total guardado de la previsualización y descartar no revierte piezas o filtros ya guardados.
 - Registro local persistente en `data/logs/pass.log` y `data/logs/apilador.log`: acciones, avisos y errores con fecha y origen; el del Apilador incluye la salida completa de SirIL, incluso mensajes no mostrados en pantalla. Se continúa al reabrir, sin borrar el historial automáticamente; se ocultan credenciales etiquetadas.
 - Configuración → 📚 Catálogos sigue el diseño de las otras secciones: panel con título azul, tabla compacta de filas alternas y estados diferenciados por texto/color. Botones en una fila, progreso solo durante operaciones y avisos compactos con detalle en tooltip; sin cambiar el consentimiento ni descargar al abrir.
@@ -16,6 +17,7 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 - Captura Ideal reserva al menos cinco minutos dentro de ambos extremos de la noche astronómica; los márgenes válidos quedan como Posible.
 
 ### Corregido
+- Guardar una sesión respeta el centro editado del encuadre cuando el objetivo tiene coordenadas conocidas (P-0015).
 - Terminal y resultados de SirIL acotados en memoria, conservando marcadores de fallo/identidad aunque aparezcan al principio y el historial completo en disco (S-0018).
 - Los fallos al enviar comandos, cerrar stdin o recibir logs de SirIL terminan y recolectan el proceso hijo, y cierran sus pipes (S-0013).
 - Los menús de obstrucciones y paneles de contaminación lumínica liberan sus widgets al cerrarse, sin acumular hijos ocultos ni perder datos del sitio (L-0001).

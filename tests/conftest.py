@@ -93,6 +93,25 @@ def sin_red_real(monkeypatch):
     monkeypatch.setattr(urllib.request, "urlopen", rechazar)
 
 
+@pytest.fixture(autouse=True)
+def aislar_borradores():
+    """Evita que borradores de un test disparen diálogos en otro; solo usa la BD sandbox."""
+    conn = db_connection.get_connection()
+    conn.execute("DELETE FROM work_drafts")
+    conn.commit()
+    yield
+    from PyQt6.QtWidgets import QApplication
+
+    app = QApplication.instance()
+    if app is not None:
+        for widget in app.allWidgets():
+            draft = getattr(widget, "_draft", None)
+            if draft is not None:
+                draft.timer.stop()
+    conn.execute("DELETE FROM work_drafts")
+    conn.commit()
+
+
 def pytest_unconfigure() -> None:
     """Cierra SQLite para poder retirar la copia temporal también en Windows."""
     from pass_logging import close_logging

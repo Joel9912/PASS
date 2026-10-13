@@ -24,6 +24,7 @@ del usuario: nunca se inventa un FOV).
 """
 from __future__ import annotations
 
+import sqlite3
 from datetime import date
 
 from PyQt6.QtCore import QDate, Qt, pyqtSignal
@@ -53,7 +54,9 @@ from planners import personal_catalog, planned_sessions
 from planners.capture_plan import best_dates
 from planners.framing import calculate_fov
 from planners.moon_distance import format_hour_range
+from planners.session_draft import validate as validate_draft
 from planners.transit import night_curve
+from ui.draft_recovery import DraftRecovery, refresh_without_starting_draft
 
 from ..widgets import TransitCurve, crear_tabla_filas, fila_seleccionada, window_lines
 from .planetario_visual import PlanetarioVisual
@@ -111,6 +114,114 @@ class PlanificacionTab(QWidget):
 
         self.reload_targets()
         self.reload_setups()
+        self._draft = DraftRecovery(
+            self, "planner", "Hay una sesión sin terminar de planificar. ¿Deseas continuar?",
+            self._draft_snapshot, self._restore_draft, self._block_draft,
+        )
+        root.addWidget(self._draft.label)
+        root.addWidget(self._draft.button)
+        self._draft_location_label = QLabel("")
+        self._draft_location_label.setObjectName("HintLabel")
+        self._draft_location_label.setWordWrap(True)
+        root.addWidget(self._draft_location_label)
+        for control, signal in (
+            (self._session_name, "textChanged"), (self._notes, "textChanged"),
+            (self._exposure, "valueChanged"), (self._date, "dateChanged"),
+            (self._target, "currentIndexChanged"), (self._setup, "currentIndexChanged"),
+            (self._ra, "valueChanged"), (self._dec, "valueChanged"),
+            (self._tiles_x, "valueChanged"), (self._tiles_y, "valueChanged"),
+        ):
+            getattr(control, signal).connect(self._draft.changed)
+
+    def showEvent(self, event) -> None:
+        """Ofrece continuar solo al entrar en Planificación, no al arrancar PASS."""
+        super().showEvent(event)
+        self._draft.entered()
+
+    def _block_draft(self, blocked: bool) -> None:
+        """Impide reemplazar un borrador aplazado con una sesión nueva."""
+        for control in (
+            self._target, self._date, self._setup, self._ra, self._dec,
+            self._tiles_x, self._tiles_y, self._session_name, self._exposure,
+            self._notes, self._save_button, self._plan_button, self._planetario,
+        ):
+            control.setEnabled(not blocked)
+        if not blocked:
+            self._tiles_x.setEnabled(bool(self._fov))
+            self._tiles_y.setEnabled(bool(self._fov))
+
+    def _draft_snapshot(self) -> dict:
+        """Captura entradas y encuadre; las recomendaciones se recalculan, no se certifican."""
+        target, setup = self._current_target(), self._current_setup()
+        return {
+            "target": [str(target["object_id"]), str(target["catalog"])] if target else None,
+            "setup_id": setup["id"] if setup else None,
+            "date": self._date_iso(), "ra": self._ra.value(), "dec": self._dec.value(),
+            "tiles_x": self._tiles_x.value(), "tiles_y": self._tiles_y.value(),
+            "name": self._session_name.text(), "exposure": self._exposure.value(),
+            "notes": self._notes.text(),
+            "location": [self._latitude, self._longitude, self._utc_offset_hours],
+            "view_fov": self._planetario.view[2],
+            "frame_fov": list(self._fov) if self._fov else None,
+        }
+
+    def _restore_draft(self, data: dict) -> None:
+        """Prevalida referencias para no sustituir objetivo o equipo por el primero de la lista."""
+        validate_draft(data)
+        target_index = -1
+        if data["target"] is not None:
+            target_index = next((
+                i for i, row in enumerate(self._targets)
+                if [str(row["object_id"]), str(row["catalog"])] == data["target"]
+            ), -1)
+            if target_index < 0:
+                raise ValueError("El objetivo ya no está en el catálogo personal")
+        setup_index = -1
+        if data["setup_id"] is not None:
+            setup_index = next((i for i, row in enumerate(self._setups) if row["id"] == data["setup_id"]), -1)
+            if setup_index < 0:
+                raise ValueError("El equipo ya no existe")
+        controls = (self._target, self._setup, self._date, self._ra, self._dec,
+                    self._tiles_x, self._tiles_y, self._session_name, self._exposure, self._notes)
+        for control in controls:
+            control.blockSignals(True)
+        try:
+            self._target.setCurrentIndex(target_index)
+            self._setup.setCurrentIndex(setup_index)
+            self._date.setDate(QDate.fromString(data["date"], "yyyy-MM-dd"))
+            self._latitude, self._longitude, self._utc_offset_hours = data["location"]
+            if self._latitude is not None:
+                self._draft_location_label.setText(
+                    f"Ubicación recuperada: {self._latitude:g}°, {self._longitude:g}°; "
+                    f"desfase UTC: {self._utc_offset_hours if self._utc_offset_hours is not None else 'inferido'}. "
+                    "Para cambiarla, elige una ubicación en Búsqueda."
+                )
+            self._session_name.setText(data["name"])
+            self._exposure.setValue(data["exposure"])
+            self._notes.setText(data["notes"])
+            self._on_target_changed()
+            self._on_setup_changed()
+            current_fov = list(self._fov) if self._fov else None
+            if current_fov != data["frame_fov"]:
+                self._draft_location_label.setText(
+                    self._draft_location_label.text() + "\n"
+                    "El campo de visión del equipo cambió; se recalculó con sus datos actuales. "
+                    "Revisa el encuadre antes de guardar la sesión."
+                )
+            self._ra.setValue(data["ra"])
+            self._dec.setValue(data["dec"])
+            self._tiles_x.setValue(data["tiles_x"])
+            self._tiles_y.setValue(data["tiles_y"])
+            self._updating_view = True
+            try:
+                self._planetario.set_center(data["ra"], data["dec"])
+                self._planetario.set_fov_deg(data["view_fov"])
+            finally:
+                self._updating_view = False
+            self._apply_framing()
+        finally:
+            for control in controls:
+                control.blockSignals(False)
 
     # ------------------------------------------------------------------ #
     #                            B A R R A                                #
@@ -302,6 +413,7 @@ class PlanificacionTab(QWidget):
         actions = QHBoxLayout()
         actions.setSpacing(6)
         save = QPushButton("💾 Guardar sesión")
+        self._save_button = save
         save.setObjectName("PrimaryButton")
         save.clicked.connect(self._on_save_session)
         actions.addWidget(save)
@@ -312,6 +424,7 @@ class PlanificacionTab(QWidget):
     # ------------------------------------------------------------------ #
     #                           A P I   P Ú B L I C A                     #
     # ------------------------------------------------------------------ #
+    @refresh_without_starting_draft
     def set_location(
         self, latitude: float, longitude: float, utc_offset_hours: float | None
     ) -> None:
@@ -319,9 +432,14 @@ class PlanificacionTab(QWidget):
         self._latitude = latitude
         self._longitude = longitude
         self._utc_offset_hours = utc_offset_hours
+        if hasattr(self, "_draft_location_label"):
+            self._draft_location_label.clear()
         self._refresh_curve()
         self._invalidate_plan()
+        if hasattr(self, "_draft") and self._draft.active:
+            self._draft.flush()
 
+    @refresh_without_starting_draft
     def reload_targets(self, keep_current: bool = True) -> None:
         """Vuelve a leer el catálogo personal (objetos y regiones)."""
         current = self._current_target()
@@ -355,6 +473,7 @@ class PlanificacionTab(QWidget):
             self._target.addItem("(sin elementos)", None)
             self._on_target_changed()
 
+    @refresh_without_starting_draft
     def reload_setups(self) -> None:
         """Vuelve a leer los setups de equipo (para el FOV del encuadre)."""
         actual = self._setup.currentData()
@@ -496,6 +615,9 @@ class PlanificacionTab(QWidget):
         self._ra.blockSignals(False)
         self._updating_view = False
         self._apply_framing()
+
+        if hasattr(self, "_draft"):
+            self._draft.changed()
 
     def _on_planet_object_clicked(self, object_id: str, catalog: str) -> None:
         """Clic en un objeto del cielo → lo coloca como target si está guardado."""
@@ -669,6 +791,9 @@ class PlanificacionTab(QWidget):
         Sin nombre propio se usa «objeto · fecha»; el FOV y las teselas solo
         se guardan si el equipo aporta encuadre.
         """
+        if self._draft.pending:
+            self._draft.offer()
+            return
         target = self._current_target()
         if target is None:
             QMessageBox.information(
@@ -690,23 +815,38 @@ class PlanificacionTab(QWidget):
                 round(self._fov[1] * 60.0, 3),
             )
 
-        session_id = planned_sessions.add(
+        if not self._draft.flush():
+            return
+        params = dict(
             object_id=str(target["object_id"]),
             target_name=name,
             session_date=self._date_iso(),
             setup_id=setup.get("id") if setup else None,
             planned_exposure_s=int(self._exposure.value()),
             target_kind="region" if is_region else "catalog",
-            ra_hours=target.get("ra_hours"),
-            dec_deg=target.get("dec_deg"),
+            ra_hours=self._ra.value() if target.get("ra_hours") is not None else None,
+            dec_deg=self._dec.value() if target.get("dec_deg") is not None else None,
             fov_major_arcmin=arcmin[0] if arcmin else None,
             fov_minor_arcmin=arcmin[1] if arcmin else None,
             tiles_x=self._tiles_x.value() if arcmin else None,
             tiles_y=self._tiles_y.value() if arcmin else None,
             notes=self._notes.text().strip(),
+            draft_revision=self._draft.revision,
         )
-        self._session_name.clear()
-        self._notes.clear()
+        try:
+            session_id = planned_sessions.add(**params)
+        except (ValueError, OSError, sqlite3.Error) as exc:
+            QMessageBox.warning(self, "No se pudo guardar la sesión", str(exc))
+            return
+        self._draft.revision = None
+        self._draft.active = False
+        self._draft.paused = True
+        try:
+            self._session_name.clear()
+            self._notes.clear()
+        finally:
+            self._draft.paused = False
+        self._draft.label.setText("Sesión guardada · sin borrador pendiente.")
         self.session_saved.emit(session_id)
         QMessageBox.information(
             self,

@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QStackedWidget,
     QTabWidget,
@@ -350,6 +351,21 @@ class MainWindow(QMainWindow):
         if isinstance(equipo, EquipmentPage) and not equipo.equipos.preparar_salida():
             evento.ignore()
             return
+        planner = self._paginas.get("planner_tab")
+        stacker = self._paginas.get("stacker_tab")
+        for page in (
+            planner.planificacion if isinstance(planner, PlannerPage) else None,
+            stacker if isinstance(stacker, StackerPage) else None,
+        ):
+            draft = getattr(page, "_draft", None)
+            if draft is not None and not draft.flush():
+                QMessageBox.warning(
+                    self, "Borrador sin guardar",
+                    "No se pudieron guardar las últimas ediciones. El cierre se canceló.\n"
+                    "Revisa el aviso de Planificación o Apilador y vuelve a intentarlo.",
+                )
+                evento.ignore()
+                return
         super().closeEvent(evento)
 
     def _wire_equipo(self) -> None:
