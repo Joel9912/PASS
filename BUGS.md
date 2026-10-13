@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **94 hallazgos**: 🔴 18 graves · 🟠 49 medios · 🟡 18 bajos · 9 decisiones (8 pendientes).
-Estado: ✅ 68 corregidos · 🟡 3 contenidos · ⏳ 8 pendientes · 🔎 6 sin reproducir.
+Estado: ✅ 74 corregidos · 🟡 3 contenidos · ⏳ 7 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -63,7 +63,7 @@ Estado: ✅ 68 corregidos · 🟡 3 contenidos · ⏳ 8 pendientes · 🔎 6 sin
 | **S-0009** | Una carpeta creada por una calibración fallida bloquea el reintento: `exists()` cuenta como «ya calibrada». Sigue vigente tras **S-0002**. | ✅ `1f91334` |
 | **S-0011** | `_hilo` se libera al recibir el resultado y no al emitir `finished`. | ✅ `7bf6c24` |
 | **S-0012** | `wait(3000)` sobre tareas Python sin cancelación cooperativa puede congelar el cierre. | ✅ `a53098c` (cancelación cooperativa) |
-| **S-0013** | Un error al escribir en stdin podría dejar un hijo de SirIL vivo. | 🔎 sin reproducir |
+| **S-0013** | Un error al escribir en stdin podría dejar un hijo de SirIL vivo. | ✅ `afe3a09` |
 | **S-0014** | Solo se valida el primer FITS como 16-bit; el resto de la sesión se asume correcto. | ✅ `497637a` |
 | **S-0015** | Un `EXPTIME` textual puede hacer fallar el escaneo completo de la sesión. | ✅ `ab37304` |
 | **S-0016** | `exportar_apilados` acepta un origen arbitrario por API aunque la UI pase la carpeta de trabajo. | ✅ `f09085f` (origen acotado y resuelto) |
@@ -104,23 +104,23 @@ Estado: ✅ 68 corregidos · 🟡 3 contenidos · ⏳ 8 pendientes · 🔎 6 sin
 | **X-0002** | El README raíz describe un ranking de objetos que no existe. | ✅ `18c384e` |
 | **X-0003** | El README raíz presenta el Planetario como dependiente de red. | ✅ `18c384e` |
 | **X-0004** | `planners/README.md` mantiene como pendiente un CRUD ya implementado. | ✅ `18c384e` |
-| **X-0007** | `tests/README.md` describe la UI offscreen y la cobertura del README de forma errónea. | ⏳ |
+| **X-0007** | `tests/README.md` describe la UI offscreen y la cobertura del README de forma errónea. | ✅ documentación interna cotejada |
 
 ## 🟡 Bajos
 
 | ID | Bug | Estado |
 |---|---|---|
-| **B-0007** | `_download_tap` referencia `urllib.request` sin import directo: `NameError` latente. | 🔎 sin reproducir |
-| **S-0017** | Las previews de auditoría cargan el FITS entero en el hilo de UI. | 🔎 medir antes de priorizar |
-| **S-0018** | El stdout de SirIL y la terminal crecen sin límite en corridas largas. | 🔎 medir |
+| **B-0007** | `_download_tap` referencia `urllib.request` sin import directo: `NameError` latente. | ✅ `ef62ef6` (import explícito; hipótesis antigua no reproducida) |
+| **S-0017** | Las previews de auditoría cargan el FITS entero en el hilo de UI. | ⏳ medido; optimización diferida de baja prioridad |
+| **S-0018** | El stdout de SirIL y la terminal crecen sin límite en corridas largas. | ⏳ crecimiento medido; pendiente política de retención |
 | **S-0019** | Código muerto (símbolos sin consumidores) acumulado en `stacks/` y `ui/`. | ✅ |
-| **L-0001** | QMenu y paneles efímeros con parent retenidos: posible fuga de widgets. | 🔎 medir hijos tras N ciclos |
+| **L-0001** | QMenu y paneles efímeros con parent retenidos: posible fuga de widgets. | ✅ `afe3a09` |
 | **L-0002** | Los diálogos acumulaban hijos ocultos al cerrar (fuga medida 20/20). | ✅ |
 | **U-0006** | El `QDateEdit` de «Editar sesión» no reflejaba la fecha seleccionada. | ✅ |
 | **X-0005** | `i18n/` declara traducciones vacías como si fueran válidas. | ⏳ (carpeta aún sin implementar) |
 | **X-0006** | Búsqueda decía «sin datos hasta que haya API key» aunque hubiera claves. | ✅ |
-| **X-0008** | `tests/README.md` atribuía la BD a `siril_finder`. | ⏳ |
-| **X-0009** | `tests/README.md` citaba rutas y tests equivocados. | ⏳ |
+| **X-0008** | `tests/README.md` atribuía la BD a `siril_finder`. | ✅ documentación interna cotejada |
+| **X-0009** | `tests/README.md` citaba rutas y tests equivocados. | ✅ documentación interna cotejada |
 | **X-0010** | El README de Configuración atribuía la persistencia a `siril_finder`. | ✅ |
 | **X-0011** | Resumen y `STRUCTURE.md` presentaban como actual un flujo aún futuro. | ✅ |
 | **X-0012** | Los totales del catálogo se repetían en `MEMORY.md`. | ✅ |
