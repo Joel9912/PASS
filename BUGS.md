@@ -138,7 +138,7 @@ Cuestiones que requieren decidir el comportamiento; las resueltas indican su acu
 | **B-0008** | Añadir una región con un nombre repetido se descarta en silencio (`INSERT OR IGNORE`). |
 | **E-0011** | Migración aprobada: separar datos de equipo v1 en piezas independientes y vincularlas a equipos, sin inventar características ni fusionar por nombre. ⏳ Implementación y verificación pendientes. |
 | **E-0012** | ✅ Todo o nada para guardar setups: BD y adjuntos; aplicado en `e5bf105`. |
-| **E-0013** | No está definido si el «total» guardado de un setup son los datos persistidos o las ediciones del formulario. |
+| **E-0013** | Aprobado: total de ediciones como previsualización sin guardar; guardar confirma y cancelar recupera el total persistido. ⏳ Implementación y verificación pendientes. |
 | **S-0010** | Una secuencia nueva pide métricas `wfwhm`/`nbstars` que SirIL no vuelve a calcular. |
 | **P-0011** | Las horas se calculan con un offset fijo por ubicación: no se tiene en cuenta el cambio de hora (DST). |
 | **U-0007** | Al planificar no está decidido si se selecciona la noche sugerida o la fecha guardada por el usuario. |
