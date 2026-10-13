@@ -1052,13 +1052,16 @@ def test_hacer_todo_encadena_las_cuatro_fases(tmp_path, monkeypatch, memory_db):
         pool = GlobalPool()
         pool.entries = [
             LightRef(
-                ruta=Path("/tmp/working") / f"pp_light_{i:05d}.fit",
+                ruta=tmp_path / "working" / f"pp_light_{i:05d}.fit",
                 sesion="noche1",
                 filtro=None,
                 exposicion_s=30.0,
             )
             for i in (1, 2)
         ]
+        (tmp_path / "working").mkdir(exist_ok=True)
+        for ref in pool.entries:
+            ref.ruta.touch()
         return pool
 
     def audit_falso(pool, **_kwargs):
@@ -1153,6 +1156,7 @@ def test_apilar_pide_debayer_o_drizzle_segun_la_casilla(tmp_path, monkeypatch):
         filtro=None,
         exposicion_s=30.0,
     )
+    ref.ruta.touch()
     pool = GlobalPool()
     pool.entries = [ref]
     auditoria = Registro(

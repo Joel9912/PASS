@@ -8,6 +8,7 @@ ventana nunca se congela y «Cancelar» mata la corrida de SirIL en curso.
 """
 from collections.abc import Callable
 from pathlib import Path
+from threading import Event
 
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -25,6 +26,7 @@ from PyQt6.QtWidgets import (
 )
 
 from db.settings import PROJECT_ROOT_KEY, get_setting, set_setting
+from stacks import work_recovery
 from stacks.calibrator import (
     CALIBRATED_DIR,
     SETTING_GLOBAL_DIR,
@@ -59,6 +61,13 @@ from stacks.siril_runner import (
     eliminar_salidas_trabajo,
 )
 from stacks.stacker import APILADOS_DIR, apilar_pool, exportar_apilados
+from ui.draft_recovery import (
+    DraftRecovery,
+    capture_controls,
+    connect_controls,
+    restore_controls,
+    validate_controls,
+)
 from ui.style import PALETTE
 
 from .paneles import PanelApilar, PanelAuditar, PanelCalibrar, PanelFinal, PanelSesiones
@@ -118,6 +127,7 @@ class StackerPage(QWidget):
     #: Resultado intermedio emitido desde el hilo de trabajo: la BD solo se
     #: toca en el hilo principal (SQLite exige el mismo hilo que la creó).
     dato = pyqtSignal(object)
+    registro_terminado = pyqtSignal(object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         """Monta barra de pasos, los 5 paneles, navegación, progreso y log."""
@@ -141,6 +151,14 @@ class StackerPage(QWidget):
         self._worker: SirilWorker | None = None
         self._tarea_ok: Callable[[object], None] | None = None
         self._tarea_no: Callable[[str], None] | None = None
+        self._input_stamps = {}
+        self._calibration_checkpoints = {}
+        self._audit_checkpoint = None
+        self._final_checkpoint = None
+        self._recovery_rows = None
+        self._inputs_verified = True
+        self._interrupted = None
+        self._preserved_checkpoints = {}
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -234,6 +252,7 @@ class StackerPage(QWidget):
         # La tarea emite cada sesión calibrada; aquí se guarda en la BD
         # (siempre en el hilo principal: SQLite no admite otro hilo).
         self.dato.connect(self._guardar_calibracion)
+        self.registro_terminado.connect(self._guardar_registro_final)
 
         # --- raíz inicial desde Configuración y estado de SirIL
         self._refrescar_calibradas()
@@ -246,6 +265,174 @@ class StackerPage(QWidget):
             app.aboutToQuit.connect(self._parar_todo)
 
         self._mostrar_paso(0)
+        self._draft_controls = self._controles_borrador()
+        self._draft = DraftRecovery(
+            self, "stacker", "Hay un trabajo de Apilador pendiente. ¿Deseas continuar?",
+            self._draft_snapshot, self._restore_draft, self._block_draft,
+        )
+        layout.addWidget(self._draft.label)
+        layout.addWidget(self._draft.button)
+        connect_controls(self._draft_controls, self._draft_changed)
+        self.panel_auditar._tabla.itemChanged.connect(self._draft_changed)
+
+    def showEvent(self, event) -> None:
+        """Ofrece recuperar al entrar; no lanza escaneo, calibración ni SirIL."""
+        super().showEvent(event)
+        self._draft.entered()
+
+    def _controles_borrador(self) -> dict:
+        """Declara entradas del asistente, no el log ni las miniaturas derivadas."""
+        controls = {"root": self.panel_sesiones._raiz}
+        for name in ("_opt", "_cc"):
+            controls[f"calibrate{name}"] = getattr(self.panel_calibrar, name)
+        for name, control in self.panel_auditar._pesos.items():
+            controls[f"weight_{name}"] = control
+        for name in ("_umbral", "_sigma", "_metrica"):
+            controls[f"audit{name}"] = getattr(self.panel_auditar, name)
+        for name in (
+            "_nombre", "_integracion", "_ponderacion", "_norm", "_framing",
+            "_rechazo", "_sigma_low", "_sigma_high", "_rejmaps", "_merge_rejmaps",
+            "_drizzle", "_scale", "_pixfrac", "_kernel", "_flat_drizzle", "_ruta_flat",
+            "_bit32", "_output_norm", "_rgb_equal", "_fastnorm", "_extra",
+        ):
+            controls[f"stack{name}"] = getattr(self.panel_apilar, name)
+        return controls
+
+    def _block_draft(self, blocked: bool) -> None:
+        """Un borrador aplazado no se sustituye por una corrida nueva."""
+        for panel in self._paneles_lista:
+            panel.setEnabled(not blocked)
+        self._actualizar_navegacion(blocked or self._worker is not None, self._paso)
+
+    def _draft_changed(self, *_args) -> None:
+        """Conserva elecciones sin interpretar una tabla en pleno repintado como descartes."""
+        if self.panel_auditar._cargando or self._apilado:
+            return
+        self._draft.changed()
+
+    def _draft_snapshot(self) -> dict:
+        """Guarda referencias y puntos sellados, no banderas de éxito autoritativas."""
+        accepted = self._preserved_checkpoints.get("accepted", [])
+        if self.registro:
+            accepted = [str(self.registro.frames[i - 1].ruta.absolute())
+                        for i in self.panel_auditar.aceptados() if 1 <= i <= len(self.registro.frames)]
+        return {
+            "controls": capture_controls(self._draft_controls),
+            "sessions": work_recovery.dump_sessions(self.sesiones),
+            "inputs": self._input_stamps, "calibrations": self._calibration_checkpoints,
+            "audit": self._audit_checkpoint or self._preserved_checkpoints.get("audit"),
+            "final": self._final_checkpoint or self._preserved_checkpoints.get("final"),
+            "accepted": accepted, "step": self._paso, "interrupted": self._interrupted,
+        }
+
+    def _restore_draft(self, data: dict) -> None:
+        """Recupera hasta el último paso verificable y conserva entradas inválidas para reescanear."""
+        required = {"controls", "sessions", "inputs", "calibrations", "audit", "final", "accepted", "step", "interrupted"}
+        if set(data) != required or type(data["step"]) is not int or not 0 <= data["step"] <= 4:
+            raise ValueError("Estado de Apilador incompatible")
+        validate_controls(self._draft_controls, data["controls"])
+        sessions = work_recovery.load_sessions(data["sessions"])
+        if (not isinstance(data["inputs"], dict) or not isinstance(data["calibrations"], dict)
+            or not isinstance(data["accepted"], list) or any(not isinstance(p, str) for p in data["accepted"])
+            or (data["interrupted"] is not None and data["interrupted"] not in PASOS)):
+            raise ValueError("Puntos de recuperación inválidos")
+        inputs_ok = work_recovery.verify_inputs(sessions, data["inputs"])
+        rows = work_recovery.verified_calibrations(data["calibrations"], list_calibrated()) if inputs_ok else []
+        self.sesiones = sessions
+        self._input_stamps = data["inputs"]
+        self._inputs_verified = inputs_ok
+        self._calibration_checkpoints = data["calibrations"]
+        self._recovery_rows = {str(Path(row["session_dir"]).resolve()) for row in rows}
+        self._audit_checkpoint = None
+        self._final_checkpoint = None
+        self._preserved_checkpoints = {key: data[key] for key in ("audit", "final", "accepted")}
+        self.registro, self.metricas, self._pool = None, None, None
+        self._calibrado = self._auditado = self._apilado = False
+        self._interrupted = None
+        self._aviso_trabajo = True
+        restore_controls(self._draft_controls, data["controls"])
+        self._exposiciones = {
+            clave_sesion(s): [exposure_de(path) or 0.0 for path in s.frames.get("lights", [])]
+            for s in sessions if inputs_ok
+        }
+        self._fichas = {}
+        for session in sessions if inputs_ok else []:
+            first = next((p for p in session.frames.get("lights", []) if p.suffix.lower() in (".fit", ".fits", ".fts")), None)
+            self._fichas[clave_sesion(session)] = ficha_de_luz(first) if first else FichaFITS()
+        self._refrescar_calibradas()
+        self._calibrado = bool(sessions) and all(clave_sesion(s) in self._calibradas for s in sessions)
+        notices = []
+        if not inputs_ok:
+            notices.append("Las entradas faltan o cambiaron: reescanea antes de procesar.")
+        if sessions and not self._calibrado:
+            notices.append("Solo se recuperan calibraciones completas y sin cambios.")
+        pool = pool_desde_calibradas(rows, root=WORKING_FOLDER / CALIBRATED_DIR)
+        if self._calibrado and data["audit"]:
+            try:
+                sealed = work_recovery.recover_registry(data["audit"])
+                previous = auditoria_guardada(pool)
+                if previous is None or [r.ruta for r in previous.frames] != [r.ruta for r in sealed.frames]:
+                    raise ValueError("La auditoría no corresponde al pool")
+                self.metricas = extract_metrics(previous, self.panel_auditar.pesos())
+                valid_paths = {str(ref.ruta.absolute()) for ref in previous.frames}
+                if not set(data["accepted"]) <= valid_paths:
+                    raise ValueError("Los descartes no corresponden a esta auditoría")
+                self.registro, self._pool = previous, pool
+                self.panel_auditar.mostrar(previous, self.metricas)
+                self.panel_auditar.restaurar_aceptados(set(data["accepted"]))
+                self._auditado = True
+                self._audit_checkpoint = data["audit"]
+            except (OSError, ValueError, SirilError, KeyError, TypeError, IndexError) as exc:
+                self.registro, self.metricas, self._pool = None, None, None
+                self.panel_auditar.limpiar()
+                notices.append(f"Auditoría no recuperable: {exc}. Revisa o repite ese paso.")
+        if self._auditado and data["final"]:
+            try:
+                work_recovery.recover_registry(data["final"])
+                self._final_checkpoint = data["final"]
+                notices.append("Registro final recuperado; puedes apilar sin repetirlo si mantienes sus opciones y tomas.")
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                notices.append(f"Registro final no recuperable: {exc}.")
+        self.panel_sesiones.mostrar(sessions, self._calibradas, self._exposiciones, self._fichas)
+        self.panel_calibrar.mostrar_pendientes(sessions, self._calibradas)
+        limit = 3 if self._auditado else 2 if self._calibrado else 1 if inputs_ok and sessions else 0
+        self._mostrar_paso(min(data["step"], limit))
+        if data["interrupted"]:
+            notices.append(f"La operación «{data['interrupted']}» quedó interrumpida; no se reinicia automáticamente.")
+        self._decir("Trabajo recuperado. " + " ".join(notices))
+
+    def _capture_calibration_checkpoints(self) -> None:
+        """Sella éxitos de la BD; los parciales nunca se convierten en calibraciones recuperables."""
+        for row in self._filas_calibradas_actuales():
+            key = str(Path(row["session_dir"]).resolve())
+            try:
+                self._calibration_checkpoints[key] = work_recovery.seal_calibration(row)
+            except (OSError, ValueError) as exc:
+                self._log(f"No se pudo sellar la calibración para recuperación: {exc}")
+
+    def _capture_audit_checkpoint(self) -> None:
+        """Conserva secuencia, pool y métricas verificables después de una auditoría completa."""
+        if self.registro and self._pool:
+            try:
+                context = work_recovery.registration_context({}, self._pool.entries)
+                self._audit_checkpoint = work_recovery.seal_registry(self.registro, context)
+            except (OSError, ValueError, SirilError) as exc:
+                self._audit_checkpoint = None
+                self._log(f"No se pudo sellar la auditoría para recuperación: {exc}")
+
+    def _guardar_registro_final(self, payload: tuple) -> None:
+        """Confirma en el hilo UI el registro terminado antes del apilado."""
+        checkpoint, ready, confirmed = payload
+        self._final_checkpoint = checkpoint
+        self._log("Punto de recuperación: registro final terminado, pendiente de apilar.")
+        try:
+            confirmed[0] = self._draft.changed()
+            if confirmed[0]:
+                from pass_logging import record_action
+
+                record_action("apilador", "Punto de recuperación guardado: registro final terminado, pendiente de apilar.")
+        finally:
+            ready.set()
 
     # ------------------------------------------------------------- navegación
 
@@ -270,6 +457,8 @@ class StackerPage(QWidget):
             self._aviso_trabajo = True
             if any(self._carpeta_calibrada(s).exists() for s in self.sesiones):
                 self._preguntar_trabajo()
+        if hasattr(self, "_draft"):
+            self._draft.flush()
 
     def _salida_atribuida(self, sesion: Session) -> Path:
         """Salida que corresponde a esta sesión: la registrada o la nueva única.
@@ -434,6 +623,14 @@ class StackerPage(QWidget):
 
     def reiniciar(self) -> None:
         """Vuelve al principio (el log se conserva por si hay que depurar)."""
+        if self._worker is not None or not self._draft.clear():
+            return
+        self._input_stamps = {}
+        self._calibration_checkpoints = {}
+        self._preserved_checkpoints = {}
+        self._audit_checkpoint = self._final_checkpoint = None
+        self._recovery_rows = None
+        self._inputs_verified = True
         self.sesiones = []
         self._exposiciones = {}
         self._fichas = {}
@@ -505,6 +702,14 @@ class StackerPage(QWidget):
             self._invalidar_aguas_abajo()
             self._aviso_trabajo = False
             self.sesiones = sesiones
+            self._recovery_rows = None
+            self._inputs_verified = True
+            try:
+                self._input_stamps = work_recovery.input_signature(sesiones)
+            except (OSError, ValueError) as exc:
+                self._input_stamps = {}
+                self._log(f"No se pudo sellar el escaneo para recuperación: {exc}")
+            self._calibration_checkpoints = {}
             self._exposiciones = exposiciones
             self._fichas = fichas
             self._refrescar_calibradas()
@@ -516,6 +721,8 @@ class StackerPage(QWidget):
             )
             self.panel_calibrar.mostrar_pendientes(sesiones, self._calibradas)
             self._decir(f"{len(sesiones)} sesiones en {raiz}.")
+            self._capture_calibration_checkpoints()
+            self._draft.changed()
             self._avanzar(ir_a, siguiente)
 
         if self._lanzar(tarea, al_terminar):
@@ -531,6 +738,9 @@ class StackerPage(QWidget):
         explicita: bool = False,
     ) -> None:
         """Calibra todas las sesiones escaneadas con SirIL (una tras otra)."""
+        if not self._inputs_verified:
+            self._decir("Reescanea las entradas cambiadas antes de calibrar.")
+            return
         if not self.sesiones:
             self._decir("Escanea las sesiones primero (paso 1).")
             return
@@ -602,6 +812,8 @@ class StackerPage(QWidget):
                 self._fichas,
             )
             self._decir(f"{len(resultados)} sesiones calibradas.")
+            self._capture_calibration_checkpoints()
+            self._draft.changed()
             if self._calibrado:
                 self._avanzar(ir_a, siguiente)
 
@@ -658,6 +870,8 @@ class StackerPage(QWidget):
                     self.registro, self.metricas, self._pool = previo, metricas, pool_previo
                     self._auditado = True
                     self.panel_auditar.mostrar(previo, metricas)
+                    self._capture_audit_checkpoint()
+                    self._draft.changed()
                     self._decir("Auditoría anterior reutilizada; revisa los descartes.")
                     self._avanzar(ir_a, siguiente)
                     return
@@ -685,6 +899,8 @@ class StackerPage(QWidget):
             self.registro, self.metricas, self._pool = resultado
             self._auditado = True
             self.panel_auditar.mostrar(self.registro, self.metricas)
+            self._capture_audit_checkpoint()
+            self._draft.changed()
             descartados = len(self.registro.frames) - len(self.metricas)
             self._decir(
                 f"{len(self.metricas)} frames con métricas"
@@ -711,6 +927,7 @@ class StackerPage(QWidget):
             f"{cambiados} casillas desmarcadas según los descartes recomendados: "
             "revísalos; el motivo de cada uno está en la tabla."
         )
+        self._draft.changed()
 
     # ------------------------------------------------------- fase 4: apilar
 
@@ -761,6 +978,19 @@ class StackerPage(QWidget):
             except ValueError as exc:
                 self._decir(str(exc))
                 return
+        try:
+            final_context = work_recovery.registration_context(registro_opciones, marcas)
+        except (OSError, ValueError) as exc:
+            self._decir(f"No se pudieron verificar las entradas para el registro: {exc}")
+            return
+        registro_recuperado = None
+        if self._final_checkpoint:
+            try:
+                candidate = work_recovery.recover_registry(self._final_checkpoint)
+                if self._final_checkpoint["context"] == final_context:
+                    registro_recuperado = candidate
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                self._log(f"No se reutilizará el registro final: {exc}")
         padres = {sesion.path.parent.resolve() for sesion in self.sesiones}
         if len(padres) != 1:
             self._decir("Las sesiones no tienen una misma carpeta madre; no se apilará.")
@@ -776,6 +1006,8 @@ class StackerPage(QWidget):
             WORKING_FOLDER / REGISTRADOS_DIR / nombre,
             WORKING_FOLDER / APILADOS_DIR / nombre,
         ):
+            if registro_recuperado is not None and carpeta.resolve() == registro_recuperado.dir.resolve():
+                continue
             if carpeta.exists() and (not carpeta.is_dir() or any(carpeta.iterdir())):
                 self._decir(f"Ya hay datos en {carpeta}; elige otro nombre para conservarlos.")
                 return
@@ -785,25 +1017,40 @@ class StackerPage(QWidget):
         debayer = not drizzle
 
         def tarea(progress_cb, log_cb):
-            log_cb(
-                f"Registro final de {len(marcas)} frames aceptados ("
-                + (f"drizzle ×{registro_opciones['scale']:g}" if drizzle else "debayer si es CFA")
-                + ")…"
-            )
-            registro = register_pool(
-                pool,
-                nombre,
-                aceptados=marcas,
-                debayer=debayer,
-                drizzle=drizzle,
-                scale=registro_opciones["scale"],
-                framing=registro_opciones["framing"],
-                pixfrac=registro_opciones["pixfrac"],
-                kernel=registro_opciones["kernel"],
-                flat=registro_opciones["flat"],
-                progress_cb=progress_cb,
-                log_cb=log_cb,
-            )
+            if registro_recuperado is not None:
+                registro = registro_recuperado
+                log_cb("Registro final verificado y recuperado; no se repetirá con SirIL.")
+            else:
+                log_cb(
+                    f"Registro final de {len(marcas)} frames aceptados ("
+                    + (f"drizzle ×{registro_opciones['scale']:g}" if drizzle else "debayer si es CFA")
+                    + ")…"
+                )
+                registro = register_pool(
+                    pool,
+                    nombre,
+                    aceptados=marcas,
+                    debayer=debayer,
+                    drizzle=drizzle,
+                    scale=registro_opciones["scale"],
+                    framing=registro_opciones["framing"],
+                    pixfrac=registro_opciones["pixfrac"],
+                    kernel=registro_opciones["kernel"],
+                    flat=registro_opciones["flat"],
+                    progress_cb=progress_cb,
+                    log_cb=log_cb,
+                )
+                try:
+                    checkpoint = work_recovery.seal_registry(registro, final_context)
+                except (OSError, ValueError, SirilError) as exc:
+                    log_cb(f"No se pudo sellar el registro para recuperación: {exc}")
+                else:
+                    ready, confirmed = Event(), [False]
+                    self.registro_terminado.emit((checkpoint, ready, confirmed))
+                    while not ready.wait(0.1):
+                        progress_cb(0.0)
+                    if not confirmed[0]:
+                        raise SirilError("No se pudo guardar el punto de recuperación; se conserva el registro y no se inicia el apilado.")
             log_cb(f"Apilando «{nombre}»: {len(registro.frames)} frames…")
             salidas = apilar_pool(
                 registro,
@@ -828,6 +1075,7 @@ class StackerPage(QWidget):
                 salidas=salidas,
             )
             self._decir(f"«{nombre}» apilado: {len(salidas)} imagen(es).")
+            self._draft.clear()
             self._avanzar(ir_a, siguiente)
 
         if self._lanzar(tarea, al_terminar, siril=True):
@@ -844,6 +1092,9 @@ class StackerPage(QWidget):
         siril: bool = False,
     ) -> bool:
         """Arranca ``tarea`` en su hilo; False si ya hay una corrida en curso."""
+        if hasattr(self, "_draft") and self._draft.pending:
+            self._draft.offer()
+            return False
         if self._worker is not None:
             return False
         if siril:
@@ -862,6 +1113,9 @@ class StackerPage(QWidget):
             tarea = tarea_con_binario
         self._tarea_ok = al_terminar
         self._tarea_no = al_fallar
+        self._interrupted = PASOS[self._paso]
+        if hasattr(self, "_draft") and not self._draft.changed():
+            return False
         self._ocupar(True)
         self._hilo, self._worker = arrancar_en_hilo(
             tarea,
@@ -893,8 +1147,10 @@ class StackerPage(QWidget):
         )
         self._worker = None
         self._ocupar(False)
+        self._interrupted = None
         if al_terminar is not None:
             al_terminar(resultado)
+        self._draft.flush()
 
     def _al_fallar(self, motivo: str) -> None:
         """Fallo o cancelación: libera, lo pinta y corta la cadena."""
@@ -913,6 +1169,7 @@ class StackerPage(QWidget):
             self._log(f"✗ {motivo}")
         if al_fallar is not None:
             al_fallar(motivo)
+        self._draft.flush()
 
     def _actualizar_navegacion(self, ocupado: bool, indice: int) -> None:
         """Habilita Atrás/Siguiente/Todo/Limpiar según el paso y la corrida (A-21).
@@ -932,8 +1189,18 @@ class StackerPage(QWidget):
         if ocupado:
             self._barra.setValue(0)
         self._actualizar_navegacion(ocupado, self._paso)
+        if ocupado and hasattr(self, "_draft_controls"):
+            self._controls_enabled = {key: control.isEnabled() for key, control in self._draft_controls.items()}
         for panel in self._paneles_lista:
             panel.bloquear(ocupado)
+        self.panel_auditar._tabla.setEnabled(not ocupado)
+        if hasattr(self, "_draft_controls"):
+            if ocupado:
+                for control in self._draft_controls.values():
+                    control.setEnabled(False)
+            else:
+                for key, enabled in getattr(self, "_controls_enabled", {}).items():
+                    self._draft_controls[key].setEnabled(enabled)
 
     def _cancelar_tarea(self) -> None:
         """Pide parar la corrida en curso (mata SirIL y corta la cadena)."""
@@ -943,6 +1210,8 @@ class StackerPage(QWidget):
 
     def _parar_todo(self) -> None:
         """Cierre de la aplicación: ninguna tarea ni SirIL se quedan colgados."""
+        if hasattr(self, "_draft"):
+            self._draft.flush()
         if self._worker is not None:
             self._worker.cancelar()
         if self._hilo is not None:
@@ -1000,6 +1269,8 @@ class StackerPage(QWidget):
             fila for fila in list_calibrated()
             if Path(fila["session_dir"]).resolve() in origenes
             and Path(fila["calibrated_dir"]).is_dir()
+            and self._inputs_verified
+            and (self._recovery_rows is None or str(Path(fila["session_dir"]).resolve()) in self._recovery_rows)
         ]
 
     def _guardar_calibracion(self, resultado) -> None:
@@ -1009,6 +1280,11 @@ class StackerPage(QWidget):
         una sesión posterior falla y la cadena se corta.
         """
         save_calibration(resultado)
+        if self._recovery_rows is not None:
+            self._recovery_rows.add(str(resultado.session.path.resolve()))
+        self._capture_calibration_checkpoints()
+        if hasattr(self, "_draft"):
+            self._draft.changed()
         self._log(
             f"BD: {resultado.session.path.name} guardada "
             f"({resultado.n_lights} lights)."
@@ -1022,6 +1298,9 @@ class StackerPage(QWidget):
         self._calibrado = False
         self._auditado = False
         self._apilado = False
+        self._audit_checkpoint = None
+        self._final_checkpoint = None
+        self._preserved_checkpoints = {}
 
     def _log(self, linea: str) -> None:
         """Añade una línea al log visible (se llama también desde el hilo)."""

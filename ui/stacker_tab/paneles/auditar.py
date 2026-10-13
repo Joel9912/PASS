@@ -419,6 +419,19 @@ class PanelAuditar(QWidget):
                 indices.append(int(item.data(Qt.ItemDataRole.UserRole)))
         return indices
 
+    def restaurar_aceptados(self, paths: set[str]) -> None:
+        """Recupera descartes por ruta, independientemente de la ordenación por puntuación."""
+        self._cargando = True
+        try:
+            for row in range(self._tabla.rowCount()):
+                item, name = self._tabla.item(row, 0), self._tabla.item(row, 1)
+                if item is not None and name is not None and item.flags() & Qt.ItemFlag.ItemIsUserCheckable:
+                    path = str(Path(name.data(Qt.ItemDataRole.UserRole)).absolute())
+                    item.setCheckState(Qt.CheckState.Checked if path in paths else Qt.CheckState.Unchecked)
+        finally:
+            self._cargando = False
+        self._pintar_grafica()
+
     def descartar_recomendados(self) -> int:
         """Desmarca las casillas de los frames con veredicto «descartada»."""
         cambiados = 0
