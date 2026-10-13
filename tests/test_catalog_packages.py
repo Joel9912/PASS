@@ -126,7 +126,7 @@ def test_catalog_config_no_network_on_open(qt_app, monkeypatch):
     monkeypatch.setattr(packages, "check_manifest", lambda: pytest.fail("No debe consultar la red"))
     page = CatalogsPage()
     assert not page._update.isEnabled()
-    assert "sin identificar" in page._table.item(list(packages.GROUPS).index("hyg"), 1).text()
+    assert page._table.item(list(packages.GROUPS).index("hyg"), 1).text() == "Sin identificar"
     page.deleteLater()
 
 
@@ -141,7 +141,10 @@ def test_catalogos_tabla_botones_y_progreso(qt_app):
         "Catálogo", "Versión", "Actualizado",
     ]
     assert page._table.rowCount() == len(packages.GROUPS)
-    rows = [page.layout().itemAt(i).layout() for i in range(page.layout().count())]
+    panel = page._panel.layout()
+    rows = [panel.itemAt(i).layout() for i in range(panel.count())]
+    assert page._panel.objectName() == "GroupFrame"
+    assert page._table.alternatingRowColors()
     buttons = next(row for row in rows if isinstance(row, QHBoxLayout))
     assert buttons.itemAt(0).widget() is page._check
     assert buttons.itemAt(1).widget() is page._update

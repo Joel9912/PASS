@@ -3,8 +3,10 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QAbstractItemView,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -20,6 +22,7 @@ from PyQt6.QtWidgets import (
 from db import connection
 from pass_logging import record_action
 from planners import catalog_packages
+from ui.style import PALETTE
 
 _EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="catalog-packages")
 
@@ -36,20 +39,41 @@ class CatalogsPage(QWidget):
         self._packages = None
         self._busy = False
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self._panel = QFrame()
+        self._panel.setObjectName("GroupFrame")
+        self._panel.setProperty("catalogPanel", True)
+        layout.addWidget(self._panel)
+        layout.addStretch()
+        layout = QVBoxLayout(self._panel)
+        layout.setContentsMargins(12, 6, 12, 10)
+        layout.setSpacing(8)
+        title = QLabel("Catálogos de datos")
+        title.setObjectName("PanelTitle")
+        layout.addWidget(title)
+        hint = QLabel("Versiones locales y actualizaciones de los paquetes PASS.")
+        hint.setObjectName("HintLabel")
+        layout.addWidget(hint)
         self._table = QTableWidget(len(catalog_packages.GROUPS), 3)
+        self._table.setObjectName("CatalogPackagesTable")
+        self._table.setAlternatingRowColors(True)
+        self._table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._table.setHorizontalHeaderLabels(["Catálogo", "Versión", "Actualizado"])
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.verticalHeader().hide()
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self._table.verticalHeader().setDefaultSectionSize(2 * self.fontMetrics().height() + 16)
         layout.addWidget(self._table)
         self._status = QLabel("Comprueba si hay paquetes nuevos publicados por PASS.")
+        self._status.setObjectName("HintLabel")
         self._status.setWordWrap(True)
         buttons = QHBoxLayout()
         self._check = QPushButton("Comprobar actualizaciones")
         self._check.clicked.connect(self.check)
         buttons.addWidget(self._check)
         self._update = QPushButton("Actualizar")
+        self._update.setObjectName("PrimaryButton")
         self._update.clicked.connect(self.start_update)
         buttons.addWidget(self._update)
         layout.addLayout(buttons)
@@ -57,11 +81,17 @@ class CatalogsPage(QWidget):
         self._progress.setRange(0, 1)
         self._progress.setValue(0)
         self._progress.setTextVisible(False)
+        self._progress.setFixedHeight(6)
+        self._progress.hide()
         layout.addWidget(self._progress)
         layout.addWidget(self._status)
-        layout.addStretch()
         self.completed.connect(self._finished)
         self.refresh()
+        self._table.setFixedHeight(
+            self._table.horizontalHeader().sizeHint().height()
+            + sum(self._table.rowHeight(row) for row in range(self._table.rowCount()))
+            + 2 * self._table.frameWidth() + 4
+        )
 
     def refresh(self):
         """No confunde catálogos heredados sin metadatos con una versión vigente."""
@@ -69,7 +99,7 @@ class CatalogsPage(QWidget):
         self._pending = []
         for row, group in enumerate(catalog_packages.GROUPS):
             version = versions[group]
-            text = version["version"] if version else "Versión sin identificar o catálogo no instalado"
+            text = version["version"] if version else "Sin identificar"
             state = "Vigencia no comprobada"
             if self._packages:
                 item = self._packages[group]
@@ -77,9 +107,26 @@ class CatalogsPage(QWidget):
                 state = "Actualizado" if current else "Paquete disponible"
                 if not current:
                     self._pending.append(group)
-            for column, value in enumerate((group.upper(), text, version["date"] if version else "—")):
+            date = version["date"] if version else "—"
+            for column, value in enumerate((group.upper(), text, f"{date}\n{state}")):
                 item = QTableWidgetItem(value)
                 item.setToolTip(state)
+                if not version:
+                    item.setToolTip(state + ". Versión sin identificar o catálogo no instalado.")
+                item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | (
+                    Qt.AlignmentFlag.AlignLeft if column == 0 else Qt.AlignmentFlag.AlignHCenter
+                ))
+                color = PALETTE["accentLight"] if column == 0 else PALETTE["textDim"]
+                if column == 0:
+                    font = item.font()
+                    font.setBold(True)
+                    item.setFont(font)
+                elif version:
+                    color = PALETTE["text"]
+                if column == 2 and self._packages:
+                    color = PALETTE["ok"] if state == "Actualizado" else PALETTE["warn"]
+                item.setForeground(QColor(color))
+                item.setBackground(QColor(PALETTE["panel"] if row % 2 else PALETTE["bg"]))
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 self._table.setItem(row, column, item)
         self._check.setEnabled(not self._busy)
@@ -89,6 +136,7 @@ class CatalogsPage(QWidget):
         """Encola una sola operación y devuelve su resultado mediante señal Qt."""
         self._busy = True
         self._progress.setRange(0, 0)
+        self._progress.show()
         self.refresh()
         future = _EXECUTOR.submit(operation, *args)
         future.add_done_callback(self._deliver)
@@ -134,15 +182,20 @@ class CatalogsPage(QWidget):
         self._busy = False
         self._progress.setRange(0, 1)
         self._progress.setValue(0 if error else 1)
+        self._progress.hide()
         if error:
             self._packages = None
-            self._status.setText("No se pudo completar la operación. "
-                                 "Los catálogos anteriores se conservan. " + error)
+            self._status.setText("⚠ No se pudo completar la operación. Los catálogos anteriores se conservan.")
+            self._status.setToolTip(error)
         elif isinstance(result, dict):
             self._packages = result
             self._status.setText("Comprobación completada.")
+            self._status.setToolTip("")
         else:
             self._status.setText("Catálogos actualizados.")
+            self._status.setToolTip("")
             self.catalogs_changed.emit()
         self.refresh()
         record_action("catálogos", self._status.text())
+        if error:
+            record_action("catálogos", error, level=logging.ERROR)

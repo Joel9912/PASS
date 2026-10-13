@@ -8,7 +8,7 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 
 ### Añadido
 - Registro local persistente en `data/logs/pass.log` y `data/logs/apilador.log`: acciones, avisos y errores con fecha y origen; el del Apilador incluye la salida completa de SirIL, incluso mensajes no mostrados en pantalla. Se continúa al reabrir, sin borrar el historial automáticamente; se ocultan credenciales etiquetadas.
-- Configuración → 📚 Catálogos muestra la tabla Catálogo/Versión/Actualizado, los botones de comprobación y actualización en una fila y el progreso debajo, sin cambiar el consentimiento ni descargar al abrir.
+- Configuración → 📚 Catálogos sigue el diseño de las otras secciones: panel con título azul, tabla compacta de filas alternas y estados diferenciados por texto/color. Botones en una fila, progreso solo durante operaciones y avisos compactos con detalle en tooltip; sin cambiar el consentimiento ni descargar al abrir.
 - Lectura de exposición RAW en metadatos EXIF mediante la librería Python ExifRead, sin revelar ni modificar originales ni necesitar programas externos. Los contenedores no soportados, incluido CR3, quedan sin dato.
 - Captura Posible admite Luna a menos de 5° aun con separación insuficiente, según el criterio del usuario. Captura Ideal mantiene sus requisitos.
 - Captura Ideal usa bloques completos de cinco minutos; sus restos válidos se suman a Captura Posible sin huecos artificiales.

@@ -221,6 +221,18 @@ QHeaderView::section {
     border-right: 1px solid $border;
     padding: 6px;
 }
+#CatalogPackagesTable QHeaderView::section {
+    color: $accentLight;
+    font-weight: bold;
+}
+#GroupFrame[catalogPanel="true"] QLabel {
+    background-color: transparent;
+}
+#GroupFrame[catalogPanel="true"] QPushButton#PrimaryButton:disabled {
+    background-color: $surface;
+    color: $textDim;
+    border-color: $border;
+}
 
 /* ================ Scrollbars ================ */
 QScrollBar:vertical {
