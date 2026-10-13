@@ -13,6 +13,7 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 - Captura Ideal reserva al menos cinco minutos dentro de ambos extremos de la noche astronómica; los márgenes válidos quedan como Posible.
 
 ### Corregido
+- Tests de interfaz estables con escalado de pantalla: la prueba de la rosácea no confunde una línea de rejilla con el fondo y la de Efemérides controla la maximización diferida antes de fijar su tamaño (T-0006).
 - Arranque sin descargas bloqueantes (B-0005). Configuración incorpora Catálogos: comprobación e instalación consentida de paquetes PASS en segundo plano, con tamaño/SHA-256 y reemplazo transaccional. Los paquetes incluidos rellenan catálogos ausentes sin Internet; no se ha publicado aún ningún paquete.
 - Pruebas independientes de los catálogos personales y de Internet: base sintética aislada, HTTP simulado y tablas astronómicas locales (T-0003, T-0004).
 - Catálogos: se rechazan descargas sin longitud verificable, incluso en la primera carga; se conserva la base anterior. Se validan CSV/gzip y filas útiles antes de reemplazar datos; los errores de inserción revierten el refresco. Las cachés requieren tamaño y huella SHA-256 registrados tras una transferencia comprobada; una caché antigua o alterada exige volver a descargar (B-0003).

@@ -493,10 +493,16 @@ def test_rosacea_color_absoluto_y_cache_sqm(qt_app):
     disco.resize(420, 340)
 
     def color():
-        """Muestrea dentro del disco lejos de rejilla, letras y barra."""
+        """Toma el color dominante de una zona; una línea rasterizada no decide el resultado."""
+        from collections import Counter
+
         foto = disco.grab()
         dpr = foto.devicePixelRatio()
-        return foto.toImage().pixelColor(round(177 * dpr), round(193 * dpr)).name()
+        image = foto.toImage()
+        colors = Counter(image.pixelColor(x, y).name()
+                         for x in range(round(172 * dpr), round(183 * dpr))
+                         for y in range(round(188 * dpr), round(199 * dpr)))
+        return colors.most_common(1)[0][0]
 
     disco.set_datos(1, None, {}, {})
     oscuro = color()

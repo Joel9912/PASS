@@ -166,6 +166,8 @@ def test_ephemeris_panel_fills_its_cell(qt_app):
     app = qt_app
     window = MainWindow()
     window.show()
+    app.processEvents()                    # consume el showMaximized diferido del arranque
+    window.showNormal()                    # la pantalla offscreen no fija el tamaño del test
     window.content.setCurrentIndex(4)      # página del Planificador visible
     window.resize(1919, 1026)              # tamaño holgado, como el real
     for _ in range(3):
