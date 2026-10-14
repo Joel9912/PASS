@@ -11,6 +11,7 @@ from PyQt6.QtGui import (
     QResizeEvent,
 )
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QHBoxLayout,
     QHeaderView,
@@ -58,6 +59,7 @@ class PanelAuditar(QWidget):
         """Monta registro, pesos, tabla+miniatura, gráfica y resumen."""
         super().__init__(parent)
         self._cargando = False
+        self._bloqueado = False
         self._registro: Registro | None = None
         self._metricas: list[FrameMetrics] = []
         self._evaluaciones: dict[str, Evaluacion] = {}  # ruta → veredicto
@@ -71,7 +73,7 @@ class PanelAuditar(QWidget):
         layout.addWidget(_titulo("Auditoría"))
         intro_fila = QHBoxLayout()
         intro_fila.addWidget(_pista(
-            "Mide con SirIL y revisa los frames. Ajusta pesos y pulsa "
+            "Mide con SirIL y revisa los frames. Ajusta criterios y pesos; pulsa "
             "«Actualizar» para repuntuar; tú decides qué casillas desmarcar."
         ), 1)
         self._boton = QPushButton("Registrar y auditar")
@@ -133,6 +135,29 @@ class PanelAuditar(QWidget):
         self._boton_descartar.clicked.connect(self.descartar)
         controles_fila.addWidget(self._boton_descartar)
         layout.addLayout(controles_fila)
+
+        criterio_fila = QHBoxLayout()
+        criterio_fila.addWidget(QLabel("Corte FWHM:"))
+        self._criterio_fwhm = QComboBox()
+        self._criterio_fwhm.addItem("MAD · grupo completo", "mad")
+        self._criterio_fwhm.addItem("Media + (media − mínimo)/6 · sesión/filtro", "media_minimo")
+        self._criterio_fwhm.setToolTip(
+            "La segunda regla calcula un límite por sesión y filtro. "
+            "Solo recomienda descartar por encima; la igualdad se conserva. "
+            "Sigma no afecta esa fórmula; sigue controlando los cortes de redondez/fondo. "
+            "Un corte relativo no garantiza calidad absoluta ni detecta obstrucciones."
+        )
+        criterio_fila.addWidget(self._criterio_fwhm)
+        self._usar_puntuacion = QCheckBox("Usar puntuación para descartar")
+        self._usar_puntuacion.setChecked(True)
+        self._usar_puntuacion.setToolTip(
+            "Desactívalo para probar solo los cortes por métrica. "
+            "La puntuación sigue visible como ranking; las casillas no se cambian."
+        )
+        self._usar_puntuacion.toggled.connect(self._puntuacion_cambiada)
+        criterio_fila.addWidget(self._usar_puntuacion)
+        criterio_fila.addStretch(1)
+        layout.addLayout(criterio_fila)
 
         self._tabla = _tabla([
             "Usar", "Frame", "Sesión", "FWHM", "Redondez", "Fondo",
@@ -253,13 +278,20 @@ class PanelAuditar(QWidget):
 
     def bloquear(self, bloqueado: bool) -> None:
         """Deshabilita sus botones y spins mientras corre una tarea en el hilo."""
+        self._bloqueado = bloqueado
         self._boton.setEnabled(not bloqueado)
         self._boton_actualizar.setEnabled(not bloqueado)
         self._boton_descartar.setEnabled(not bloqueado)
         for spin in self._pesos.values():
             spin.setEnabled(not bloqueado)
-        self._umbral.setEnabled(not bloqueado)
+        self._umbral.setEnabled(not bloqueado and self._usar_puntuacion.isChecked())
         self._sigma.setEnabled(not bloqueado)
+        self._criterio_fwhm.setEnabled(not bloqueado)
+        self._usar_puntuacion.setEnabled(not bloqueado)
+
+    def _puntuacion_cambiada(self, usar: bool) -> None:
+        """Conserva el mínimo elegido aunque se excluya del veredicto de descarte."""
+        self._umbral.setEnabled(usar and not self._bloqueado)
 
     def limpiar(self) -> None:
         """Borra métricas, veredictos, casillas, gráfica y miniatura."""
@@ -295,8 +327,8 @@ class PanelAuditar(QWidget):
         return self._sigma.value()
 
     def umbral(self) -> float:
-        """Puntuación mínima para recomendar el descarte de un frame."""
-        return self._umbral.value()
+        """Mínimo activo; cero evita el corte por ranking sin ocultar la puntuación."""
+        return self._umbral.value() if self._usar_puntuacion.isChecked() else 0.0
 
     def mostrar(self, registro: Registro, metricas: list[FrameMetrics]) -> None:
         """Guarda el registro y pinta la primera evaluación (una fila por frame)."""
@@ -315,7 +347,8 @@ class PanelAuditar(QWidget):
         if self._registro is None:
             return
         evaluaciones = evaluar(
-            self._metricas, self.pesos(), umbral=self.umbral(), sigma=self.sigma()
+            self._metricas, self.pesos(), umbral=self.umbral(), sigma=self.sigma(),
+            criterio_fwhm=self._criterio_fwhm.currentData(),
         )
         self._evaluaciones = {e.metricas.path: e for e in evaluaciones}
         # Filas de mayor a menor puntuación; lo que SirIL descartó (sin
@@ -404,6 +437,8 @@ class PanelAuditar(QWidget):
                 f"Estrellas: {m.stars if m.stars is not None else 'sin dato'}\n"
                 f"Canal registrado: {m.registration_layer if m.registration_layer is not None else 'sin dato'}\n"
                 "El ponderado ya incorpora una penalización estelar; no se mezcla con el FWHM."
+                + (f"\nLímite FWHM: {ev.corte_fwhm:.6g} px; descartar solo si lo supera."
+                   if ev.corte_fwhm is not None else "\nSin corte FWHM activo para esta toma.")
             )
         if ev is None:
             motivo, color = "SirIL", QColor(COLOR_DESCARTE)
@@ -563,8 +598,8 @@ class PanelAuditar(QWidget):
     def _pintar_grafica(self) -> None:
         """Curva de la métrica elegida por frame; fuera de las casillas, en rojo.
 
-        El eje x es el orden de registro (no el de la tabla ordenada):
-        así se ve la evolución a lo largo de la noche.
+        El eje x conserva el índice de registro, no el orden de la tabla
+        ni necesariamente el orden temporal de captura.
         """
         atributo = self._metrica.currentData()
         self._plot.setLabel("left", self._metrica.currentText())
@@ -583,8 +618,7 @@ class PanelAuditar(QWidget):
                 (indice, float(getattr(ev.metricas, atributo)), marcada)
             )
         # La tabla va ordenada por puntuación: la curva se reordena por
-        # índice de registro para que la línea avance por la noche y no
-        # zigzaguee saltando de un frame a otro.
+        # índice de registro; no se presenta esa numeración como hora.
         puntos.sort()
         xs = [indice for indice, valor, marcada in puntos if marcada]
         ys = [valor for indice, valor, marcada in puntos if marcada]
@@ -592,7 +626,7 @@ class PanelAuditar(QWidget):
         yd = [valor for indice, valor, marcada in puntos if not marcada]
         self._curva.setData(xs, ys)
         self._descartados_plot.setData(xd, yd)
-        if atributo == "weighted" and self._evaluaciones:
+        if atributo == "weighted" and self._evaluaciones and self._usar_puntuacion.isChecked():
             self._umbral_linea.setValue(self.umbral())
             self._umbral_linea.show()
         else:
@@ -612,7 +646,13 @@ class PanelAuditar(QWidget):
             aviso = (
                 " ⚠ El mínimo se lleva TODOS los frames: la puntuación es "
                 "relativa al pool, baja «Mín.» o revisa los pesos."
-            )
+            ) if self._usar_puntuacion.isChecked() else " ⚠ Los cortes recomiendan descartar todas las tomas; revisa sus motivos."
+        regla = ("media+(media−mínimo)/6 por sesión y filtro"
+                 if self._criterio_fwhm.currentData() == "media_minimo" else "MAD del grupo completo")
+        if self._pesos["fwhm"].value() == 0:
+            regla = "sin corte (peso 0)"
+        puntuacion = (f"mínimo {self.umbral():g}" if self._usar_puntuacion.isChecked()
+                      else "sin corte por puntuación")
         self._resumen.setText(
             f"{len(self._metricas)} frames con métricas de "
             f"{len(self._registro.frames)}"
@@ -621,7 +661,7 @@ class PanelAuditar(QWidget):
                 if descartados_siril
                 else ""
             )
-            + f" · {recomendados} descartes recomendados (mínimo {self.umbral():g}, "
-            f"σ={sigma:g}). El motivo está en la tabla; las casillas son tuyas."
+            + f" · {recomendados} descartes recomendados ({puntuacion}, "
+            f"σ={sigma:g}). FWHM: {regla}. El motivo está en la tabla; las casillas son tuyas."
             + aviso
         )

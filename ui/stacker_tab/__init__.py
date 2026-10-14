@@ -287,7 +287,7 @@ class StackerPage(QWidget):
             controls[f"calibrate{name}"] = getattr(self.panel_calibrar, name)
         for name, control in self.panel_auditar._pesos.items():
             controls[f"weight_{name}"] = control
-        for name in ("_umbral", "_sigma", "_metrica"):
+        for name in ("_umbral", "_sigma", "_metrica", "_criterio_fwhm", "_usar_puntuacion"):
             controls[f"audit{name}"] = getattr(self.panel_auditar, name)
         for name in (
             "_nombre", "_integracion", "_ponderacion", "_norm", "_framing",
@@ -330,7 +330,12 @@ class StackerPage(QWidget):
         required = {"controls", "sessions", "inputs", "calibrations", "audit", "final", "accepted", "step", "interrupted"}
         if set(data) != required or type(data["step"]) is not int or not 0 <= data["step"] <= 4:
             raise ValueError("Estado de Apilador incompatible")
-        validate_controls(self._draft_controls, data["controls"])
+        controls = data["controls"]
+        if isinstance(controls, dict):
+            controls = dict(controls)
+            controls.setdefault("audit_criterio_fwhm", {"data": "mad", "text": ""})
+            controls.setdefault("audit_usar_puntuacion", True)
+        validate_controls(self._draft_controls, controls)
         sessions = work_recovery.load_sessions(data["sessions"])
         if (not isinstance(data["inputs"], dict) or not isinstance(data["calibrations"], dict)
             or not isinstance(data["accepted"], list) or any(not isinstance(p, str) for p in data["accepted"])
@@ -350,7 +355,7 @@ class StackerPage(QWidget):
         self._calibrado = self._auditado = self._apilado = False
         self._interrupted = None
         self._aviso_trabajo = True
-        restore_controls(self._draft_controls, data["controls"])
+        restore_controls(self._draft_controls, controls)
         self._exposiciones = {
             clave_sesion(s): [exposure_de(path) or 0.0 for path in s.frames.get("lights", [])]
             for s in sessions if inputs_ok

@@ -35,6 +35,7 @@ class FrameMetrics:
     wfwhm: float | None = None
     stars: int | None = None
     registration_layer: int | None = None
+    filtro: str | None = None
 
 
 @dataclass
@@ -93,6 +94,7 @@ def extract_metrics(registro: Registro, pesos: Pesos | None = None) -> list[Fram
             wfwhm=wfwhm,
             stars=stars,
             registration_layer=capa,
+            filtro=ref.filtro,
         ))
     if not metricas:
         raise ValueError("Ningún frame quedó registrado: no hay métricas que extraer.")
@@ -151,6 +153,7 @@ class Evaluacion:
     metricas: FrameMetrics
     descartada: bool
     motivo: str
+    corte_fwhm: float | None = None
 
 
 #: Textos de motivo (lo que el usuario ve en la tabla de la auditoría).
@@ -168,6 +171,7 @@ def evaluar(
     *,
     umbral: float = 80.0,
     sigma: float = 3.0,
+    criterio_fwhm: str = "mad",
 ) -> list[Evaluacion]:
     """Repuntúa el pool y decide frame a frame si descartarlo y por qué.
 
@@ -180,7 +184,13 @@ def evaluar(
     corta aparte: dentro del pool es el inverso del fondo. Sin dispersión
     (MAD 0 o menos de 3 frames) esa métrica no corta. Al repuntuar con
     ``pesos`` no hace falta registrar de nuevo.
+
+    El criterio alternativo ``media_minimo`` sustituye solo el corte FWHM
+    por media+(media−mínimo)/6 en cada sesión/filtro. No cambia el ranking
+    global ni los otros cortes; sigma no interviene en esa fórmula.
     """
+    if criterio_fwhm not in ("mad", "media_minimo"):
+        raise ValueError("El criterio FWHM no es compatible.")
     if not metricas:
         return []
     if not math.isfinite(umbral) or not math.isfinite(sigma) or umbral < 0 or sigma <= 0:
@@ -188,8 +198,13 @@ def evaluar(
     pesos = pesos or Pesos()
     puntuar(metricas, pesos)
     cortes: dict[str, float | None] = {}
+    cortes_fwhm = {}
     if pesos.fwhm > 0:
-        cortes["fwhm"] = _corte([m.fwhm for m in metricas], sigma, peor="alto")
+        if criterio_fwhm == "mad":
+            limite = _corte([m.fwhm for m in metricas], sigma, peor="alto")
+            cortes_fwhm = {m.path: limite for m in metricas}
+        else:
+            cortes_fwhm = _cortes_media_minimo(metricas)
     if pesos.redondez > 0:
         cortes["roundness"] = _corte([m.roundness for m in metricas], sigma, peor="bajo")
     if pesos.fondo > 0:
@@ -201,14 +216,31 @@ def evaluar(
         motivos = []
         if m.weighted < umbral:
             motivos.append(MOTIVOS["weighted"])
-        if cortes.get("fwhm") is not None and m.fwhm > cortes["fwhm"]:
+        limite_fwhm = cortes_fwhm.get(m.path)
+        if limite_fwhm is not None and m.fwhm > limite_fwhm:
             motivos.append(MOTIVOS["fwhm"])
         if cortes.get("roundness") is not None and m.roundness < cortes["roundness"]:
             motivos.append(MOTIVOS["roundness"])
         if cortes.get("background") is not None and m.background > cortes["background"]:
             motivos.append(MOTIVOS["background"])
-        evaluaciones.append(Evaluacion(m, bool(motivos), ", ".join(motivos)))
+        evaluaciones.append(Evaluacion(m, bool(motivos), ", ".join(motivos), limite_fwhm))
     return evaluaciones
+
+
+def _cortes_media_minimo(metricas: list[FrameMetrics]) -> dict[str, float]:
+    """Aplica media+(media−mínimo)/6 por identidad de sesión/filtro, no por nombre."""
+    grupos: dict[tuple[str, str | None], list[FrameMetrics]] = {}
+    for m in metricas:
+        grupos.setdefault((m.session, m.filtro), []).append(m)
+    cortes = {}
+    for grupo in grupos.values():
+        media = statistics.fmean(m.fwhm for m in grupo)
+        minimo = min(m.fwhm for m in grupo)
+        limite = media + (media - minimo) / 6
+        if not math.isfinite(limite):
+            raise ValueError("El límite FWHM calculado no es finito.")
+        cortes.update((m.path, limite) for m in grupo)
+    return cortes
 
 
 def _corte(valores: list[float], sigma: float, *, peor: str) -> float | None:

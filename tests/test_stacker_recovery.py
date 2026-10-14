@@ -299,3 +299,27 @@ def test_reauditoria_fallida_no_deja_apilable_la_anterior(pipeline, monkeypatch,
     page.auditar()
     assert _wait(qt_app, lambda: page._worker is None and page._auditado)
     assert {str(page.registro.frames[i-1].ruta.absolute()) for i in page.panel_auditar.aceptados()} == wanted
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_recuperar_criterio_fwhm_y_borrador_anterior(pipeline, monkeypatch, legacy):
+    """Los nuevos controles se recuperan y un borrador antiguo mantiene MAD y puntuación."""
+    page, _, _ = pipeline
+    page.panel_auditar._criterio_fwhm.setCurrentIndex(1)
+    page.panel_auditar._usar_puntuacion.setChecked(False)
+    page._draft.changed()
+    if legacy:
+        row = work_drafts.read("stacker")
+        payload = work_drafts.decode(row)
+        payload["controls"].pop("audit_criterio_fwhm")
+        payload["controls"].pop("audit_usar_puntuacion")
+        work_drafts.save("stacker", payload, row["revision"])
+    restored = _resume(monkeypatch)
+    try:
+        assert not restored._draft.pending
+        assert restored.panel_auditar._criterio_fwhm.currentData() == ("mad" if legacy else "media_minimo")
+        assert restored.panel_auditar._usar_puntuacion.isChecked() == legacy
+        assert restored.panel_auditar._umbral.isEnabled() == legacy
+        assert restored._worker is None
+    finally:
+        restored.deleteLater()
