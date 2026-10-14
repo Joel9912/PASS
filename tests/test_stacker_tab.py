@@ -162,8 +162,45 @@ def test_autoestirado_moderado_conserva_contraste_de_nubes_y_cables():
     vista = _estirar([imagen])[0]
     assert np.median(vista[0:32, :]) > np.median(vista[40:60, :])
     assert np.median(vista[40:60, :]) > np.median(vista[64:80, :])
-    assert np.median(vista[40:60, :]) > 175
+    assert 20 <= np.median(vista[40:60, :]) <= 90
     assert vista[20, 20] >= 254
+
+
+def test_autoestirado_no_convierte_el_cielo_en_gris_claro():
+    """El ruido de un light no se eleva a fondo brillante para poder inspeccionar la señal."""
+    import numpy as np
+
+    from ui.stacker_tab.pasos_common import _estirar
+
+    rng = np.random.default_rng(91)
+    image = rng.normal(0.0015, 0.00004, (256, 256)).astype(np.float32)
+    image[100:150, 100:150] += 0.0002
+    image[120, 120] = 0.03
+    before = image.copy()
+    view = _estirar([image])[0]
+    assert 25 <= np.median(view[:80]) <= 70
+    assert np.median(view[100:150, 100:150]) > np.median(view[:80]) + 20
+    assert view[120, 120] >= 254
+    np.testing.assert_array_equal(image, before)
+
+
+def test_autoestirado_moderado_enlaza_rgb_y_es_independiente_de_escala():
+    """Mantiene el balance enlazado y el contraste al variar la escala numérica del FITS."""
+    import numpy as np
+
+    from ui.stacker_tab.pasos_common import _estirar
+
+    rng = np.random.default_rng(92)
+    image = rng.normal(0.0015, 0.00004, (128, 128)).astype(np.float64)
+    channels = [image*2, image.copy(), image/2]
+    copies = [c.copy() for c in channels]
+    view = _estirar(channels)
+    scaled = _estirar([c*10000 for c in channels])
+    for c, original, shown, other in zip(channels, copies, view, scaled, strict=True):
+        np.testing.assert_array_equal(c, original)
+        assert 25 <= np.median(shown) <= 70
+        assert np.max(np.abs(shown.astype(float)-other.astype(float))) <= 1
+        np.testing.assert_array_equal(shown, view[1])
 
 
 def test_nombre_vacio_admite_generacion_automatica():

@@ -64,6 +64,9 @@ _BAYER: dict[str, tuple[tuple[int, int], tuple[int, int]]] = {
 #: Lado máximo (px) de la miniatura de la auditoría.
 _ANCHO_PREVIEW = 900
 
+# Nivel visual del fondo; no es un umbral de calidad ni modifica el FITS.
+_FONDO_PREVIEW = 0.18
+
 
 def _reducir_bloques(arr: np.ndarray, k: int) -> np.ndarray:
     """Media por bloques k×k: reduce sin perder el flujo de las estrellas.
@@ -79,7 +82,7 @@ def _reducir_bloques(arr: np.ndarray, k: int) -> np.ndarray:
 
 
 def _estirar(canales: list[np.ndarray]) -> list[np.ndarray]:
-    """Autoestirado asinh enlazado para mostrar nebulosidad sin alterar el FITS.
+    """Autoestirado enlazado con fondo oscuro para inspeccionar sin alterar el FITS.
 
     Si hay tres capas (CFA desempaquetado) primero se iguala la mediana de
     cada canal —balance de blancos simple, como el «link channels» de
@@ -105,19 +108,28 @@ def _estirar(canales: list[np.ndarray]) -> list[np.ndarray]:
         return [np.zeros(c.shape, dtype=np.uint8) for c in trabajados]
     mediana = np.median(muestra)
     dispersion = 1.4826 * np.median(np.abs(muestra - mediana))
-    # Se deja más margen bajo la mediana para levantar el fondo sin ocultar
-    # gradientes, nubes o cables: la auditoría debe seguir revelándolos.
+    # Conserva margen oscuro para que sombras y gradientes no desaparezcan
+    # al bajar el brillo visual mediante la curva de medios tonos.
     bajo = mediana - 3.0 * dispersion
     alto = np.percentile(muestra, 99.7)
     if alto <= bajo:
         alto = bajo + 1.0
     factor = 1.0 / (alto - bajo)
-    return [
-        (255 * np.arcsinh(16 * np.clip(
+    planos = [
+        np.arcsinh(16 * np.clip(
             np.nan_to_num((c - bajo) * factor, nan=0.0), 0, 1
-        )) / np.arcsinh(16)).astype(np.uint8)
+        )) / np.arcsinh(16)
         for c in trabajados
     ]
+    fondo = np.arcsinh(16 * np.clip((mediana - bajo) * factor, 0, 1)) / np.arcsinh(16)
+    if _FONDO_PREVIEW < fondo < 1:
+        # La transformación de medios tonos lleva el fondo al nivel objetivo
+        # sin mover el negro, el blanco ni el orden de las intensidades.
+        medio = fondo * (1 - _FONDO_PREVIEW) / (
+            fondo + _FONDO_PREVIEW - 2 * fondo * _FONDO_PREVIEW
+        )
+        planos = [(medio - 1) * p / ((2 * medio - 1) * p - medio) for p in planos]
+    return [(255 * np.clip(p, 0, 1)).astype(np.uint8) for p in planos]
 
 
 def _preview_fits(ruta: Path) -> QImage | None:
