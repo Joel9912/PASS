@@ -1,8 +1,8 @@
 """stacks/frame_metrics: lectura de las métricas del .seq, puntuación 0–100 y evaluación.
 
 Ojo: no confundir con `test_metrics.py`, que prueba `equipment/metrics.py`.
-Nada de SirIL aquí: los .seq se escriben a mano con el formato real
-validado (líneas R0: fwhm_x, fwhm_y, redondez, fondo, nº de estrellas).
+Nada de SirIL aquí: los .seq sintéticos siguen su contrato de campos
+(FWHM, wfwhm, redondez, calidad, fondo, nº de estrellas y homografía).
 """
 from pathlib import Path
 
@@ -19,9 +19,9 @@ from stacks.global_pool import LightRef
 from stacks.registration import Registro
 
 
-def _R(fwhm_x=5.0, fwhm_y=5.0, roundness=0.98, fondo=690.0) -> str:
+def _R(fwhm=5.0, wfwhm=5.0, roundness=0.98, fondo=690.0, stars=27) -> str:
     """Fila de registro como la escribe SirIL (R0 + campos)."""
-    return f"R0 {fwhm_x} {fwhm_y} {roundness} 0 {fondo / 65535} 27 H 1 0 0 0 1 0 0 0 1"
+    return f"R0 {fwhm} {wfwhm} {roundness} 0 {fondo / 65535} {stars} H 1 0 0 0 1 0 0 0 1"
 
 
 def _registro(
@@ -45,6 +45,7 @@ def _registro(
     n = len(filas_R)
     registro.ruta_seq.write_text(
         f"S 'registro_' 1 {n} {n} {n} 0 6 0 0 0\n"
+        + "L 1\n"
         + "".join(f"I {i} 1\n" for i in range(1, n + 1))
         + "".join(fila + "\n" for fila in filas_R)
     )
@@ -59,15 +60,16 @@ def _metrica(path="f1", fwhm=5.0, roundness=0.95, transparency=1.0, fondo=600.0)
 
 
 def test_extract_lee_las_metricas_del_seq(tmp_path):
-    """Del .seq salen fwhm (media x/y), redondez, fondo, sesión y transparencia."""
+    """Del .seq salen FWHM, wfwhm separado, estrellas, redondez, fondo y sesión."""
     registro = _registro(tmp_path, [
-        _R(fwhm_x=4.0, fwhm_y=6.0, roundness=0.9, fondo=800.0),
-        _R(fwhm_x=5.0, fwhm_y=5.0, roundness=1.0, fondo=400.0),
+        _R(fwhm=4.0, wfwhm=6.0, roundness=0.9, fondo=800.0),
+        _R(fwhm=5.0, wfwhm=5.0, roundness=1.0, fondo=400.0),
     ])
 
     a, b = extract_metrics(registro)
 
-    assert a.fwhm == 5.0 and a.roundness == 0.9
+    assert a.fwhm == 4.0 and a.roundness == 0.9
+    assert a.wfwhm == 6.0 and a.stars == 27 and a.registration_layer == 0
     # El fondo sale en ADU/s: 800 ADU sobre 30 s de exposición (del LightRef).
     assert a.background == pytest.approx(800.0 / 30.0)
     assert (a.path, a.session) == (str(Path("/cal/0001.fit")), "noche1")
@@ -130,7 +132,7 @@ def test_extract_con_mas_filas_que_frames_falla(tmp_path):
     ]
     registro = Registro(dir=tmp_path, seq="registro_", frames=frames)
     registro.ruta_seq.write_text(
-        f"S 'registro_' 1 3 3 3 0 6 0 0 0\n{_R()}\n{_R()}\n{_R()}\n"
+        f"S 'registro_' 1 2 2 3 0 6 0 0 0\nL 1\nI 1 1\nI 2 1\n{_R()}\n{_R()}\n{_R()}\n"
     )
     with pytest.raises(ValueError, match="filas de registro"):
         extract_metrics(registro)
@@ -139,10 +141,10 @@ def test_extract_con_mas_filas_que_frames_falla(tmp_path):
 def test_extract_salta_los_frames_descartados(tmp_path):
     """Filas en ceros (frames que SirIL descartó) no se puntúan: se saltan."""
     registro = _registro(tmp_path, [
-        _R(fwhm_x=4.0, fwhm_y=6.0, roundness=0.9, fondo=800.0),
-        _R(fwhm_x=0.0, fwhm_y=0.0, roundness=0.0, fondo=0.0),  # descartado
-        _R(fwhm_x=5.0, fwhm_y=5.0, roundness=float("-nan"), fondo=0.0),  # descartado
-        _R(fwhm_x=3.0, fwhm_y=3.0, roundness=1.0, fondo=400.0),
+        _R(fwhm=4.0, wfwhm=6.0, roundness=0.9, fondo=800.0),
+        _R(fwhm=0.0, wfwhm=0.0, roundness=0.0, fondo=0.0, stars=0),
+        _R(fwhm=0.0, wfwhm=0.0, roundness=float("-nan"), fondo=0.0, stars=0),
+        _R(fwhm=3.0, wfwhm=3.0, roundness=1.0, fondo=400.0),
     ])
 
     metricas = extract_metrics(registro)
@@ -156,7 +158,7 @@ def test_extract_salta_los_frames_descartados(tmp_path):
 
 def test_extract_si_todo_fue_descartado_falla(tmp_path):
     """Si no quedó registrado ni un frame, no hay auditoría que hacer."""
-    registro = _registro(tmp_path, [_R(fwhm_x=0.0, fwhm_y=0.0, roundness=0.0, fondo=0.0)])
+    registro = _registro(tmp_path, [_R(fwhm=0.0, wfwhm=0.0, roundness=0.0, fondo=0.0, stars=0)])
     with pytest.raises(ValueError, match="registrado"):
         extract_metrics(registro)
 

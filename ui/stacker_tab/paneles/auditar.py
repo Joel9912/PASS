@@ -158,6 +158,10 @@ class PanelAuditar(QWidget):
             "guarda normalizado (0–1). Se convierte con 65535 y se divide "
             "por la exposición para comparar sesiones de distintas duraciones."
         )
+        self._tabla.horizontalHeaderItem(3).setToolTip(
+            "FWHM de SirIL en píxeles, sin mezclar FWHM ponderado. "
+            "Menor suele indicar estrellas más estrechas; no garantiza ausencia de nubes o cables."
+        )
         self._tabla.itemChanged.connect(self._alCambiarItem)
         self._tabla.itemSelectionChanged.connect(self._alSeleccionar)
 
@@ -392,6 +396,15 @@ class PanelAuditar(QWidget):
             celda = QTableWidgetItem(texto)
             celda.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self._tabla.setItem(fila, columna, celda)
+        if ev is not None:
+            m = ev.metricas
+            self._tabla.item(fila, 3).setToolTip(
+                f"FWHM SirIL: {m.fwhm:.5g} px\n"
+                f"FWHM ponderado SirIL: {m.wfwhm if m.wfwhm is not None else 'sin dato'}\n"
+                f"Estrellas: {m.stars if m.stars is not None else 'sin dato'}\n"
+                f"Canal registrado: {m.registration_layer if m.registration_layer is not None else 'sin dato'}\n"
+                "El ponderado ya incorpora una penalización estelar; no se mezcla con el FWHM."
+            )
         if ev is None:
             motivo, color = "SirIL", QColor(COLOR_DESCARTE)
             ayuda = "SirIL descartó este frame al registrar: sin métricas."
@@ -419,7 +432,7 @@ class PanelAuditar(QWidget):
                 indices.append(int(item.data(Qt.ItemDataRole.UserRole)))
         return indices
 
-    def restaurar_aceptados(self, paths: set[str]) -> None:
+    def restaurar_aceptados(self, paths: set[str], conocidas: set[str] | None = None) -> None:
         """Recupera descartes por ruta, independientemente de la ordenación por puntuación."""
         self._cargando = True
         try:
@@ -427,7 +440,8 @@ class PanelAuditar(QWidget):
                 item, name = self._tabla.item(row, 0), self._tabla.item(row, 1)
                 if item is not None and name is not None and item.flags() & Qt.ItemFlag.ItemIsUserCheckable:
                     path = str(Path(name.data(Qt.ItemDataRole.UserRole)).absolute())
-                    item.setCheckState(Qt.CheckState.Checked if path in paths else Qt.CheckState.Unchecked)
+                    if conocidas is None or path in conocidas:
+                        item.setCheckState(Qt.CheckState.Checked if path in paths else Qt.CheckState.Unchecked)
         finally:
             self._cargando = False
         self._pintar_grafica()

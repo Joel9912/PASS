@@ -18,6 +18,8 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 - Captura Ideal reserva al menos cinco minutos dentro de ambos extremos de la noche astronómica; los márgenes válidos quedan como Posible.
 
 ### Corregido
+- Auditoría interpreta FWHM y FWHM ponderado de SirIL por separado; muestra estrellas, ponderado y canal en la ayuda del FWHM. Valida la secuencia y rechaza datos no finitos antes de puntuar; respeta la selección de SirIL y su canal de registro RGB (S-0024, S-0025, S-0026).
+- Una nueva auditoría fallida invalida el permiso de apilado anterior, conservando las elecciones manuales por archivo para reintentar (S-0028).
 - Las llamadas CLI de SirIL y la comprobación de versión no abren terminales en Windows al iniciar PASS sin consola desde el acceso directo; log, progreso y errores siguen capturados (S-0023).
 - Guardar una sesión respeta el centro editado del encuadre cuando el objetivo tiene coordenadas conocidas (P-0015).
 - Terminal y resultados de SirIL acotados en memoria, conservando marcadores de fallo/identidad aunque aparezcan al principio y el historial completo en disco (S-0018).

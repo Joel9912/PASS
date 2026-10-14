@@ -837,6 +837,7 @@ class StackerPage(QWidget):
         if not self.sesiones:
             self._decir("Escanea las sesiones primero (paso 1).")
             return
+        decisiones = self._decisiones_auditoria()
         try:
             pesos = self.panel_auditar.pesos()
         except ValueError as exc:
@@ -870,6 +871,10 @@ class StackerPage(QWidget):
                     self.registro, self.metricas, self._pool = previo, metricas, pool_previo
                     self._auditado = True
                     self.panel_auditar.mostrar(previo, metricas)
+                    self.panel_auditar.restaurar_aceptados(
+                        {path for path, usar in decisiones.items() if usar}, set(decisiones),
+                    )
+                    self._preserved_checkpoints = {}
                     self._capture_audit_checkpoint()
                     self._draft.changed()
                     self._decir("Auditoría anterior reutilizada; revisa los descartes.")
@@ -899,6 +904,10 @@ class StackerPage(QWidget):
             self.registro, self.metricas, self._pool = resultado
             self._auditado = True
             self.panel_auditar.mostrar(self.registro, self.metricas)
+            self.panel_auditar.restaurar_aceptados(
+                {path for path, usar in decisiones.items() if usar}, set(decisiones),
+            )
+            self._preserved_checkpoints = {}
             self._capture_audit_checkpoint()
             self._draft.changed()
             descartados = len(self.registro.frames) - len(self.metricas)
@@ -913,8 +922,32 @@ class StackerPage(QWidget):
             )
             self._avanzar(ir_a, siguiente)
 
-        if self._lanzar(tarea, al_terminar, siril=True):
+        def al_fallar(_motivo):
+            """No conserva permiso de apilado tras un fallo; guarda las elecciones para reauditar."""
+            self._preserved_checkpoints = {
+                "audit": self._audit_checkpoint or self._preserved_checkpoints.get("audit"),
+                "accepted": [path for path, usar in decisiones.items() if usar],
+            }
+            self.registro, self.metricas, self._pool = None, None, None
+            self._auditado = self._apilado = False
+            self._audit_checkpoint = self._final_checkpoint = None
+            self.panel_auditar.limpiar()
+            self._actualizar_navegacion(False, self._paso)
+
+        if self._lanzar(tarea, al_terminar, al_fallar=al_fallar, siril=True):
             self._decir("Registrando y midiendo (auditoría rápida)…")
+
+    def _decisiones_auditoria(self) -> dict[str, bool]:
+        """Relaciona decisiones anteriores por ruta, incluso tras una auditoría fallida."""
+        if self.registro is not None:
+            aceptados = set(self.panel_auditar.aceptados())
+            return {str(ref.ruta.absolute()): i in aceptados for i, ref in enumerate(self.registro.frames, 1)}
+        checkpoint = self._preserved_checkpoints.get("audit")
+        if not isinstance(checkpoint, dict) or not isinstance(checkpoint.get("frames"), list):
+            return {}
+        aceptados = set(self._preserved_checkpoints.get("accepted", []))
+        return {item["path"]: item["path"] in aceptados for item in checkpoint["frames"]
+                if isinstance(item, dict) and isinstance(item.get("path"), str)}
 
     def descartar_recomendados(self) -> None:
         """Aplica a las casillas los descartes recomendados (el veto es del usuario)."""

@@ -25,7 +25,9 @@ def _registry(directory: Path, frames) -> Registro:
     for i, ref in enumerate(frames, 1):
         os.link(ref.ruta, directory / f"registro_{i:05d}.fit")
     (directory / "registro_.seq").write_text(
-        "\n".join("R0 2 2 1 0 0.01 10" for _ in frames), encoding="utf-8"
+        f"S 'registro_' 1 {len(frames)} {len(frames)} 5 0 6 0 0 0\nL 1\n"
+        + "".join(f"I {i} 1\n" for i in range(1, len(frames)+1))
+        + "\n".join("R0 2 2 1 0 0.01 10 H 1 0 0 0 1 0 0 0 1" for _ in frames), encoding="utf-8"
     )
     return Registro(directory, "registro_", list(frames), False)
 
@@ -270,3 +272,30 @@ def test_recuperar_registro_con_transformadas(pipeline):
     (final.dir / "r_registro_00002.fit").unlink()
     with pytest.raises(ValueError):
         work_recovery.recover_registry(checkpoint)
+
+
+def test_reauditoria_fallida_no_deja_apilable_la_anterior(pipeline, monkeypatch, qt_app):
+    """Un fallo al releer métricas invalida el permiso de apilado, no reutiliza la tabla anterior."""
+    from PyQt6.QtWidgets import QMessageBox
+
+    page, _, _ = pipeline
+    registry = page.registro
+    pool = page._pool
+    assert page._auditado
+    wanted = {str(registry.frames[1].ruta.absolute())}
+    page.panel_auditar.restaurar_aceptados(wanted)
+    previous = registry.ruta_seq.read_text(encoding="utf-8")
+    registry.ruta_seq.write_text(previous.replace("R0 2 2", "R0 inf 2"), encoding="utf-8")
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.StandardButton.No)
+    monkeypatch.setattr(stacker_tab, "audit_pool", lambda *args, **kwargs: registry)
+    monkeypatch.setattr(stacker_tab, "pool_desde_calibradas", lambda *args, **kwargs: pool)
+    page.auditar()
+    assert _wait(qt_app, lambda: page._worker is None)
+    assert not page._auditado
+    assert page.registro is None
+    assert page._pool is None
+    assert set(work_drafts.decode(work_drafts.read("stacker"))["accepted"]) == wanted
+    registry.ruta_seq.write_text(previous, encoding="utf-8")
+    page.auditar()
+    assert _wait(qt_app, lambda: page._worker is None and page._auditado)
+    assert {str(page.registro.frames[i-1].ruta.absolute()) for i in page.panel_auditar.aceptados()} == wanted

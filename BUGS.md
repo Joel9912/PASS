@@ -24,8 +24,8 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 
 ## Resumen
 
-**100 hallazgos**: 🔴 18 graves · 🟠 55 medios · 🟡 18 bajos · 9 decisiones (7 pendientes).
-Estado: ✅ 77 corregidos · 🟡 3 contenidos · ⏳ 10 pendientes · 🔎 1 sin reproducir.
+**101 hallazgos**: 🔴 18 graves · 🟠 56 medios · 🟡 18 bajos · 9 decisiones (7 pendientes).
+Estado: ✅ 77 corregidos · 🟡 3 contenidos · ⏳ 11 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -74,6 +74,7 @@ Estado: ✅ 77 corregidos · 🟡 3 contenidos · ⏳ 10 pendientes · 🔎 1 si
 | **S-0025** | La lectura de métricas acepta filas de registro incompletas sin validar su correspondencia con toda la secuencia; la UI atribuye la ausencia a un descarte de SirIL. | ⏳ |
 | **S-0026** | FWHM o fondo infinitos contaminan las puntuaciones con NaN y pueden dejar los frames sin recomendación de descarte. | ⏳ |
 | **S-0027** | Con exposición desconocida se mezclan fondos en ADU equivalentes y ADU equivalentes/s dentro de la misma puntuación. | ⏳ |
+| **S-0028** | Si falla una nueva auditoría, quedan habilitadas las referencias y decisiones de la auditoría anterior para apilar. | ⏳ |
 | **E-0003** | Una pieza usada en dos roles deja el formulario y los totales desactualizados tras editar o borrar. | ✅ `dbc82e4` |
 | **E-0004** | El precio de un filtro editado no repinta el total hasta otra interacción. | ✅ `dbc82e4` |
 | **E-0005** | `NaN`/infinito y precio o peso negativos no se filtran antes de persistir un setup. | ✅ `a491664` |
