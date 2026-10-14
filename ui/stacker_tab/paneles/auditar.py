@@ -369,6 +369,7 @@ class PanelAuditar(QWidget):
                 (
                     self._evaluaciones[str(ref.ruta)].metricas.weighted
                     if str(ref.ruta) in self._evaluaciones
+                    and self._evaluaciones[str(ref.ruta)].metricas.weighted is not None
                     else -1.0,
                     indice,
                     ref,
@@ -432,9 +433,9 @@ class PanelAuditar(QWidget):
             else [
                 f"{ev.metricas.fwhm:.2f}",
                 f"{ev.metricas.roundness:.2f}",
-                f"{ev.metricas.background:.1f}",
-                f"{ev.metricas.transparency:.2f}",
-                f"{ev.metricas.weighted:.1f}",
+                f"{ev.metricas.background:.1f}" if ev.metricas.background is not None else "—",
+                f"{ev.metricas.transparency:.2f}" if ev.metricas.transparency is not None else "—",
+                f"{ev.metricas.weighted:.1f}" if ev.metricas.weighted is not None else "—",
             ]
         )
         for columna, texto in enumerate(celdas, start=3):
@@ -443,6 +444,15 @@ class PanelAuditar(QWidget):
             self._tabla.setItem(fila, columna, celda)
         if ev is not None:
             m = ev.metricas
+            if m.background is None:
+                self._tabla.item(fila, 5).setToolTip(
+                    "Sin exposición conocida: el fondo no es evaluable en ADU equivalentes/s.\n"
+                    f"Valor normalizado original de SirIL: {m.background_normalized}."
+                )
+            if m.transparency is None:
+                self._tabla.item(fila, 6).setToolTip("Sin tasa de fondo comparable; no se inventa el proxy de transparencia.")
+            if m.weighted is None:
+                self._tabla.item(fila, 7).setToolTip("Faltan datos para una métrica con peso; desactívala solo si no quieres usarla.")
             self._tabla.item(fila, 3).setToolTip(
                 f"FWHM SirIL: {m.fwhm:.5g} px\n"
                 f"FWHM ponderado SirIL: {m.wfwhm if m.wfwhm is not None else 'sin dato'}\n"
@@ -455,6 +465,9 @@ class PanelAuditar(QWidget):
         if ev is None:
             motivo, color = "SirIL", QColor(COLOR_DESCARTE)
             ayuda = "SirIL descartó este frame al registrar: sin métricas."
+        elif ev.revisar:
+            motivo, color = "Revisar", QColor(PALETTE["warn"])
+            ayuda = f"{ev.motivo}. Se recomienda excluir por prudencia, no se afirma que la toma sea mala. Tú decides (casilla)."
         elif ev.descartada:
             motivo, color = f"Sí · {ev.motivo}", QColor(COLOR_DESCARTE)
             ayuda = f"Recomendado descartar por: {ev.motivo}. Tú decides (casilla)."
@@ -565,11 +578,16 @@ class PanelAuditar(QWidget):
             pie = f"{nombre.text()} · descartado por SirIL al registrar"
         else:
             atributo = self._metrica.currentData()
-            self._seleccion_plot.setData(
-                [indice], [float(getattr(ev.metricas, atributo))]
-            )
-            pie = f"{nombre.text()} · {ev.metricas.weighted:.1f} puntos"
-            if ev.descartada:
+            value = getattr(ev.metricas, atributo)
+            if value is not None:
+                self._seleccion_plot.setData([indice], [float(value)])
+            else:
+                self._seleccion_plot.setData([], [])
+            pie = (f"{nombre.text()} · {ev.metricas.weighted:.1f} puntos" if ev.metricas.weighted is not None
+                   else f"{nombre.text()} · sin puntuación")
+            if ev.revisar:
+                pie += f" · revisar: {ev.motivo}"
+            elif ev.descartada:
                 pie += f" · descartar: {ev.motivo}"
         self._mostrar_preview(Path(ruta), pie)
 
@@ -647,9 +665,9 @@ class PanelAuditar(QWidget):
                 continue
             indice = int(casilla.data(Qt.ItemDataRole.UserRole))
             marcada = casilla.checkState() == Qt.CheckState.Checked
-            puntos.append(
-                (indice, float(getattr(ev.metricas, atributo)), marcada)
-            )
+            value = getattr(ev.metricas, atributo)
+            if value is not None:
+                puntos.append((indice, float(value), marcada))
         # La tabla va ordenada por puntuación: la curva se reordena por
         # índice de registro; no se presenta esa numeración como hora.
         puntos.sort()
@@ -673,13 +691,11 @@ class PanelAuditar(QWidget):
             return
         descartados_siril = len(self._registro.frames) - len(self._metricas)
         recomendados = sum(1 for e in self._evaluaciones.values() if e.descartada)
+        revisar = sum(e.revisar for e in self._evaluaciones.values())
         sigma = self.sigma()
         aviso = ""
         if self._metricas and recomendados == len(self._metricas):
-            aviso = (
-                " ⚠ El mínimo se lleva TODOS los frames: la puntuación es "
-                "relativa al pool, baja «Mín.» o revisa los pesos."
-            ) if self._usar_puntuacion.isChecked() else " ⚠ Los cortes recomiendan descartar todas las tomas; revisa sus motivos."
+            aviso = " ⚠ Hay recomendaciones para TODOS los frames. Revisa datos, pesos y cortes; la puntuación es relativa al pool."
         regla = ("media+(media−mínimo)/6 por sesión y filtro"
                  if self._criterio_fwhm.currentData() == "media_minimo" else "MAD del grupo completo")
         if self._pesos["fwhm"].value() == 0:
@@ -696,5 +712,6 @@ class PanelAuditar(QWidget):
             )
             + f" · {recomendados} descartes recomendados ({puntuacion}, "
             f"σ={sigma:g}). FWHM: {regla}. El motivo está en la tabla; las casillas son tuyas."
+            + (f" · {revisar} por revisar: datos insuficientes." if revisar else "")
             + aviso
         )

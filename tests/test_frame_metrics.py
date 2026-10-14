@@ -87,7 +87,7 @@ def test_extract_normaliza_el_fondo_por_exposicion(tmp_path):
             _R(fondo=90.0),    # 45 s → 2,0 ADU/s
             _R(fondo=120.0),   # 60 s → 2,0 ADU/s: ¡igual que el anterior!
             _R(fondo=135.0),   # 45 s → 3,0 ADU/s: más contaminación real
-            _R(fondo=500.0),   # sin exposición: se deja crudo
+            _R(fondo=500.0),   # sin exposición: no hay tasa comparable
         ],
         exposiciones=[45.0, 60.0, 45.0, None],
     )
@@ -97,7 +97,7 @@ def test_extract_normaliza_el_fondo_por_exposicion(tmp_path):
     assert a.background == pytest.approx(2.0)
     assert b.background == pytest.approx(2.0)  # sin normalizar sería 120 vs 90
     assert c.background == pytest.approx(3.0)
-    assert d.background == 500.0
+    assert d.background is None and d.transparency is None and d.weighted is None
     # La transparencia deja de penalizar la sesión más larga…
     assert a.transparency == pytest.approx(1.0)
     assert b.transparency == pytest.approx(1.0)

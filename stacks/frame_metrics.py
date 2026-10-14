@@ -29,13 +29,14 @@ class FrameMetrics:
     session: str             # sesión a la que pertenece
     fwhm: float              # FWHM de SirIL, sin mezclar su penalización por estrellas
     roundness: float         # 0..1 (1 = perfectamente redondo)
-    transparency: float      # 0..1 (proxy: fondo mínimo del pool / fondo)
-    background: float        # ADU equivalentes 16-bit/s (fracción .seq × 65535 ÷ exposición)
-    weighted: float          # puntuación 0..100 para el apilado (puntuar)
+    transparency: float | None  # proxy de fondo; None si no hay tasa comparable
+    background: float | None    # ADU equivalentes 16-bit/s; None sin exposición
+    weighted: float | None      # puntuación 0..100; None si faltan métricas con peso
     wfwhm: float | None = None
     stars: int | None = None
     registration_layer: int | None = None
     filtro: str | None = None
+    background_normalized: float | None = None
 
 
 @dataclass
@@ -65,7 +66,8 @@ def extract_metrics(registro: Registro, pesos: Pesos | None = None) -> list[Fram
     normalizados 0..1, al igual que los FITS float32 que escribe SirIL):
     crece con la exposición y sin normalizar, una sesión a 60 s parecería
     más contaminada que una a 45 s solo por durar más. Sin exposición
-    conocida se deja crudo (limitación pendiente S-0027).
+    conocida, tasa y proxy quedan desconocidos; se conserva el valor original
+    normalizado sin mezclarlo con ADU/s.
 
     Lanza ``ValueError`` si el ``.seq`` no tiene filas de registro, si hay
     más que frames, o si no quedó registrado ni un frame: es mejor fallar
@@ -82,7 +84,7 @@ def extract_metrics(registro: Registro, pesos: Pesos | None = None) -> list[Fram
         if not math.isfinite(exposicion) or exposicion < 0:
             raise ValueError(f"Exposición inválida en frame {indice}.")
         fondo_adu = fondo_normalizado * 65535.0
-        fondo = fondo_adu / exposicion if exposicion > 0 else fondo_adu
+        fondo = fondo_adu / exposicion if exposicion > 0 else None
         metricas.append(FrameMetrics(
             path=str(ref.ruta),
             session=ref.sesion,
@@ -95,12 +97,13 @@ def extract_metrics(registro: Registro, pesos: Pesos | None = None) -> list[Fram
             stars=stars,
             registration_layer=capa,
             filtro=ref.filtro,
+            background_normalized=fondo_normalizado,
         ))
     if not metricas:
         raise ValueError("Ningún frame quedó registrado: no hay métricas que extraer.")
-    fondo_min = min(m.background for m in metricas)
+    fondo_min = min((m.background for m in metricas if m.background is not None), default=None)
     for m in metricas:
-        m.transparency = fondo_min / m.background
+        m.transparency = fondo_min / m.background if fondo_min is not None and m.background is not None else None
     puntuar(metricas, pesos)
     return metricas
 
@@ -111,7 +114,8 @@ def puntuar(metrics: list[FrameMetrics], pesos: Pesos | None = None) -> None:
     Cada métrica se normaliza (mejor del pool = 1, peor = 0) y se combina
     con los pesos: puntúan el fwhm bajo, la redondez alta, la transparencia
     alta y el fondo bajo. Los pesos los fija el usuario; si todos son cero
-    no hay escala posible y se rechaza.
+    no hay escala posible y se rechaza. Si falta una métrica con peso,
+    ``weighted`` queda en None en lugar de mezclar unidades o reducir pesos.
     """
     if not metrics:
         return
@@ -123,7 +127,12 @@ def puntuar(metrics: list[FrameMetrics], pesos: Pesos | None = None) -> None:
     if not math.isfinite(total) or total <= 0:
         raise ValueError("La suma de los pesos tiene que ser positiva.")
     for m in metrics:
-        for value in (m.fwhm, m.roundness, m.transparency, m.background):
+        for value in (m.fwhm, m.roundness):
+            if value is None or not math.isfinite(value) or value <= 0:
+                raise ValueError(f"Métrica inválida para {m.path}; no se puede puntuar.")
+        for value in (m.transparency, m.background):
+            if value is None:
+                continue
             if not math.isfinite(value) or value <= 0:
                 raise ValueError(f"Métrica inválida para {m.path}; no se puede puntuar.")
     norm = {
@@ -133,6 +142,10 @@ def puntuar(metrics: list[FrameMetrics], pesos: Pesos | None = None) -> None:
         "background": _normalizar([m.background for m in metrics], peor="alto"),
     }
     for i, m in enumerate(metrics):
+        if ((pesos.transparencia > 0 and m.transparency is None)
+            or (pesos.fondo > 0 and m.background is None)):
+            m.weighted = None
+            continue
         m.weighted = 100.0 * (
             pesos.fwhm * norm["fwhm"][i]
             + pesos.redondez * norm["roundness"][i]
@@ -154,6 +167,7 @@ class Evaluacion:
     descartada: bool
     motivo: str
     corte_fwhm: float | None = None
+    revisar: bool = False
 
 
 #: Textos de motivo (lo que el usuario ve en la tabla de la auditoría).
@@ -188,6 +202,10 @@ def evaluar(
     El criterio alternativo ``media_minimo`` sustituye solo el corte FWHM
     por media+(media−mínimo)/6 en cada sesión/filtro. No cambia el ranking
     global ni los otros cortes; sigma no interviene en esa fórmula.
+
+    Un dato requerido ausente recomienda exclusión conservadora y ``revisar``,
+    no afirma mala calidad. Sin corte por puntuación, sus datos exclusivos
+    no vetan cortes estelares disponibles; las casillas siguen siendo manuales.
     """
     if criterio_fwhm not in ("mad", "media_minimo"):
         raise ValueError("El criterio FWHM no es compatible.")
@@ -209,21 +227,29 @@ def evaluar(
         cortes["roundness"] = _corte([m.roundness for m in metricas], sigma, peor="bajo")
     if pesos.fondo > 0:
         cortes["background"] = _corte(
-            [m.background for m in metricas], sigma, peor="alto"
+            [m.background for m in metricas if m.background is not None], sigma, peor="alto"
         )
     evaluaciones = []
     for m in metricas:
         motivos = []
-        if m.weighted < umbral:
+        faltantes = []
+        if pesos.fondo > 0 and m.background is None:
+            faltantes.append("Fondo")
+        if umbral > 0 and pesos.transparencia > 0 and m.transparency is None:
+            faltantes.append("Transparencia")
+        if faltantes:
+            motivos.append("Datos insuficientes: " + "/".join(faltantes))
+        if m.weighted is not None and m.weighted < umbral:
             motivos.append(MOTIVOS["weighted"])
         limite_fwhm = cortes_fwhm.get(m.path)
         if limite_fwhm is not None and m.fwhm > limite_fwhm:
             motivos.append(MOTIVOS["fwhm"])
         if cortes.get("roundness") is not None and m.roundness < cortes["roundness"]:
             motivos.append(MOTIVOS["roundness"])
-        if cortes.get("background") is not None and m.background > cortes["background"]:
+        if (cortes.get("background") is not None and m.background is not None
+            and m.background > cortes["background"]):
             motivos.append(MOTIVOS["background"])
-        evaluaciones.append(Evaluacion(m, bool(motivos), ", ".join(motivos), limite_fwhm))
+        evaluaciones.append(Evaluacion(m, bool(motivos), ", ".join(motivos), limite_fwhm, bool(faltantes)))
     return evaluaciones
 
 
@@ -343,13 +369,16 @@ def _metricas_fila(campos: list[str], indice: int) -> tuple | None:
     return fwhm, wfwhm, roundness, background, stars
 
 
-def _normalizar(valores: list[float], *, peor: str) -> list[float]:
-    """Normaliza a 0..1 dentro del pool (1 = mejor); `peor` es el extremo malo."""
+def _normalizar(valores: list[float | None], *, peor: str) -> list[float]:
+    """Normaliza solo datos disponibles; los huecos no aportan puntuación ni extremos."""
     if not valores:
         return []
-    lo, hi = min(valores), max(valores)
+    disponibles = [v for v in valores if v is not None]
+    if not disponibles:
+        return [0.0] * len(valores)
+    lo, hi = min(disponibles), max(disponibles)
     if hi == lo:
-        return [1.0] * len(valores)  # todos iguales: nadie es peor
+        return [1.0 if v is not None else 0.0 for v in valores]
     if peor == "alto":
-        return [(hi - v) / (hi - lo) for v in valores]
-    return [(v - lo) / (hi - lo) for v in valores]
+        return [(hi - v) / (hi - lo) if v is not None else 0.0 for v in valores]
+    return [(v - lo) / (hi - lo) if v is not None else 0.0 for v in valores]
