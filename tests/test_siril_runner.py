@@ -11,6 +11,96 @@ from stacks import siril_runner
 from stacks.siril_runner import SirilError
 
 
+@pytest.mark.parametrize("platform", ["win32", "linux"])
+def test_cli_no_crea_consola_y_conserva_pipes(monkeypatch, platform):
+    """S-0023: Windows no abre terminales; otras plataformas conservan flags neutros y el log."""
+    import subprocess
+    from types import SimpleNamespace
+
+    from stacks import siril_finder
+
+    monkeypatch.setattr(siril_finder, "sys", SimpleNamespace(platform=platform), raising=False)
+    monkeypatch.setattr(subprocess, "CREATE_NO_WINDOW", 0x08000000, raising=False)
+    monkeypatch.setattr(siril_runner, "find_siril", lambda: "siril-falso")
+    received = []
+
+    def start(args, **kwargs):
+        """Captura opciones de creación sin lanzar SirIL ni cambiar datos personales."""
+        received.append(kwargs)
+        return _ProcFalso("log: salida conservada\nprogress: trabajo, 25%\n")
+
+    monkeypatch.setattr(siril_runner.subprocess, "Popen", start)
+    logs, progress = [], []
+    result = siril_runner.ejecutar_script(["noop"], log_cb=logs.append, progress_cb=progress.append)
+    options = received[0]
+    assert options.get("creationflags", 0) == (0x08000000 if platform == "win32" else 0)
+    assert options["stdin"] == subprocess.PIPE
+    assert options["stdout"] == subprocess.PIPE
+    assert options["stderr"] == subprocess.STDOUT
+    assert "log: salida conservada" in logs
+    assert progress == [0.25]
+    assert result.ok
+
+
+def test_hijo_real_desde_pythonw_no_tiene_consola(tmp_path):
+    """S-0023: un padre real sin consola ejecuta el runner sin crear consola en el hijo."""
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    if sys.platform != "win32":
+        pytest.skip("La consola Win32 solo se verifica en Windows.")
+    pythonw = Path(sys.executable).with_name("pythonw.exe")
+    if not pythonw.is_file():
+        pytest.skip("Este intérprete no incluye pythonw.exe.")
+    script = tmp_path / "probe_pythonw.py"
+    script.write_text('''"""Sondeo aislado de procesos Win32; no abre la base personal ni ejecuta SirIL."""
+import ctypes
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, sys.argv[2])
+from db import connection
+from stacks import siril_runner
+
+base = Path(sys.argv[1])
+connection.DATA_DIR = base
+siril_runner.WORKING_FOLDER = base / "working"
+siril_runner.find_siril = lambda: "hijo-python-sintetico"
+popen = subprocess.Popen
+
+def start(args, **kwargs):
+    """Oculta cualquier consola del caso rojo para no robar foco al usuario."""
+    startup = subprocess.STARTUPINFO()
+    startup.dwFlags = subprocess.STARTF_USESHOWWINDOW
+    startup.wShowWindow = subprocess.SW_HIDE
+    kwargs["startupinfo"] = startup
+    code = "import sys, ctypes; sys.stdin.read(); print('console=' + str(ctypes.windll.kernel32.GetConsoleWindow())); print('progress: probe, 50%')"
+    return popen([str(Path(sys.executable).with_name("python.exe")), "-c", code], **kwargs)
+
+siril_runner.subprocess.Popen = start
+progress = []
+result = siril_runner.ejecutar_script(["noop"], progress_cb=progress.append)
+(base / "result.json").write_text(json.dumps({
+    "parent_console": ctypes.windll.kernel32.GetConsoleWindow(),
+    "lines": result.lineas, "ok": result.ok, "progress": progress,
+}), encoding="utf-8")
+''', encoding="utf-8")
+    subprocess.run(
+        [str(pythonw), str(script), str(tmp_path), str(Path(__file__).resolve().parents[1])],
+        stdin=subprocess.DEVNULL, capture_output=True, timeout=20, check=True,
+        creationflags=subprocess.CREATE_NO_WINDOW,
+    )
+    result = json.loads((tmp_path / "result.json").read_text(encoding="utf-8"))
+    assert result["parent_console"] == 0
+    assert "console=0" in result["lines"]
+    assert result["progress"] == [0.5]
+    assert result["ok"]
+
+
 class _ProcFalso:
     """Sustituto mínimo de ``subprocess.Popen``: siril escribe ``lineas`` y termina."""
 

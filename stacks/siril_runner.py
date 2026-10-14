@@ -38,7 +38,7 @@ from pathlib import Path
 
 from pass_logging import LOG_PERSISTED, MAX_LOG_LINES, record_action
 
-from .siril_finder import find_siril
+from .siril_finder import cli_creationflags, find_siril
 
 _binario_tarea: ContextVar[str | None] = ContextVar("binario_siril_tarea", default=None)
 
@@ -183,6 +183,7 @@ def ejecutar_script(
             text=True,
             encoding="utf-8",
             errors="replace",  # un log con acentos no debe tumbar la corrida
+            creationflags=cli_creationflags(),
         )
     except OSError as exc:
         raise SirilError(f"No se pudo arrancar SirIL ({binario}): {exc}") from exc

@@ -24,8 +24,8 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 
 ## Resumen
 
-**95 hallazgos**: 🔴 18 graves · 🟠 50 medios · 🟡 18 bajos · 9 decisiones (7 pendientes).
-Estado: ✅ 76 corregidos · 🟡 3 contenidos · ⏳ 6 pendientes · 🔎 1 sin reproducir.
+**96 hallazgos**: 🔴 18 graves · 🟠 51 medios · 🟡 18 bajos · 9 decisiones (7 pendientes).
+Estado: ✅ 76 corregidos · 🟡 3 contenidos · ⏳ 7 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -69,6 +69,7 @@ Estado: ✅ 76 corregidos · 🟡 3 contenidos · ⏳ 6 pendientes · 🔎 1 sin
 | **S-0016** | `exportar_apilados` acepta un origen arbitrario por API aunque la UI pase la carpeta de trabajo. | ✅ `f09085f` (origen acotado y resuelto) |
 | **S-0020** | La limpieza de salidas anteriores podía dejar restos y la corrida nueva los mezclaba con sus resultados. | ✅ `4e1e5c0` |
 | **S-0022** | El registro rechaza hardlinks válidos cuando Windows no permite crear symlinks. | ✅ `265d35c` |
+| **S-0023** | Abrir PASS sin consola (`pythonw`/acceso directo) hace aparecer terminales en las llamadas CLI de SirIL y al comprobar su versión. | ⏳ |
 | **E-0003** | Una pieza usada en dos roles deja el formulario y los totales desactualizados tras editar o borrar. | ✅ `dbc82e4` |
 | **E-0004** | El precio de un filtro editado no repinta el total hasta otra interacción. | ✅ `dbc82e4` |
 | **E-0005** | `NaN`/infinito y precio o peso negativos no se filtran antes de persistir un setup. | ✅ `a491664` |

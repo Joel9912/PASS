@@ -7,10 +7,16 @@ debe usar la conexión creada en el hilo de UI (SQLite lo prohibió y ya hay
 regresión de eso en `test_siril_runner.py`).
 """
 import subprocess
+import sys
 from shutil import which
 
 #: Clave de ``settings`` donde la UI guarda la ruta elegida por el usuario.
 SETTINGS_KEY = "siril_path"
+
+
+def cli_creationflags() -> int:
+    """Evita consolas hijas en Windows, también desde pythonw; no afecta a la GUI de SirIL."""
+    return subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
 
 def find_siril(ruta_guardada: str | None = None) -> str | None:
@@ -48,6 +54,7 @@ def siril_version(path: str) -> str | None:
             capture_output=True,
             text=True,
             timeout=10,
+            creationflags=cli_creationflags(),
         )
     except (OSError, subprocess.SubprocessError):
         return None

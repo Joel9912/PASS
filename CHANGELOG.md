@@ -18,6 +18,7 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 - Captura Ideal reserva al menos cinco minutos dentro de ambos extremos de la noche astronómica; los márgenes válidos quedan como Posible.
 
 ### Corregido
+- Las llamadas CLI de SirIL y la comprobación de versión no abren terminales en Windows al iniciar PASS sin consola desde el acceso directo; log, progreso y errores siguen capturados (S-0023).
 - Guardar una sesión respeta el centro editado del encuadre cuando el objetivo tiene coordenadas conocidas (P-0015).
 - Terminal y resultados de SirIL acotados en memoria, conservando marcadores de fallo/identidad aunque aparezcan al principio y el historial completo en disco (S-0018).
 - Los fallos al enviar comandos, cerrar stdin o recibir logs de SirIL terminan y recolectan el proceso hijo, y cierran sus pipes (S-0013).

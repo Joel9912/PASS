@@ -5,7 +5,31 @@ toca la BD: `settings` lo lee la UI y se lo pasa por parámetro (A-03). La
 lectura de ``--version`` va con ``subprocess.run`` sustituido: nunca se
 ejecuta SirIL.
 """
+import pytest
+
 from stacks import siril_finder
+
+
+@pytest.mark.parametrize("platform", ["win32", "linux"])
+def test_version_sin_consola(monkeypatch, platform):
+    """S-0023: comprobar versión tampoco abre terminales ni pierde stdout o timeout."""
+    import subprocess
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(siril_finder, "sys", SimpleNamespace(platform=platform), raising=False)
+    monkeypatch.setattr(subprocess, "CREATE_NO_WINDOW", 0x08000000, raising=False)
+    calls = []
+
+    def run(args, **kwargs):
+        """Simula una versión válida capturando las opciones del proceso."""
+        calls.append(kwargs)
+        return subprocess.CompletedProcess(args, 0, "Siril prueba\n", "")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    assert siril_finder.siril_version("siril-falso") == "Siril prueba"
+    assert calls[0].get("creationflags", 0) == (0x08000000 if platform == "win32" else 0)
+    assert calls[0]["capture_output"]
+    assert calls[0]["timeout"] == 10
 
 
 def test_find_siril_falls_back_to_saved_path(monkeypatch):
