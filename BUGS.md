@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **102 hallazgos**: 🔴 18 graves · 🟠 57 medios · 🟡 18 bajos · 9 decisiones (7 pendientes).
-Estado: ✅ 82 corregidos · 🟡 3 contenidos · ⏳ 7 pendientes · 🔎 1 sin reproducir.
+Estado: ✅ 83 corregidos · 🟡 3 contenidos · ⏳ 6 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -73,7 +73,7 @@ Estado: ✅ 82 corregidos · 🟡 3 contenidos · ⏳ 7 pendientes · 🔎 1 sin
 | **S-0024** | La auditoría promedia FWHM y FWHM ponderado de SirIL como si fueran los ejes X/Y y presenta esa mezcla como FWHM. | ✅ `4cefa59` |
 | **S-0025** | La lectura de métricas acepta filas de registro incompletas sin validar su correspondencia con toda la secuencia; la UI atribuye la ausencia a un descarte de SirIL. | ✅ `4cefa59` |
 | **S-0026** | FWHM o fondo infinitos contaminan las puntuaciones con NaN y pueden dejar los frames sin recomendación de descarte. | ✅ `4cefa59` |
-| **S-0027** | Con exposición desconocida se mezclan fondos en ADU equivalentes y ADU equivalentes/s dentro de la misma puntuación. | ⏳ |
+| **S-0027** | Con exposición desconocida se mezclan fondos en ADU equivalentes y ADU equivalentes/s dentro de la misma puntuación. | ✅ `51ba56e` |
 | **S-0028** | Si falla una nueva auditoría, quedan habilitadas las referencias y decisiones de la auditoría anterior para apilar. | ✅ `4cefa59` |
 | **S-0029** | El autoestirado de las previsualizaciones FITS levanta demasiado el fondo y el ruido, dificultando la inspección de los lights. | ✅ `b2cbeba` |
 | **E-0003** | Una pieza usada en dos roles deja el formulario y los totales desactualizados tras editar o borrar. | ✅ `dbc82e4` |

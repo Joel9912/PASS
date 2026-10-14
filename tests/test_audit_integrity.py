@@ -1,7 +1,5 @@
 """Regresiones del contrato real de SirIL y rechazo de métricas inseguras."""
 
-from pathlib import Path
-
 import pytest
 
 from stacks.frame_metrics import FrameMetrics, Pesos, evaluar, extract_metrics, puntuar
@@ -15,7 +13,7 @@ def _sequence(tmp_path, rows=None):
     rows = rows if rows is not None else [row, row, row]
     header = "S 'probe_' 1 3 3 5 0 6 0 0 0\nL 1\nI 1 1\nI 2 1\nI 3 1\n"
     registry = Registro(tmp_path, "probe_", [
-        LightRef(Path(f"frame{i}.fit"), "sesión", None, 60.0) for i in range(3)
+        LightRef(tmp_path / f"frame{i}.fit", "sesión", None, 60.0) for i in range(3)
     ], False)
     registry.ruta_seq.write_text(header + "\n".join(rows) + "\n", encoding="utf-8")
     return registry

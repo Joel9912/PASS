@@ -288,7 +288,7 @@ class StackerPage(QWidget):
             controls[f"calibrate{name}"] = getattr(self.panel_calibrar, name)
         for name, control in self.panel_auditar._pesos.items():
             controls[f"weight_{name}"] = control
-        for name in ("_umbral", "_sigma", "_metrica", "_criterio_fwhm", "_usar_puntuacion"):
+        for name in ("_umbral", "_sigma", "_metrica", "_criterio_fwhm", "_usar_puntuacion", "_orden"):
             controls[f"audit{name}"] = getattr(self.panel_auditar, name)
         for name in (
             "_nombre", "_integracion", "_ponderacion", "_norm", "_framing",
@@ -336,6 +336,7 @@ class StackerPage(QWidget):
             controls = dict(controls)
             controls.setdefault("audit_criterio_fwhm", {"data": "mad", "text": ""})
             controls.setdefault("audit_usar_puntuacion", True)
+            controls.setdefault("audit_orden", {"data": "puntuacion", "text": ""})
         validate_controls(self._draft_controls, controls)
         sessions = work_recovery.load_sessions(data["sessions"])
         if (not isinstance(data["inputs"], dict) or not isinstance(data["calibrations"], dict)

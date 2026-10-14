@@ -36,7 +36,8 @@ SirIL usa todos los hilos disponibles por sí solo.
 """
 import json
 from collections import Counter
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
+from datetime import datetime
 from pathlib import Path
 
 from .global_pool import GlobalPool, LightRef, nombre_sesion
@@ -78,6 +79,7 @@ class Registro:
     seq: str                  # nombre real de la secuencia (p. ej. 'registro_')
     frames: list[LightRef]    # refs en el orden de índices de la secuencia
     transformadas: bool = True  # False: identidad → apilar la entrada (sin r_*)
+    capture_times: dict[str, datetime | None] = field(default_factory=dict, compare=False, repr=False)
 
     @property
     def ruta_seq(self) -> Path:

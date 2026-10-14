@@ -32,7 +32,7 @@ def _registro(
     """Registro de mentira: .seq con las filas dadas y un light por fila."""
     frames = [
         LightRef(
-            ruta=Path(f"/cal/{i:04d}.fit"),
+            ruta=tmp_path / "cal" / f"{i:04d}.fit",
             sesion=f"noche{(i - 1) % 2 + 1}",
             filtro=None,
             exposicion_s=(
@@ -72,8 +72,8 @@ def test_extract_lee_las_metricas_del_seq(tmp_path):
     assert a.wfwhm == 6.0 and a.stars == 27 and a.registration_layer == 0
     # El fondo sale en ADU/s: 800 ADU sobre 30 s de exposición (del LightRef).
     assert a.background == pytest.approx(800.0 / 30.0)
-    assert (a.path, a.session) == (str(Path("/cal/0001.fit")), "noche1")
-    assert (b.path, b.session) == (str(Path("/cal/0002.fit")), "noche2")
+    assert (a.path, a.session) == (str(tmp_path / "cal" / "0001.fit"), "noche1")
+    assert (b.path, b.session) == (str(tmp_path / "cal" / "0002.fit"), "noche2")
     # La transparencia es un proxy del fondo dentro del pool (mejor = 1).
     assert (a.transparency, b.transparency) == (0.5, 1.0)
     assert 0.0 <= a.weighted <= 100.0 and a.weighted < b.weighted
@@ -127,7 +127,7 @@ def test_extract_sin_datos_de_registro_falla(tmp_path):
 def test_extract_con_mas_filas_que_frames_falla(tmp_path):
     """Si el .seq trae más filas R que frames, no se atribuye a ciegas."""
     frames = [
-        LightRef(ruta=Path(f"/cal/{i}.fit"), sesion="s", filtro=None, exposicion_s=None)
+        LightRef(ruta=tmp_path / "cal" / f"{i}.fit", sesion="s", filtro=None, exposicion_s=None)
         for i in range(1, 3)
     ]
     registro = Registro(dir=tmp_path, seq="registro_", frames=frames)
@@ -150,8 +150,8 @@ def test_extract_salta_los_frames_descartados(tmp_path):
     metricas = extract_metrics(registro)
 
     assert [(m.path, m.session) for m in metricas] == [
-        (str(Path("/cal/0001.fit")), "noche1"),
-        (str(Path("/cal/0004.fit")), "noche2"),
+        (str(tmp_path / "cal" / "0001.fit"), "noche1"),
+        (str(tmp_path / "cal" / "0004.fit"), "noche2"),
     ]
     assert all(m.fwhm > 0 and m.background > 0 for m in metricas)
 

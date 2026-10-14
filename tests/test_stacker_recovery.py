@@ -307,12 +307,14 @@ def test_recuperar_criterio_fwhm_y_borrador_anterior(pipeline, monkeypatch, lega
     page, _, _ = pipeline
     page.panel_auditar._criterio_fwhm.setCurrentIndex(1)
     page.panel_auditar._usar_puntuacion.setChecked(False)
+    page.panel_auditar._orden.setCurrentIndex(1)
     page._draft.changed()
     if legacy:
         row = work_drafts.read("stacker")
         payload = work_drafts.decode(row)
         payload["controls"].pop("audit_criterio_fwhm")
         payload["controls"].pop("audit_usar_puntuacion")
+        payload["controls"].pop("audit_orden")
         work_drafts.save("stacker", payload, row["revision"])
     restored = _resume(monkeypatch)
     try:
@@ -320,6 +322,7 @@ def test_recuperar_criterio_fwhm_y_borrador_anterior(pipeline, monkeypatch, lega
         assert restored.panel_auditar._criterio_fwhm.currentData() == ("mad" if legacy else "media_minimo")
         assert restored.panel_auditar._usar_puntuacion.isChecked() == legacy
         assert restored.panel_auditar._umbral.isEnabled() == legacy
+        assert restored.panel_auditar._orden.currentData() == ("puntuacion" if legacy else "cronologico")
         assert restored._worker is None
     finally:
         restored.deleteLater()

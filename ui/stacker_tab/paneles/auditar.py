@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from stacks.audit_metadata import chronological_indices
 from stacks.frame_metrics import Evaluacion, FrameMetrics, Pesos, evaluar
 from stacks.global_pool import nombre_sesion
 from stacks.registration import Registro
@@ -77,6 +78,17 @@ class PanelAuditar(QWidget):
             "Mide con SirIL y revisa los frames. Ajusta criterios y pesos; pulsa "
             "«Actualizar» para repuntuar; tú decides qué casillas desmarcar."
         ), 1)
+        intro_fila.addWidget(QLabel("Orden:"))
+        self._orden = QComboBox()
+        self._orden.addItem("Puntuación", "puntuacion")
+        self._orden.addItem("Sesión y fecha (UTC)", "cronologico")
+        self._orden.setToolTip(
+            "Agrupa sesiones por su primera captura y ordena las tomas por DATE-OBS. "
+            "Sin fecha compatible: al final de su sesión, en orden de registro. "
+            "No cambia criterios ni casillas. Usa las flechas de la tabla para recorrer las tomas."
+        )
+        self._orden.currentIndexChanged.connect(self._orden_cambiado)
+        intro_fila.addWidget(self._orden)
         self._boton = QPushButton("Registrar y auditar")
         self._boton.setObjectName("PrimaryButton")
         self._boton.clicked.connect(self.auditar)
@@ -217,6 +229,7 @@ class PanelAuditar(QWidget):
         self._preview_pie = QLabel("")
         self._preview_pie.setObjectName("HintLabel")
         self._preview_pie.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._preview_pie.setWordWrap(True)
         preview_layout.addWidget(self._preview_pie)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -297,6 +310,7 @@ class PanelAuditar(QWidget):
         self._sigma.setEnabled(not bloqueado)
         self._criterio_fwhm.setEnabled(not bloqueado)
         self._usar_puntuacion.setEnabled(not bloqueado)
+        self._orden.setEnabled(not bloqueado)
         self._boton_seleccionar_todo.setEnabled(not bloqueado and bool(self._metricas))
 
     def _puntuacion_cambiada(self, usar: bool) -> None:
@@ -362,6 +376,18 @@ class PanelAuditar(QWidget):
             criterio_fwhm=self._criterio_fwhm.currentData(),
         )
         self._evaluaciones = {e.metricas.path: e for e in evaluaciones}
+        self._pintar_tabla()
+
+    def _orden_cambiado(self, _index: int) -> None:
+        """Reordena la vista sin aplicar cambios de criterios que aún no se hayan actualizado."""
+        if self._registro is not None and not self._bloqueado:
+            self._pintar_tabla(conservar_seleccion=True)
+
+    def _pintar_tabla(self, conservar_seleccion: bool = False) -> None:
+        """Pinta el orden elegido conservando casillas por índice y, al reordenar, la toma visible."""
+        actual = self._tabla.currentRow()
+        item = self._tabla.item(actual, 1) if actual >= 0 else None
+        seleccionada = item.data(Qt.ItemDataRole.UserRole) if item is not None and conservar_seleccion else None
         # Filas de mayor a menor puntuación; lo que SirIL descartó (sin
         # métricas) va al final: no hay puntuación que darle.
         filas = sorted(
@@ -378,6 +404,10 @@ class PanelAuditar(QWidget):
             ),
             key=lambda fila: (-fila[0], fila[1]),
         )
+        if self._orden.currentData() == "cronologico":
+            indices = chronological_indices(self._registro.frames, self._registro.capture_times)
+            por_indice = {fila[1]: fila for fila in filas}
+            filas = [por_indice[index] for index in indices]
         previos = set(self.aceptados()) if self._tabla.rowCount() else None
         self._cargando = True
         self._tabla.setRowCount(0)
@@ -389,6 +419,17 @@ class PanelAuditar(QWidget):
         self._pintar_grafica()
         self._pintar_resumen()
         self._boton_seleccionar_todo.setEnabled(not self._bloqueado and bool(self._metricas))
+        if seleccionada is not None:
+            for row in range(self._tabla.rowCount()):
+                if self._tabla.item(row, 1).data(Qt.ItemDataRole.UserRole) == seleccionada:
+                    self._tabla.setCurrentCell(row, 1)
+                    break
+
+    def _fecha_texto(self, path: str) -> str:
+        """Expone la fecha científica en UTC o la ausencia, nunca una hora inferida del índice."""
+        moment = self._registro.capture_times.get(path) if self._registro is not None else None
+        return (moment.isoformat().replace("+00:00", " UTC")
+                if moment is not None else "Fecha no disponible o no compatible")
 
     def _insertar_fila(
         self,
@@ -425,7 +466,7 @@ class PanelAuditar(QWidget):
         # La sesión se guarda como ruta (identidad) y se pinta solo su nombre.
         sesion = QTableWidgetItem(nombre_sesion(ref))
         sesion.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-        sesion.setToolTip(ref.sesion)
+        sesion.setToolTip(ref.sesion + "\nCaptura: " + self._fecha_texto(str(ref.ruta)))
         self._tabla.setItem(fila, 2, sesion)
         celdas = (
             ["—"] * 5
@@ -573,6 +614,7 @@ class PanelAuditar(QWidget):
         ruta = nombre.data(Qt.ItemDataRole.UserRole)
         ev = self._evaluaciones.get(ruta)
         indice = int(casilla.data(Qt.ItemDataRole.UserRole))
+        posicion = fila + 1 if self._orden.currentData() == "cronologico" else indice
         if ev is None:
             self._seleccion_plot.setData([], [])
             pie = f"{nombre.text()} · descartado por SirIL al registrar"
@@ -580,7 +622,7 @@ class PanelAuditar(QWidget):
             atributo = self._metrica.currentData()
             value = getattr(ev.metricas, atributo)
             if value is not None:
-                self._seleccion_plot.setData([indice], [float(value)])
+                self._seleccion_plot.setData([posicion], [float(value)])
             else:
                 self._seleccion_plot.setData([], [])
             pie = (f"{nombre.text()} · {ev.metricas.weighted:.1f} puntos" if ev.metricas.weighted is not None
@@ -589,6 +631,7 @@ class PanelAuditar(QWidget):
                 pie += f" · revisar: {ev.motivo}"
             elif ev.descartada:
                 pie += f" · descartar: {ev.motivo}"
+        pie += " · " + self._fecha_texto(ruta)
         self._mostrar_preview(Path(ruta), pie)
 
     def _mostrar_preview(self, ruta: Path, pie: str) -> None:
@@ -649,12 +692,16 @@ class PanelAuditar(QWidget):
     def _pintar_grafica(self) -> None:
         """Curva de la métrica elegida por frame; fuera de las casillas, en rojo.
 
-        El eje x conserva el índice de registro, no el orden de la tabla
-        ni necesariamente el orden temporal de captura.
+        El eje x usa índice de registro o posición cronológica de revisión;
+        en esta última vista no representa duración entre exposiciones.
         """
         atributo = self._metrica.currentData()
+        cronologico = self._orden.currentData() == "cronologico"
         self._plot.setLabel("left", self._metrica.currentText())
+        self._plot.setLabel("bottom", "Orden por sesión/fecha · intervalos no a escala" if cronologico
+                            else "Frame · orden de registro")
         puntos: list[tuple[int, float, bool]] = []
+        sesiones = {}
         for fila in range(self._tabla.rowCount()):
             casilla = self._tabla.item(fila, 0)
             nombre = self._tabla.item(fila, 1)
@@ -664,18 +711,32 @@ class PanelAuditar(QWidget):
             if ev is None:
                 continue
             indice = int(casilla.data(Qt.ItemDataRole.UserRole))
+            posicion = fila + 1 if cronologico else indice
             marcada = casilla.checkState() == Qt.CheckState.Checked
             value = getattr(ev.metricas, atributo)
             if value is not None:
-                puntos.append((indice, float(value), marcada))
+                puntos.append((posicion, float(value), marcada))
+                sesiones[posicion] = ev.metricas.session
         # La tabla va ordenada por puntuación: la curva se reordena por
         # índice de registro; no se presenta esa numeración como hora.
         puntos.sort()
         xs = [indice for indice, valor, marcada in puntos if marcada]
         ys = [valor for indice, valor, marcada in puntos if marcada]
+        if cronologico:
+            xs, ys = [], []
+            anterior = None
+            for posicion, valor, marcada in puntos:
+                if not marcada:
+                    continue
+                if anterior is not None and sesiones[posicion] != anterior:
+                    xs.append(posicion - 0.5)
+                    ys.append(float("nan"))  # rompe la línea; no representa una medición
+                xs.append(posicion)
+                ys.append(valor)
+                anterior = sesiones[posicion]
         xd = [indice for indice, valor, marcada in puntos if not marcada]
         yd = [valor for indice, valor, marcada in puntos if not marcada]
-        self._curva.setData(xs, ys)
+        self._curva.setData(xs, ys, connect="finite")
         self._descartados_plot.setData(xd, yd)
         if atributo == "weighted" and self._evaluaciones and self._usar_puntuacion.isChecked():
             self._umbral_linea.setValue(self.umbral())
@@ -692,6 +753,7 @@ class PanelAuditar(QWidget):
         descartados_siril = len(self._registro.frames) - len(self._metricas)
         recomendados = sum(1 for e in self._evaluaciones.values() if e.descartada)
         revisar = sum(e.revisar for e in self._evaluaciones.values())
+        sin_fecha = sum(self._registro.capture_times.get(str(ref.ruta)) is None for ref in self._registro.frames)
         sigma = self.sigma()
         aviso = ""
         if self._metricas and recomendados == len(self._metricas):
@@ -713,5 +775,7 @@ class PanelAuditar(QWidget):
             + f" · {recomendados} descartes recomendados ({puntuacion}, "
             f"σ={sigma:g}). FWHM: {regla}. El motivo está en la tabla; las casillas son tuyas."
             + (f" · {revisar} por revisar: datos insuficientes." if revisar else "")
+            + (f" · {sin_fecha} sin fecha compatible, al final de su sesión."
+               if sin_fecha and self._orden.currentData() == "cronologico" else "")
             + aviso
         )
