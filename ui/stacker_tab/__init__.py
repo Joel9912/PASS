@@ -274,6 +274,7 @@ class StackerPage(QWidget):
         layout.addWidget(self._draft.button)
         connect_controls(self._draft_controls, self._draft_changed)
         self.panel_auditar._tabla.itemChanged.connect(self._draft_changed)
+        self.panel_auditar.seleccion_cambiada.connect(self._draft_changed)
 
     def showEvent(self, event) -> None:
         """Ofrece recuperar al entrar; no lanza escaneo, calibración ni SirIL."""

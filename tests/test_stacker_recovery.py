@@ -323,3 +323,29 @@ def test_recuperar_criterio_fwhm_y_borrador_anterior(pipeline, monkeypatch, lega
         assert restored._worker is None
     finally:
         restored.deleteLater()
+
+
+def test_seleccionar_todo_se_guarda_una_vez_y_se_recupera(pipeline, monkeypatch):
+    """La selección masiva confirma un solo borrador, sin una escritura por frame."""
+    page, _, _ = pipeline
+    page.panel_auditar.restaurar_aceptados(set())
+    page._draft.changed()
+    original = work_drafts.save
+    calls = []
+
+    def save(*args, **kwargs):
+        """Cuenta confirmaciones manteniendo la transacción sandbox real."""
+        calls.append(True)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(work_drafts, "save", save)
+    page.panel_auditar._boton_seleccionar_todo.click()
+    assert calls == [True]
+    expected = {str(ref.ruta.absolute()) for ref in page.registro.frames}
+    assert set(work_drafts.decode(work_drafts.read("stacker"))["accepted"]) == expected
+    restored = _resume(monkeypatch)
+    try:
+        actual = {str(restored.registro.frames[i-1].ruta.absolute()) for i in restored.panel_auditar.aceptados()}
+        assert actual == expected
+    finally:
+        restored.deleteLater()

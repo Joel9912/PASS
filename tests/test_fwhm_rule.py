@@ -83,3 +83,64 @@ def test_ui_formula_sin_puntuacion_conserva_casillas(qt_app, tmp_path):
         assert "4.4" in panel._tabla.item(0, 3).toolTip()
     finally:
         panel.deleteLater()
+
+
+def test_seleccionar_todo_respeta_siril_y_no_cambia_criterios(qt_app, tmp_path):
+    """Marca utilizables en lote, incluso sugeridas, sin habilitar frames sin métricas."""
+    from pathlib import Path
+
+    from stacks.global_pool import LightRef
+    from stacks.registration import Registro
+    from ui.stacker_tab.paneles.auditar import PanelAuditar
+
+    frames = _frames([3, 4.4, 5.2])
+    refs = [LightRef(Path(f.path), f.session, None, 60) for f in frames]
+    refs.append(LightRef(Path("rechazada.fit"), "noche", None, 60))
+    panel = PanelAuditar()
+    events = []
+    try:
+        assert not panel._boton_seleccionar_todo.isEnabled()
+        panel.mostrar(Registro(tmp_path, "probe_", refs), frames)
+        panel.resize(1309, 735)
+        panel.show()
+        qt_app.processEvents()
+        assert panel._boton_seleccionar_todo.isVisible()
+        assert panel._boton_seleccionar_todo.geometry().right() <= panel.width()
+        assert not panel._boton_seleccionar_todo.geometry().intersects(panel._usar_puntuacion.geometry())
+        panel.restaurar_aceptados(set())
+        before = [(e.motivo, e.metricas.weighted) for e in panel._evaluaciones.values()]
+        panel.seleccion_cambiada.connect(lambda: events.append(True))
+        panel._boton_seleccionar_todo.click()
+        assert sorted(panel.aceptados()) == [1, 2, 3]
+        assert events == [True]
+        assert [(e.motivo, e.metricas.weighted) for e in panel._evaluaciones.values()] == before
+        panel._boton_seleccionar_todo.click()
+        assert events == [True]
+        panel.limpiar()
+        assert not panel._boton_seleccionar_todo.isEnabled()
+    finally:
+        panel.deleteLater()
+
+
+def test_seleccionar_todo_bloqueado_no_cambia_casillas(qt_app, tmp_path):
+    """No altera la selección utilizada por una operación en curso."""
+    from pathlib import Path
+
+    from stacks.global_pool import LightRef
+    from stacks.registration import Registro
+    from ui.stacker_tab.paneles.auditar import PanelAuditar
+
+    frames = _frames([3, 4, 5])
+    panel = PanelAuditar()
+    try:
+        refs = [LightRef(Path(f.path), f.session, None, 60) for f in frames]
+        panel.mostrar(Registro(tmp_path, "probe_", refs), frames)
+        panel.restaurar_aceptados(set())
+        panel.bloquear(True)
+        assert not panel._boton_seleccionar_todo.isEnabled()
+        assert panel.seleccionar_todos() == 0
+        assert panel.aceptados() == []
+        panel.bloquear(False)
+        assert panel._boton_seleccionar_todo.isEnabled()
+    finally:
+        panel.deleteLater()

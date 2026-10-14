@@ -54,6 +54,7 @@ class PanelAuditar(QWidget):
 
     auditar = pyqtSignal()    # «Registrar y auditar»
     descartar = pyqtSignal()  # «Descartar recomendados»
+    seleccion_cambiada = pyqtSignal()  # selección masiva completada: guardar una sola vez
 
     def __init__(self, parent: QWidget | None = None) -> None:
         """Monta registro, pesos, tabla+miniatura, gráfica y resumen."""
@@ -157,6 +158,14 @@ class PanelAuditar(QWidget):
         self._usar_puntuacion.toggled.connect(self._puntuacion_cambiada)
         criterio_fila.addWidget(self._usar_puntuacion)
         criterio_fila.addStretch(1)
+        self._boton_seleccionar_todo = QPushButton("Seleccionar todo")
+        self._boton_seleccionar_todo.setToolTip(
+            "Marca todas las tomas utilizables, incluidas las sugeridas para descarte. "
+            "No habilita las rechazadas por SirIL ni cambia criterios o puntuaciones."
+        )
+        self._boton_seleccionar_todo.setEnabled(False)
+        self._boton_seleccionar_todo.clicked.connect(self.seleccionar_todos)
+        criterio_fila.addWidget(self._boton_seleccionar_todo)
         layout.addLayout(criterio_fila)
 
         self._tabla = _tabla([
@@ -288,6 +297,7 @@ class PanelAuditar(QWidget):
         self._sigma.setEnabled(not bloqueado)
         self._criterio_fwhm.setEnabled(not bloqueado)
         self._usar_puntuacion.setEnabled(not bloqueado)
+        self._boton_seleccionar_todo.setEnabled(not bloqueado and bool(self._metricas))
 
     def _puntuacion_cambiada(self, usar: bool) -> None:
         """Conserva el mínimo elegido aunque se excluya del veredicto de descarte."""
@@ -300,6 +310,7 @@ class PanelAuditar(QWidget):
         self._cargando = False
         self._registro = None
         self._metricas = []
+        self._boton_seleccionar_todo.setEnabled(False)
         self._evaluaciones = {}
         self._previews.clear()
         self._limpiar_seleccion()
@@ -376,6 +387,7 @@ class PanelAuditar(QWidget):
         self._limpiar_seleccion()
         self._pintar_grafica()
         self._pintar_resumen()
+        self._boton_seleccionar_todo.setEnabled(not self._bloqueado and bool(self._metricas))
 
     def _insertar_fila(
         self,
@@ -501,6 +513,27 @@ class PanelAuditar(QWidget):
                 cambiados += 1
         self._cargando = False
         self._pintar_grafica()
+        return cambiados
+
+    def seleccionar_todos(self) -> int:
+        """Marca solo casillas utilizables y notifica una vez para guardar el lote completo."""
+        if self._bloqueado:
+            return 0
+        cambiados = 0
+        self._cargando = True
+        try:
+            for fila in range(self._tabla.rowCount()):
+                casilla = self._tabla.item(fila, 0)
+                if (casilla is not None
+                    and casilla.flags() & Qt.ItemFlag.ItemIsUserCheckable
+                    and casilla.checkState() != Qt.CheckState.Checked):
+                    casilla.setCheckState(Qt.CheckState.Checked)
+                    cambiados += 1
+        finally:
+            self._cargando = False
+        if cambiados:
+            self._pintar_grafica()
+            self.seleccion_cambiada.emit()
         return cambiados
 
     def _al_actualizar(self) -> None:
