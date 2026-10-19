@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **103 hallazgos**: 🔴 18 graves · 🟠 58 medios · 🟡 18 bajos · 9 decisiones (7 pendientes).
-Estado: ✅ 83 corregidos · 🟡 3 contenidos · ⏳ 7 pendientes · 🔎 1 sin reproducir.
+Estado: ✅ 84 corregidos · 🟡 3 contenidos · ⏳ 6 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -76,7 +76,7 @@ Estado: ✅ 83 corregidos · 🟡 3 contenidos · ⏳ 7 pendientes · 🔎 1 sin
 | **S-0027** | Con exposición desconocida se mezclan fondos en ADU equivalentes y ADU equivalentes/s dentro de la misma puntuación. | ✅ `51ba56e` |
 | **S-0028** | Si falla una nueva auditoría, quedan habilitadas las referencias y decisiones de la auditoría anterior para apilar. | ✅ `4cefa59` |
 | **S-0029** | El autoestirado de las previsualizaciones FITS levanta demasiado el fondo y el ruido, dificultando la inspección de los lights. | ✅ `b2cbeba` |
-| **S-0030** | El pie del visor de Auditar ocupa varias líneas con fecha y motivos largos, reduciendo el espacio de la imagen FITS. | ⏳ |
+| **S-0030** | El pie del visor de Auditar ocupa varias líneas con fecha y motivos largos, reduciendo el espacio de la imagen FITS. | ✅ `836f23b` |
 | **E-0003** | Una pieza usada en dos roles deja el formulario y los totales desactualizados tras editar o borrar. | ✅ `dbc82e4` |
 | **E-0004** | El precio de un filtro editado no repinta el total hasta otra interacción. | ✅ `dbc82e4` |
 | **E-0005** | `NaN`/infinito y precio o peso negativos no se filtran antes de persistir un setup. | ✅ `a491664` |
