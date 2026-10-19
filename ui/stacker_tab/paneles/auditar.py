@@ -278,7 +278,7 @@ class PanelAuditar(QWidget):
         self._plot = pg.PlotWidget(enableMenu=False)
         # Conserva la gráfica alta cuando sobra sitio, pero cede altura a
         # la tabla/terminal en ventanas de 800 px con barra de título.
-        self._plot.setMinimumHeight(110)
+        self._plot.setMinimumHeight(90)
         self._plot.setMaximumHeight(130)
         self._plot.setMouseEnabled(x=False, y=False)
         self._plot.showGrid(x=True, y=True, alpha=0.15)

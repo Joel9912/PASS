@@ -10,7 +10,8 @@ from collections.abc import Callable
 from pathlib import Path
 from threading import Event
 
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QPalette
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -20,7 +21,9 @@ from PyQt6.QtWidgets import (
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
+    QSizePolicy,
     QStackedWidget,
+    QStylePainter,
     QVBoxLayout,
     QWidget,
 )
@@ -76,6 +79,24 @@ from .worker import CANCELADO, SirilWorker, arrancar_en_hilo
 
 #: Nombres de los cinco pasos; el orden ES el flujo del asistente.
 PASOS = ("Sesiones", "Calibrar", "Auditar", "Apilar", "Final")
+
+
+class _EstadoCompacto(QLabel):
+    """Conserva el texto accesible completo pero pinta una sola línea abreviada al ancho disponible."""
+
+    def __init__(self, text: str) -> None:
+        """Evita que el estado compita por ancho o añada filas a costa del panel."""
+        super().__init__(text)
+        self.setWordWrap(False)
+        self.setTextFormat(Qt.TextFormat.PlainText)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+
+    def paintEvent(self, event) -> None:
+        """Elide solo lo dibujado; QLabel.text y la ayuda conservan el mensaje íntegro."""
+        painter = QStylePainter(self)
+        text = self.fontMetrics().elidedText(self.text(), Qt.TextElideMode.ElideRight, self.contentsRect().width())
+        painter.drawItemText(self.contentsRect(), self.alignment(), self.palette(), self.isEnabled(),
+                             text, QPalette.ColorRole.WindowText)
 
 
 def _siril_del_usuario() -> str | None:
@@ -200,7 +221,8 @@ class StackerPage(QWidget):
         layout.addWidget(self._paneles, 1)
 
         nav = QHBoxLayout()
-        self._estado = QLabel("Elige la carpeta raíz y pulsa «Escanear».")
+        self._estado_operacion = "Elige la carpeta raíz y pulsa «Escanear»."
+        self._estado = _EstadoCompacto(self._estado_operacion)
         self._estado.setObjectName("HintLabel")
         nav.addWidget(self._estado, 1)
         self._limpiar = QPushButton("Limpiar working…")
@@ -273,8 +295,10 @@ class StackerPage(QWidget):
             self, "stacker", "Hay un trabajo de Apilador pendiente. ¿Deseas continuar?",
             self._draft_snapshot, self._restore_draft, self._block_draft,
         )
-        layout.addWidget(self._draft.label)
-        layout.addWidget(self._draft.button)
+        self._draft.label.hide()
+        nav.insertWidget(1, self._draft.button)
+        self._draft.status_changed.connect(self._actualizar_estado)
+        self._actualizar_estado()
         connect_controls(self._draft_controls, self._draft_changed)
         self.panel_auditar._tabla.itemChanged.connect(self._draft_changed)
         self.panel_auditar.seleccion_cambiada.connect(self._draft_changed)
@@ -1358,7 +1382,26 @@ class StackerPage(QWidget):
 
     def _decir(self, texto: str) -> None:
         """Actualiza la línea de estado bajo la navegación."""
-        self._estado.setText(texto)
+        self._estado_operacion = texto
+        self._actualizar_estado()
         from pass_logging import record_action
 
         record_action("apilador", texto)
+
+    def _actualizar_estado(self, _text: str = "") -> None:
+        """Combina operación y borrador en la navegación; un fallo de persistencia tiene prioridad."""
+        draft = getattr(self, "_draft", None)
+        status = draft.label.text() if draft is not None else ""
+        operation = self._estado_operacion.rstrip(".")
+        if status.startswith("No se pudo"):
+            text = f"{status} · {operation}"
+        elif status.startswith("Borrador guardado automáticamente"):
+            text = f"{operation} · Borrador guardado"
+        elif status and status != "Sin borrador pendiente.":
+            text = f"{operation} · {status.rstrip('.')}"
+        else:
+            text = operation
+        self._estado.setText(text)
+        detail = f"{self._estado_operacion}\n{status}".strip()
+        self._estado.setToolTip(detail)
+        self._estado.setAccessibleDescription(detail)

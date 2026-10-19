@@ -1580,6 +1580,111 @@ def test_controles_auditoria_comparten_filas_y_ancho():
     panel.close()
 
 
+@pytest.mark.parametrize("size", [(1536, 792), (1920, 990)])
+def test_ventana_auditoria_no_solapa_tabla_pie_y_controles(qapp, memory_db, monkeypatch, tmp_path, size, request):
+    """Reproduce el espacio útil a 125/100 %, incluyendo sidebar, pie y avisos de borrador."""
+    import os
+    import subprocess
+    import sys
+
+    if os.environ.get("PASS_LAYOUT_ISOLATED") != "1":
+        env = dict(os.environ, PASS_LAYOUT_ISOLATED="1", QT_SCALE_FACTOR="1.25" if size[0] == 1536 else "1")
+        result = subprocess.run(
+            [sys.executable, "-X", "utf8", "-m", "pytest", request.node.nodeid, "-q", "--tb=short"],
+            env=env, capture_output=True, text=True, encoding="utf-8", timeout=60)
+        assert result.returncode == 0, result.stdout + result.stderr
+        return
+
+    from PyQt6.QtCore import QPoint
+    from PyQt6.QtGui import QFontDatabase
+
+    from ui import main_window
+    from ui.stacker_tab import StackerPage
+    from ui.style import apply_style
+
+    previous_style = qapp.styleSheet()
+    previous_font = qapp.font()
+    font_id = QFontDatabase.addApplicationFont("C:/Windows/Fonts/segoeui.ttf")
+    apply_style(qapp)
+    monkeypatch.setattr(main_window, "_PAGE_BUILDERS", {"stacker_tab": StackerPage})
+    monkeypatch.setattr(main_window.MainWindow, "showMaximized", lambda self: None)
+    monkeypatch.setattr(main_window.MainWindow, "_install_bundled_catalogs", lambda self: None)
+    window = main_window.MainWindow()
+    page = window._paginas["stacker_tab"]
+    panel = page.panel_auditar
+    ref = LightRef(tmp_path / "frame.fit", "noche", None, 60)
+    try:
+        page._mostrar_paso(2)
+        panel.mostrar(Registro(tmp_path, "registro_", [ref]), [
+            FrameMetrics(str(ref.ruta), "noche", 4, .9, 1, 1, 0)])
+        panel._tabla.setCurrentCell(0, 1)
+        page._decir("Trabajo recuperado.")
+        page._draft._status("Borrador guardado automáticamente · trabajo pendiente.")
+        window.sidebar.nav.setCurrentRow(5)
+        window.resize(*size)
+        window.show()
+        qapp.processEvents()
+        assert (window.width(), window.height()) == size
+        splitter_bottom = panel._splitter.mapTo(panel, panel._splitter.rect().bottomLeft()).y()
+        for control in (panel._metrica, panel._ubicacion_horaria):
+            assert control.mapTo(panel, QPoint(0, 0)).y() > splitter_bottom
+        pie_bottom = panel._preview_pie.mapTo(panel, panel._preview_pie.rect().bottomLeft()).y()
+        assert panel._ubicacion_horaria.mapTo(panel, QPoint(0, 0)).y() > pie_bottom
+        assert not page._draft.label.isVisibleTo(page)
+        assert "Trabajo recuperado" in page._estado.text()
+        assert "Borrador guardado" in page._estado.text()
+    finally:
+        window.close()
+        window.deleteLater()
+        qapp.setStyleSheet(previous_style)
+        qapp.setFont(previous_font)
+        if font_id >= 0:
+            QFontDatabase.removeApplicationFont(font_id)
+
+
+def test_estado_unificado_prioriza_error_y_conserva_recuperacion(qapp, memory_db, monkeypatch):
+    """Compactar no oculta fallos de guardado ni desplaza el botón de recuperación a otra fila."""
+    import sqlite3
+
+    from PyQt6.QtCore import QPoint
+
+    from db import work_drafts
+    from ui.stacker_tab import StackerPage
+
+    page = StackerPage()
+    try:
+        page.resize(1536, 792)
+        page.show()
+        qapp.processEvents()
+        page._decir("Trabajo recuperado.")
+        page._draft.active = True
+
+        def fail_save(*args, **kwargs):
+            """Simula un fallo real de persistencia sin tocar el disco del usuario."""
+            raise sqlite3.OperationalError("disco lleno " * 50)
+
+        monkeypatch.setattr(work_drafts, "save", fail_save)
+        assert not page._draft.flush()
+        assert page._estado.text().startswith("No se pudo guardar el borrador")
+        assert "solo en memoria" in page._estado.toolTip()
+        assert "Trabajo recuperado" in page._estado.toolTip()
+        assert page._estado.accessibleDescription() == page._estado.toolTip()
+        page._decir("Auditoría lista.")
+        assert page._estado.text().startswith("No se pudo guardar el borrador")
+        page._draft.pending = True
+        page._draft._status("Borrador conservado. Recupéralo o descártalo antes de empezar otro.")
+        qapp.processEvents()
+        button = page._draft.button
+        assert button.isVisibleTo(page)
+        assert abs(button.mapTo(page, button.rect().center()).y()
+                   - page._estado.mapTo(page, page._estado.rect().center()).y()) <= 1
+        assert button.mapTo(page, QPoint(0, 0)).y() >= 0
+    finally:
+        page._draft.active = False
+        page.close()
+        page.deleteLater()
+
+
 def test_auditoria_tabla_compacta_centrada_y_visor_ampliado(tmp_path):
     """Frame no absorbe el ancho, Fondo es corto y el FITS gana alto real."""
     import numpy as np

@@ -5,7 +5,7 @@ import sqlite3
 from collections.abc import Callable
 from functools import wraps
 
-from PyQt6.QtCore import QObject, QTimer
+from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -136,6 +136,8 @@ def ask_recovery(parent: QWidget, title: str) -> str:
 class DraftRecovery(QObject):
     """Coordina la UI sin interpretar datos de negocio ni acceder a originales."""
 
+    status_changed = pyqtSignal(str)
+
     def __init__(
         self, owner: QWidget, workflow: str, title: str,
         snapshot: Callable[[], dict], restore: Callable[[dict], None],
@@ -242,4 +244,5 @@ class DraftRecovery(QObject):
     def _status(self, text: str) -> None:
         """Explica el estado con texto, sin afirmar éxito cuando hubo un error."""
         self.label.setText(text)
+        self.status_changed.emit(text)
         self.button.setVisible(self.pending)
