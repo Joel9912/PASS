@@ -106,7 +106,8 @@ def extract_metrics(registro: Registro, pesos: Pesos | None = None) -> list[Fram
     for m in metricas:
         m.transparency = fondo_min / m.background if fondo_min is not None and m.background is not None else None
     puntuar(metricas, pesos)
-    registro.capture_times = capture_dates(registro.frames)
+    registro.capture_sites.clear()
+    registro.capture_times = capture_dates(registro.frames, registro.capture_sites)
     return metricas
 
 

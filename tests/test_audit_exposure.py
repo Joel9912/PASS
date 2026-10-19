@@ -84,7 +84,7 @@ def test_ui_datos_ausentes_sin_ceros_ni_falso_rechazo_siril(qt_app, tmp_path):
         assert panel._tabla.item(row,8).text() == "Revisar"
         assert panel._tabla.item(row,0).flags() & Qt.ItemFlag.ItemIsUserCheckable
         panel._tabla.setCurrentCell(row,1)
-        assert "sin puntuación" in panel._preview_pie.text().lower()
+        assert "sin puntuación" in panel._preview_pie.toolTip().lower()
         panel._metrica.setCurrentIndex(panel._metrica.findData("background"))
         assert np.isfinite(panel._curva.getData()[1]).all()
         panel._usar_puntuacion.setChecked(False)

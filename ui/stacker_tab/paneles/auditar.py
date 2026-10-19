@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pyqtgraph as pg
-from PyQt6.QtCore import QEvent, Qt, pyqtSignal
+from PyQt6.QtCore import QDate, QEvent, QLocale, Qt, pyqtSignal
 from PyQt6.QtGui import (
     QColor,
     QImage,
@@ -25,7 +25,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from stacks.audit_metadata import chronological_indices
+from stacks.audit_metadata import chronological_indices, local_capture_time
 from stacks.frame_metrics import Evaluacion, FrameMetrics, Pesos, evaluar
 from stacks.global_pool import nombre_sesion
 from stacks.registration import Registro
@@ -56,6 +56,7 @@ class PanelAuditar(QWidget):
     auditar = pyqtSignal()    # «Registrar y auditar»
     descartar = pyqtSignal()  # «Descartar recomendados»
     seleccion_cambiada = pyqtSignal()  # selección masiva completada: guardar una sola vez
+    ubicacion_horaria_cambiada = pyqtSignal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         """Monta registro, pesos, tabla+miniatura, gráfica y resumen."""
@@ -67,6 +68,8 @@ class PanelAuditar(QWidget):
         self._evaluaciones: dict[str, Evaluacion] = {}  # ruta → veredicto
         self._previews: dict[str, QImage] = {}          # caché de miniaturas
         self._preview_img: QImage | None = None
+        self._ubicaciones: list[dict] = []
+        self._pie_completo = ""
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -81,7 +84,7 @@ class PanelAuditar(QWidget):
         intro_fila.addWidget(QLabel("Orden:"))
         self._orden = QComboBox()
         self._orden.addItem("Puntuación", "puntuacion")
-        self._orden.addItem("Sesión y fecha (UTC)", "cronologico")
+        self._orden.addItem("Sesión y fecha", "cronologico")
         self._orden.setToolTip(
             "Agrupa sesiones por su primera captura y ordena las tomas por DATE-OBS. "
             "Sin fecha compatible: al final de su sesión, en orden de registro. "
@@ -229,7 +232,9 @@ class PanelAuditar(QWidget):
         self._preview_pie = QLabel("")
         self._preview_pie.setObjectName("HintLabel")
         self._preview_pie.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._preview_pie.setWordWrap(True)
+        self._preview_pie.setWordWrap(False)
+        self._preview_pie.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self._preview_pie.installEventFilter(self)
         preview_layout.addWidget(self._preview_pie)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -256,6 +261,18 @@ class PanelAuditar(QWidget):
         self._metrica.currentIndexChanged.connect(self._pintar_grafica)
         grafica_fila.addWidget(self._metrica)
         grafica_fila.addStretch(1)
+        grafica_fila.addWidget(QLabel("Hora · ubicación alternativa:"))
+        self._ubicacion_horaria = QComboBox()
+        self._ubicacion_horaria.addItem("UTC", "")
+        self._ubicacion_horaria.setToolTip(
+            "Si el FITS identifica una ubicación guardada, se usa su desfase. "
+            "Sin posición se usa esta alternativa, recordada al reabrir. "
+            "En modo automático de la ubicación, el desfase es aproximado por longitud. "
+            "No calcula horario de verano histórico. "
+            "Sin datos para resolver el desfase se conserva UTC. No cambia fechas originales ni orden."
+        )
+        self._ubicacion_horaria.currentIndexChanged.connect(self._cambiar_hora)
+        grafica_fila.addWidget(self._ubicacion_horaria)
         layout.addLayout(grafica_fila)
 
         self._plot = pg.PlotWidget(enableMenu=False)
@@ -430,6 +447,41 @@ class PanelAuditar(QWidget):
         moment = self._registro.capture_times.get(path) if self._registro is not None else None
         return (moment.isoformat().replace("+00:00", " UTC")
                 if moment is not None else "Fecha no disponible o no compatible")
+
+    def configurar_ubicaciones(self, locations: list[dict], selected: str | None) -> None:
+        """Carga alternativas desde la página; solo una ubicación única se propone automáticamente."""
+        self._ubicaciones = locations
+        self._ubicacion_horaria.blockSignals(True)
+        self._ubicacion_horaria.clear()
+        self._ubicacion_horaria.addItem("UTC", "")
+        for location in locations:
+            self._ubicacion_horaria.addItem(location["name"], str(location["id"]))
+        if selected is None and len(locations) == 1:
+            selected = str(locations[0]["id"])
+        self._ubicacion_horaria.setCurrentIndex(max(0, self._ubicacion_horaria.findData(selected or "")))
+        self._ubicacion_horaria.blockSignals(False)
+        self._alSeleccionar()
+
+    def _cambiar_hora(self, _index: int) -> None:
+        """Cambia presentación y comunica la preferencia sin tocar métricas ni casillas."""
+        self.ubicacion_horaria_cambiada.emit(self._ubicacion_horaria.currentData() or "")
+        self._alSeleccionar()
+
+    def _fecha_local(self, path: str) -> tuple[str, str]:
+        """Presenta día/mes/hora compactos y mantiene UTC/año/procedencia en el detalle."""
+        moment = self._registro.capture_times.get(path) if self._registro is not None else None
+        if moment is None:
+            return "Sin fecha", self._fecha_texto(path)
+        selected = self._ubicacion_horaria.currentData()
+        default = next((loc for loc in self._ubicaciones if str(loc["id"]) == selected), None)
+        local, source = local_capture_time(
+            moment, self._registro.capture_sites.get(path), self._ubicaciones, default)
+        locale = QLocale(QLocale.Language.Spanish)
+        day = locale.toString(QDate(local.year, local.month, local.day), "d MMMM")
+        suffix = " UTC" if local.utcoffset().total_seconds() == 0 else ""
+        if "aproximado por longitud" in source:
+            suffix += " ≈"
+        return f"{day} {local:%H:%M:%S}{suffix}", f"{local.isoformat()}\n{source}\nOriginal: {self._fecha_texto(path)}"
 
     def _insertar_fila(
         self,
@@ -617,7 +669,7 @@ class PanelAuditar(QWidget):
         posicion = fila + 1 if self._orden.currentData() == "cronologico" else indice
         if ev is None:
             self._seleccion_plot.setData([], [])
-            pie = f"{nombre.text()} · descartado por SirIL al registrar"
+            estado, detalle = "Descartar: sí (SirIL)", "SirIL descartó esta toma al registrar."
         else:
             atributo = self._metrica.currentData()
             value = getattr(ev.metricas, atributo)
@@ -625,13 +677,13 @@ class PanelAuditar(QWidget):
                 self._seleccion_plot.setData([posicion], [float(value)])
             else:
                 self._seleccion_plot.setData([], [])
-            pie = (f"{nombre.text()} · {ev.metricas.weighted:.1f} puntos" if ev.metricas.weighted is not None
-                   else f"{nombre.text()} · sin puntuación")
-            if ev.revisar:
-                pie += f" · revisar: {ev.motivo}"
-            elif ev.descartada:
-                pie += f" · descartar: {ev.motivo}"
-        pie += " · " + self._fecha_texto(ruta)
+            estado = "Revisar" if ev.revisar else f"Descartar: {'sí' if ev.descartada else 'no'}"
+            detalle = (f"{ev.metricas.weighted:.1f} puntos" if ev.metricas.weighted is not None
+                       else "Sin puntuación") + (f"\n{ev.motivo}" if ev.motivo else "")
+        fecha, origen = self._fecha_local(ruta)
+        pie = f"{nombre.text()} · {fecha} · {estado}"
+        self._preview_pie.setToolTip(f"{ruta}\n{origen}\nRecomendación: {estado}\n{detalle}\nLa casilla es la decisión manual.")
+        self._preview_pie.setAccessibleDescription(self._preview_pie.toolTip())
         self._mostrar_preview(Path(ruta), pie)
 
     def _mostrar_preview(self, ruta: Path, pie: str) -> None:
@@ -644,7 +696,8 @@ class PanelAuditar(QWidget):
                     self._previews.clear()
                 self._previews[str(ruta)] = qimg
         self._preview_img = qimg
-        self._preview_pie.setText(pie)
+        self._pie_completo = pie
+        self._ajustar_pie()
         if qimg is None:
             self._preview_label.setText("Sin vista previa: ¿FITS ilegible?")
             return
@@ -671,6 +724,11 @@ class PanelAuditar(QWidget):
         super().resizeEvent(evento)
         self._escalar_preview()
 
+    def _ajustar_pie(self) -> None:
+        """Abrevia solo la presentación si falta ancho, sin reservar otra línea a costa del FITS."""
+        self._preview_pie.setText(self._preview_pie.fontMetrics().elidedText(
+            self._pie_completo, Qt.TextElideMode.ElideMiddle, max(0, self._preview_pie.width())))
+
     def eventFilter(self, objeto, evento) -> bool:
         """El label de la miniatura cambia de tamaño con el layout: reescalar ahí.
 
@@ -680,12 +738,17 @@ class PanelAuditar(QWidget):
         """
         if objeto is self._preview_label and evento.type() == QEvent.Type.Resize:
             self._escalar_preview()
+        if objeto is getattr(self, "_preview_pie", None) and evento.type() == QEvent.Type.Resize:
+            self._ajustar_pie()
         return super().eventFilter(objeto, evento)
 
     def _limpiar_seleccion(self) -> None:
         """Tras reordenar: sin anillo y la miniatura vuelve al texto inicial."""
         self._seleccion_plot.setData([], [])
         self._preview_img = None
+        self._pie_completo = ""
+        self._preview_pie.setToolTip("")
+        self._preview_pie.setAccessibleDescription("")
         self._preview_label.setText("Selecciona un frame para verlo.")
         self._preview_pie.setText("")
 

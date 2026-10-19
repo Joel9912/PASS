@@ -7,7 +7,7 @@ Cambios relevantes para quienes usan PASS. Los detalles de implementación y cad
 Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado**; se completará cuando se apruebe el lanzamiento.
 
 ### Añadido
-- Orden de revisión «Sesión y fecha (UTC)» en Auditar, basado en `DATE-OBS`, sin inferir fechas de los nombres. Conserva casillas y toma visible; la fecha aparece junto al FITS y en la ayuda de Sesión. La gráfica acompaña el orden cronológico como secuencia de revisión, con intervalos no a escala; las fechas no disponibles quedan identificadas.
+- Orden de revisión «Sesión y fecha» en Auditar, basado en `DATE-OBS`, sin inferir fechas de los nombres. Conserva casillas y toma visible. La gráfica acompaña el orden cronológico como secuencia de revisión, con intervalos no a escala. El visor presenta hora local según una ubicación guardada coincidente con la posición FITS o una alternativa seleccionable y recordada; mantiene UTC para ordenar. Los desfases automáticos por longitud se indican como aproximados, sin prometer horario de verano histórico.
 - Botón «Seleccionar todo» en Auditar: vuelve a marcar las tomas utilizables sin habilitar las rechazadas por SirIL ni cambiar criterios. La selección masiva se conserva en el borrador.
 - Auditar permite elegir el corte FWHM `media + (media − mínimo)/6` por sesión y filtro, con límite consultable por toma. El descarte por puntuación puede desactivarse sin ocultar el ranking ni alterar casillas; se conservan las opciones anteriores por defecto y los borradores antiguos siguen siendo recuperables.
 - Apilador conserva un borrador de sesiones, opciones y descartes, independiente del log. Al volver ofrece recuperar sin iniciar SirIL; comprueba entradas y resultados antes de acreditar pasos. El registro final se confirma como punto de recuperación antes de apilar, y puede reutilizarse con las mismas opciones de registro y tomas. Descartar el borrador no borra imágenes; los resultados parciales existentes no se sobrescriben.
@@ -21,6 +21,7 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 - Captura Ideal reserva al menos cinco minutos dentro de ambos extremos de la noche astronómica; los márgenes válidos quedan como Posible.
 
 ### Corregido
+- El pie del visor FITS de Auditar mantiene una sola línea con fecha corta y descarte sí/no (o Revisar). Los motivos, puntuación, año, UTC y procedencia horaria quedan en la ayuda, sin reducir la imagen por textos largos (S-0030).
 - Auditoría deja fondo por segundo y proxy de transparencia sin evaluar cuando falta la exposición, en lugar de mezclar unidades. Muestra «Revisar» si un criterio activo necesita esos datos y permite evaluar solo las métricas estelares al desactivar los criterios dependientes (S-0027).
 - Previsualizaciones FITS con autoestirado más moderado: fondo oscuro sin levantar tanto el ruido, conservando estrellas y contraste de sombras/nubes. Solo cambia la visualización, no las imágenes ni los criterios de descarte (S-0029).
 - Auditoría interpreta FWHM y FWHM ponderado de SirIL por separado; muestra estrellas, ponderado y canal en la ayuda del FWHM. Valida la secuencia y rechaza datos no finitos antes de puntuar; respeta la selección de SirIL y su canal de registro RGB (S-0024, S-0025, S-0026).

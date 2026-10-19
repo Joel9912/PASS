@@ -80,6 +80,7 @@ class Registro:
     frames: list[LightRef]    # refs en el orden de índices de la secuencia
     transformadas: bool = True  # False: identidad → apilar la entrada (sin r_*)
     capture_times: dict[str, datetime | None] = field(default_factory=dict, compare=False, repr=False)
+    capture_sites: dict[str, tuple[float, float] | None] = field(default_factory=dict, compare=False, repr=False)
 
     @property
     def ruta_seq(self) -> Path:

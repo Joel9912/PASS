@@ -182,6 +182,9 @@ class StackerPage(QWidget):
         self.panel_sesiones = PanelSesiones()
         self.panel_calibrar = PanelCalibrar()
         self.panel_auditar = PanelAuditar()
+        self.panel_auditar.ubicacion_horaria_cambiada.connect(
+            lambda value: set_setting("audit_default_location", value))
+        self._recargar_ubicacion_horaria()
         self.panel_apilar = PanelApilar()
         self.panel_final = PanelFinal()
         self._paneles_lista = [
@@ -279,7 +282,14 @@ class StackerPage(QWidget):
     def showEvent(self, event) -> None:
         """Ofrece recuperar al entrar; no lanza escaneo, calibración ni SirIL."""
         super().showEvent(event)
+        self._recargar_ubicacion_horaria()
         self._draft.entered()
+
+    def _recargar_ubicacion_horaria(self) -> None:
+        """Lee ubicaciones en el hilo UI; el panel y el backend no consultan SQLite."""
+        from equipment.localizations import list_locations
+
+        self.panel_auditar.configurar_ubicaciones(list_locations(), get_setting("audit_default_location"))
 
     def _controles_borrador(self) -> dict:
         """Declara entradas del asistente, no el log ni las miniaturas derivadas."""

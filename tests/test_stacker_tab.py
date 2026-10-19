@@ -1488,7 +1488,7 @@ def test_seleccionar_un_frame_carga_su_miniatura(tmp_path):
     assert panel._preview_img is not None
     assert (panel._preview_img.width(), panel._preview_img.height()) == (48, 64)
     assert "pp_light_00001.fit" in panel._preview_pie.text()
-    assert "100.0 puntos" in panel._preview_pie.text()  # único frame: el mejor
+    assert "100.0 puntos" in panel._preview_pie.toolTip()  # detalle, no roba espacio al FITS
     assert panel._tabla.item(0, 5).text() == "100.0"
     assert panel._splitter.minimumHeight() >= 320
 

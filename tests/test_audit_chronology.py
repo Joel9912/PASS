@@ -114,7 +114,8 @@ def test_ui_orden_temporal_no_aplica_pesos_pendientes_y_preserva_seleccion(qt_ap
         assert panel.aceptados() == [2]
         assert panel._tabla.item(panel._tabla.currentRow(),0).data(Qt.ItemDataRole.UserRole) == 2
         assert [(e.metricas.weighted,e.motivo) for e in panel._evaluaciones.values()] == previous
-        assert "2026-03-02" in panel._preview_pie.text() and "UTC" in panel._preview_pie.text()
+        assert "2 marzo" in panel._pie_completo and "UTC" in panel._pie_completo
+        assert "2026-03-02" in panel._preview_pie.toolTip()
         assert "2026-03-01" in panel._tabla.item(0,2).toolTip()
         assert panel._seleccion_plot.data["x"].tolist() == [3]
         assert "no a escala" in panel._plot.getAxis("bottom").labelText
@@ -125,3 +126,119 @@ def test_ui_orden_temporal_no_aplica_pesos_pendientes_y_preserva_seleccion(qt_ap
         assert not panel._orden.isEnabled()
     finally:
         panel.deleteLater()
+
+
+@pytest.mark.parametrize("site,selected,expected,source", [
+    (None, 1, -6, "alternativa"),
+    ((10.0, -84.0), 2, -6, "FITS coincidente"),
+    ((40.0, -3.0), 1, 2, "FITS coincidente"),
+    ((20.0, 30.0), 1, 0, "sin desfase"),
+    (None, None, 0, "UTC"),
+])
+def test_hora_local_prioriza_captura_sobre_alternativa(site, selected, expected, source):
+    """El desfase afecta solo la presentación; no se adivina una zona por longitud."""
+    from stacks.audit_metadata import local_capture_time
+
+    locations = [dict(id=1, name="Casa", latitude=10., longitude=-84., utc_offset_hours=-6),
+                 dict(id=2, name="Viaje", latitude=40., longitude=-3., utc_offset_hours=2)]
+    moment = datetime(2026, 3, 1, 5, 18, 12, tzinfo=UTC)
+    default = next((loc for loc in locations if loc["id"] == selected), None)
+    local, detail = local_capture_time(moment, site, locations, default)
+    assert local.utcoffset() == timedelta(hours=expected)
+    assert local == moment
+    assert source in detail
+    if expected == -6:
+        assert (local.day, local.hour, local.minute) == (28, 23, 18)
+
+
+@pytest.mark.parametrize("offset", [None, float("nan"), 15])
+def test_ubicacion_sin_desfase_valido_conserva_utc(offset):
+    """Un sitio sin huso no se presenta como si su longitud fuera una zona política."""
+    from stacks.audit_metadata import local_capture_time
+
+    moment = datetime(2026, 3, 1, tzinfo=UTC)
+    local, detail = local_capture_time(moment, None, [], dict(name="X", utc_offset_hours=offset))
+    assert local.tzinfo == UTC and "sin desfase" in detail
+
+
+def test_huso_automatico_ubicacion_se_etiqueta_aproximado():
+    """Mantiene la convención de PASS sin presentarla como zona política ni horario histórico."""
+    from stacks.audit_metadata import local_capture_time
+
+    moment = datetime(2026, 3, 1, 5, 18, tzinfo=UTC)
+    local, detail = local_capture_time(moment, None, [],
+                                     dict(name="Casa", longitude=-84, utc_offset_hours=None))
+    assert local.hour == 23 and local.day == 28
+    assert "aproximado por longitud" in detail
+
+
+def test_extractor_conserva_posicion_fits_sin_modificarlo(tmp_path):
+    """Recoge coordenadas del observatorio, nunca RA/DEC del objeto."""
+    path = tmp_path / "capture.fit"
+    fits.writeto(path, np.zeros((2, 2)), fits.Header({
+        "DATE-OBS": "2026-03-01T05:18:12", "OBSGEO-B": 10., "OBSGEO-L": -84.}))
+    before = path.read_bytes()
+    sites = {}
+    dates = capture_dates([LightRef(path, "s", None, 60)], sites)
+    assert sites[str(path)] == (10., -84.)
+    assert dates[str(path)].hour == 5
+    assert path.read_bytes() == before
+
+
+def test_pie_compacto_no_reduce_visor_y_revela_motivos(qt_app, tmp_path):
+    """Un motivo largo no crea segunda línea; hora alternativa no cambia orden ni selección."""
+    from ui.stacker_tab.paneles.auditar import PanelAuditar
+
+    ref = LightRef(tmp_path / "f.fit", "noche", None, 60)
+    registry = Registro(tmp_path, "probe_", [ref], False)
+    registry.capture_times = {str(ref.ruta): datetime(2026, 3, 1, 5, 18, 12, tzinfo=UTC)}
+    panel = PanelAuditar()
+    try:
+        panel.configurar_ubicaciones([dict(id=1, name="Casa", utc_offset_hours=-6)], "1")
+        panel.mostrar(registry, [FrameMetrics(str(ref.ruta), "noche", 4, .9, 1, 1, 0)])
+        panel.resize(1500, 760)
+        panel.show()
+        qt_app.processEvents()
+        panel._tabla.setCurrentCell(0, 1)
+        qt_app.processEvents()
+        height = panel._preview_label.height()
+        assert "28 febrero 23:18:12" in panel._pie_completo
+        assert "Descartar: no" in panel._pie_completo
+        assert "alternativa" in panel._preview_pie.toolTip()
+        assert not panel._preview_pie.wordWrap()
+        panel._evaluaciones[str(ref.ruta)].descartada = True
+        panel._evaluaciones[str(ref.ruta)].motivo = "Motivo muy largo " * 100
+        panel._alSeleccionar()
+        qt_app.processEvents()
+        assert panel._preview_label.height() == height
+        assert "Descartar: sí" in panel._pie_completo
+        assert "Motivo muy largo" not in panel._preview_pie.text()
+        assert "Motivo muy largo" in panel._preview_pie.toolTip()
+        assert panel._preview_pie.height() < 2 * panel._preview_pie.fontMetrics().lineSpacing()
+        assert panel.aceptados() == [1]
+    finally:
+        panel.close()
+        panel.deleteLater()
+
+
+def test_ubicacion_alternativa_se_recuerda_sin_elegir_entre_varias(qt_app, memory_db):
+    """La página persiste una elección explícita y la vuelve a cargar sin usar la primera ubicación."""
+    from db.settings import get_setting
+    from ui.stacker_tab import StackerPage
+
+    first = memory_db.execute(
+        "INSERT INTO locations(name,latitude,longitude,utc_offset_hours) VALUES ('A',10,-84,-6)").lastrowid
+    second = memory_db.execute(
+        "INSERT INTO locations(name,latitude,longitude,utc_offset_hours) VALUES ('B',40,-3,2)").lastrowid
+    memory_db.commit()
+    page = StackerPage()
+    try:
+        selector = page.panel_auditar._ubicacion_horaria
+        assert selector.currentData() == ""
+        selector.setCurrentIndex(selector.findData(str(second)))
+        assert get_setting("audit_default_location") == str(second)
+        page._recargar_ubicacion_horaria()
+        assert selector.currentData() == str(second)
+        assert selector.currentData() != str(first)
+    finally:
+        page.deleteLater()
