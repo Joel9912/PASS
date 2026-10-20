@@ -70,6 +70,12 @@ def pipeline(qt_app, memory_db, tmp_path, monkeypatch):
     page.panel_sesiones.poner_raiz(str(source.parent))
     page.panel_apilar._nombre.setText("pila")
     page._mostrar_paso(3)
+    limit = time.monotonic() + 5
+    while page._geometry is None and time.monotonic() < limit:
+        qt_app.processEvents()
+        time.sleep(.005)
+    assert page._geometry is not None
+    assert page._geometry_future.done()
     page._draft.changed()
     yield page, session, working
     page._parar_todo()
