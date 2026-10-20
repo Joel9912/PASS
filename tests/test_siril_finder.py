@@ -1,6 +1,6 @@
 """stacks/siril_finder: localización del binario de SirIL y versión instalada.
 
-El descubrimiento (PATH primero, ruta guardada que aporta el llamante) no
+El descubrimiento (ruta guardada primero, PATH solo sin configuración) no
 toca la BD: `settings` lo lee la UI y se lo pasa por parámetro (A-03). La
 lectura de ``--version`` va con ``subprocess.run`` sustituido: nunca se
 ejecuta SirIL.
@@ -43,10 +43,53 @@ def test_find_siril_falls_back_to_saved_path(monkeypatch):
     )
 
 
-def test_find_siril_prefers_path_over_saved(monkeypatch):
-    """El PATH del sistema tiene prioridad sobre la ruta guardada."""
-    monkeypatch.setattr(siril_finder, "which", lambda _name: "C:/bin/siril.exe")
-    assert siril_finder.find_siril("ruta-antigua") == "C:/bin/siril.exe"
+@pytest.mark.parametrize("saved", ["ruta-inexistente", "D:/otra instalacion/siril-cli.exe"])
+def test_find_siril_prefiere_guardada_sin_fallback(monkeypatch, saved):
+    """La elección, incluso inválida, no se sustituye por otra instalación del PATH."""
+    calls = []
+    monkeypatch.setattr(siril_finder, "which", lambda name: calls.append(name) or "C:/bin/siril.exe")
+    assert siril_finder.find_siril(saved) == saved
+    assert calls == []
+
+
+def test_find_siril_auto_prefiere_cli(monkeypatch):
+    """Sin elección se permite detección, con preferencia por CLI sobre GUI."""
+    monkeypatch.setattr(siril_finder, "which", lambda name: f"D:/auto/{name}.exe")
+    assert siril_finder.find_siril("") == "D:/auto/siril-cli.exe"
+
+
+@pytest.mark.parametrize("present", [True, False])
+def test_gui_configurada_no_salta_a_otra_instalacion(monkeypatch, tmp_path, present):
+    """La apertura gráfica busca solo la compañera de la instalación elegida."""
+    cli = tmp_path / "siril-cli.exe"
+    cli.touch()
+    gui = tmp_path / "siril.exe"
+    if present:
+        gui.touch()
+    calls = []
+    monkeypatch.setattr(siril_finder, "which", lambda name: calls.append(name) or "D:/otra/siril.exe")
+    assert siril_finder.find_siril_gui(str(cli)) == (str(gui) if present else None)
+    assert calls == []
+
+
+def test_ruta_invalida_avisa_sin_ejecutar_el_path(monkeypatch, tmp_path):
+    """El runner informa del fallo de la elección en lugar de ejecutar otra instalación."""
+    from stacks import siril_runner
+
+    selected = str(tmp_path / "inexistente.exe")
+    monkeypatch.setattr(siril_finder, "which", lambda name: "D:/otra/siril.exe")
+    calls = []
+
+    def start(args, **kwargs):
+        """Falla de forma controlada sin iniciar procesos externos."""
+        calls.append(args[0])
+        raise FileNotFoundError("Binario configurado ausente")
+
+    monkeypatch.setattr(siril_runner.subprocess, "Popen", start)
+    with (siril_runner.binario_de_tarea(siril_finder.find_siril(selected)),
+          pytest.raises(siril_runner.SirilError, match="No se pudo arrancar SirIL")):
+        siril_runner.ejecutar_script(["noop"])
+    assert calls == [selected]
 
 
 def test_find_siril_ignores_empty_saved_path(monkeypatch):

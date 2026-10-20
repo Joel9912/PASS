@@ -21,6 +21,7 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 - Captura Ideal reserva al menos cinco minutos dentro de ambos extremos de la noche astronómica; los márgenes válidos quedan como Posible.
 
 ### Corregido
+- La ruta de SirIL elegida en Configuración tiene prioridad sobre PATH. Si es inválida se informa del fallo sin usar otra instalación; «Abrir en SirIL» respeta también la instalación elegida (C-0004).
 - Apilador reúne el estado del trabajo y del borrador en una sola fila junto a la navegación, sin ocultar errores de guardado ni el acceso a recuperar. La gráfica de Auditar puede ceder más altura para dejar separados la tabla, el pie FITS y los controles inferiores (S-0031).
 - El pie del visor FITS de Auditar mantiene una sola línea con fecha corta y descarte sí/no (o Revisar). Los motivos, puntuación, año, UTC y procedencia horaria quedan en la ayuda, sin reducir la imagen por textos largos (S-0030).
 - Auditoría deja fondo por segundo y proxy de transparencia sin evaluar cuando falta la exposición, en lugar de mezclar unidades. Muestra «Revisar» si un criterio activo necesita esos datos y permite evaluar solo las métricas estelares al desactivar los criterios dependientes (S-0027).

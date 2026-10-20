@@ -3,6 +3,10 @@
 La ``QApplication`` viene del fixture ``qt_app`` de ``conftest.py``.
 """
 
+import pytest
+
+pytestmark = pytest.mark.usefixtures("qt_app")
+
 
 def _config_dialog(monkeypatch, find_path, *, real_probe=False):
     """Crea un ``ConfigDialog`` de prueba: sin BD y con SirIL simulado.

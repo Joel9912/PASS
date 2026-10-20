@@ -114,15 +114,18 @@ def test_final_muestra_preview_rgb_y_fallo_legible(tmp_path):
     panel.close()
 
 
-def test_final_abre_fits_seleccionado_en_siril_grafico(tmp_path, monkeypatch):
+def test_final_abre_fits_seleccionado_en_siril_grafico(tmp_path, monkeypatch, memory_db):
     """El botón lanza el GUI con la ruta elegida, no el CLI de procesado."""
+    from db.settings import set_setting
     from ui.stacker_tab.paneles import final as panel_final
 
     gui = tmp_path / "siril.exe"
     gui.touch()
     imagen = tmp_path / "final.fit"
     imagen.touch()
-    monkeypatch.setattr(panel_final, "find_siril", lambda _ruta_guardada=None: str(tmp_path / "siril-cli.exe"))
+    cli = tmp_path / "siril-cli.exe"
+    cli.touch()
+    set_setting("siril_path", str(cli))
     llamadas = []
     monkeypatch.setattr(panel_final.subprocess, "Popen", lambda args: llamadas.append(args))
     panel = panel_final.PanelFinal()
@@ -130,6 +133,29 @@ def test_final_abre_fits_seleccionado_en_siril_grafico(tmp_path, monkeypatch):
                   salidas=[imagen])
     panel._siril_boton.click()
     assert llamadas == [[str(gui), str(imagen)]]
+
+
+def test_final_no_abre_otra_instalacion_si_configurada_invalida(tmp_path, monkeypatch, memory_db):
+    """El panel final respeta la elección fallida aunque haya una GUI distinta en PATH."""
+    from db.settings import set_setting
+    from stacks import siril_finder
+    from ui.stacker_tab.paneles import final as panel_final
+
+    set_setting("siril_path", str(tmp_path / "inexistente.exe"))
+    monkeypatch.setattr(siril_finder, "which", lambda name: "D:/otra/siril.exe")
+    opened, warnings = [], []
+    monkeypatch.setattr(panel_final.subprocess, "Popen", lambda args: opened.append(args))
+    monkeypatch.setattr(panel_final.QMessageBox, "warning", lambda *args: warnings.append(args[-1]))
+    image = tmp_path / "final.fit"
+    image.touch()
+    panel = panel_final.PanelFinal()
+    try:
+        panel.mostrar(nombre="final", sesiones=1, registrados=1, descartados=0, salidas=[image])
+        panel._siril_boton.click()
+        assert opened == []
+        assert len(warnings) == 1 and "Configuración" in warnings[0]
+    finally:
+        panel.deleteLater()
 
 
 def test_autoestirado_resalta_senal_tenue_sin_tocar_datos():

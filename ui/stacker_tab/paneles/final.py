@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
 )
 
 from db.settings import get_setting
-from stacks.siril_finder import SETTINGS_KEY, find_siril, find_siril_gui
+from stacks.siril_finder import SETTINGS_KEY, find_siril_gui
 
 from ..pasos_common import (
     _pista,
@@ -159,11 +159,10 @@ class PanelFinal(QWidget):
         if item is None:
             return
         ruta = Path(item.toolTip())
-        cli = find_siril(get_setting(SETTINGS_KEY) or None)
-        candidato = Path(cli).with_name("siril.exe") if cli else None
-        ejecutable = candidato if candidato and candidato.is_file() else find_siril_gui()
+        ejecutable = find_siril_gui(get_setting(SETTINGS_KEY) or None)
         if not ejecutable or not ruta.is_file():
-            QMessageBox.warning(self, "SirIL", "No se encontró SirIL gráfico o el FITS ya no existe.")
+            QMessageBox.warning(self, "SirIL", "No se encontró SirIL gráfico en la instalación elegida "
+                                "(o en PATH si no hay configuración), o el FITS ya no existe. Revisa Configuración.")
             return
         try:
             subprocess.Popen([str(ejecutable), str(ruta)])
