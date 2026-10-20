@@ -7,8 +7,10 @@ recorrido. Cada fase corre en un ``QThread`` (``worker.SirilWorker``): la
 ventana nunca se congela y «Cancelar» mata la corrida de SirIL en curso.
 """
 from collections.abc import Callable
+from concurrent.futures import CancelledError, ThreadPoolExecutor
 from pathlib import Path
 from threading import Event
+from weakref import ref
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QPalette
@@ -49,6 +51,7 @@ from stacks.registration import (
     auditoria_guardada,
     register_pool,
 )
+from stacks.session_fov import FieldSurvey, survey_sessions
 from stacks.session_parser import (
     FichaFITS,
     Session,
@@ -79,6 +82,7 @@ from .worker import CANCELADO, SirilWorker, arrancar_en_hilo
 
 #: Nombres de los cinco pasos; el orden ES el flujo del asistente.
 PASOS = ("Sesiones", "Calibrar", "Auditar", "Apilar", "Final")
+_FOV_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="session-fov")
 
 
 class _EstadoCompacto(QLabel):
@@ -149,6 +153,7 @@ class StackerPage(QWidget):
     #: toca en el hilo principal (SQLite exige el mismo hilo que la creó).
     dato = pyqtSignal(object)
     registro_terminado = pyqtSignal(object)
+    _campos_listos = pyqtSignal(int, object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         """Monta barra de pasos, los 5 paneles, navegación, progreso y log."""
@@ -159,6 +164,13 @@ class StackerPage(QWidget):
         self.sesiones: list[Session] = []
         self._exposiciones: dict[str, list[float]] = {}  # sesión → exposición por frame
         self._fichas: dict[str, FichaFITS] = {}  # sesión → cabeceras FITS
+        self._campos: FieldSurvey | None = None
+        self._fov_generation = 0
+        self._fov_future = None
+        self._fov_cancel_state = [Event()]
+        cancel_state = self._fov_cancel_state
+        self.destroyed.connect(lambda *_: cancel_state[0].set())
+        self._campos_listos.connect(self._recibir_campos)
         self._calibradas: set[str] = set()
         self.registro: Registro | None = None
         self.metricas: list[FrameMetrics] | None = None
@@ -315,6 +327,61 @@ class StackerPage(QWidget):
 
         self.panel_auditar.configurar_ubicaciones(list_locations(), get_setting("audit_default_location"))
 
+    def _cancelar_revision_campos(self) -> None:
+        """Invalida resultados tardíos sin tocar permisos, borradores ni decisiones de auditoría."""
+        self._fov_generation += 1
+        self._fov_cancel_state[0].set()
+        if self._fov_future is not None:
+            self._fov_future.cancel()
+        self._fov_future = None
+
+    def _revisar_campos(self) -> None:
+        """Compara solo metadatos fuera de Qt; recuperar nunca inicia SirIL ni procesa imágenes."""
+        self._cancelar_revision_campos()
+        self._campos = None
+        self.panel_sesiones.poner_campos(None)
+        if not self.sesiones:
+            return
+        cancelled = Event()
+        self._fov_cancel_state[0] = cancelled
+        generation, owner = self._fov_generation, ref(self)
+
+        def checkpoint():
+            """Interrumpe comparaciones obsoletas o canceladas entre lecturas y parejas."""
+            if cancelled.is_set():
+                raise CancelledError
+
+        future = _FOV_EXECUTOR.submit(survey_sessions, list(self.sesiones), checkpoint)
+        self._fov_future = future
+
+        def deliver(done):
+            """Entrega por señal, sin retener la página ni llamar widgets desde el worker."""
+            try:
+                result = done.result()
+            except CancelledError:
+                return
+            except Exception as exc:
+                result = exc
+            page = owner()
+            if page is not None and not cancelled.is_set():
+                try:
+                    page._campos_listos.emit(generation, result)
+                except RuntimeError:
+                    pass  # la página pudo destruirse mientras acababa la lectura
+
+        future.add_done_callback(deliver)
+
+    def _recibir_campos(self, generation: int, result: object) -> None:
+        """Aplica solo la generación vigente y nunca invalida ni modifica la selección de lights."""
+        if generation != self._fov_generation:
+            return
+        if isinstance(result, FieldSurvey):
+            self._campos = result
+            self.panel_sesiones.poner_campos(result)
+        else:
+            self._log(f"No se pudo comparar el FOV de las sesiones: {result}")
+            self.panel_sesiones.poner_campos(FieldSurvey(classification="Revisar FOV · comparación no disponible"))
+
     def _controles_borrador(self) -> dict:
         """Declara entradas del asistente, no el log ni las miniaturas derivadas."""
         controls = {"root": self.panel_sesiones._raiz}
@@ -435,6 +502,12 @@ class StackerPage(QWidget):
             except (OSError, ValueError, KeyError, TypeError) as exc:
                 notices.append(f"Registro final no recuperable: {exc}.")
         self.panel_sesiones.mostrar(sessions, self._calibradas, self._exposiciones, self._fichas)
+        if inputs_ok:
+            self._revisar_campos()
+        else:
+            self._cancelar_revision_campos()
+            self._campos = None
+            self.panel_sesiones.poner_campos(None)
         self.panel_calibrar.mostrar_pendientes(sessions, self._calibradas)
         limit = 3 if self._auditado else 2 if self._calibrado else 1 if inputs_ok and sessions else 0
         self._mostrar_paso(min(data["step"], limit))
@@ -666,6 +739,9 @@ class StackerPage(QWidget):
         """Vuelve al principio (el log se conserva por si hay que depurar)."""
         if self._worker is not None or not self._draft.clear():
             return
+        self._cancelar_revision_campos()
+        self._campos = None
+        self.panel_sesiones.poner_campos(None)
         self._input_stamps = {}
         self._calibration_checkpoints = {}
         self._preserved_checkpoints = {}
@@ -760,6 +836,7 @@ class StackerPage(QWidget):
             self.panel_sesiones.mostrar(
                 sesiones, self._calibradas, exposiciones, fichas
             )
+            self._revisar_campos()
             self.panel_calibrar.mostrar_pendientes(sesiones, self._calibradas)
             self._decir(f"{len(sesiones)} sesiones en {raiz}.")
             self._capture_calibration_checkpoints()
@@ -1284,6 +1361,7 @@ class StackerPage(QWidget):
 
     def _parar_todo(self) -> None:
         """Cierre de la aplicación: ninguna tarea ni SirIL se quedan colgados."""
+        self._cancelar_revision_campos()
         if hasattr(self, "_draft"):
             self._draft.flush()
         if self._worker is not None:

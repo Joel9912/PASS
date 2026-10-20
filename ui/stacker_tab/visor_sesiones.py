@@ -12,9 +12,19 @@ from pathlib import Path
 from weakref import ref
 
 from PyQt6.QtCore import QPoint, QPointF, QRectF, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QImage, QMouseEvent, QPainter, QPen, QWheelEvent
+from PyQt6.QtGui import (
+    QColor,
+    QFont,
+    QImage,
+    QMouseEvent,
+    QPainter,
+    QPen,
+    QPolygonF,
+    QWheelEvent,
+)
 from PyQt6.QtWidgets import QWidget
 
+from stacks.session_fov import FieldSurvey
 from stacks.session_parser import FichaFITS, campo_vision
 from ui.planner_tab.planificacion.planetario_visual import (
     PlanetarioVisual,
@@ -34,6 +44,7 @@ _LEYENDA = (
     ("ic", "• IC (Verde)"),
     ("ldn", "• LDN (Oscuras)"),
 )
+_FIELD_COLORS = ("#58a6ff", "#7ee787", "#d2a8ff", "#ffa657", "#f2cc60")
 
 
 class CieloCapturado(PlanetarioVisual):
@@ -59,9 +70,43 @@ class CieloCapturado(PlanetarioVisual):
         self._centro_ficha: tuple[float, float] | None = None
         self._objeto_ficha = ""
         self._crota_fits: float | None = None
+        self._survey: FieldSurvey | None = None
+        self._selected_session = ""
+        self._fov_parcial = False
+        self.setAccessibleName("Encuadres de captura por sesión")
+
+    def poner_campos(self, survey: FieldSurvey | None, selected: str = "") -> None:
+        """Superpone muestras con procedencia; solo la carta cambia, nunca los píxeles ni el flujo de apilado."""
+        self._survey, self._selected_session = survey, selected
+        self._fov_parcial = False
+        if survey is not None:
+            overview = survey.overview()
+            captures = [(row.session, capture) for row in survey.sessions
+                        for capture in (row.primary, row.check) if capture is not None]
+            self._fov_parcial = overview is None and bool(captures)
+            if overview is None and captures:
+                capture = next((capture for session, capture in captures if session == selected), captures[0][1])
+                ra, dec = capture.center
+                overview = (ra, dec, 6.0)
+            if overview is not None:
+                ra, dec, extent = overview
+                self._valido = True
+                self.set_center(ra / 15, dec, "Encuadres de sesiones")
+                self.set_fov_deg(extent)
+            detail = "\n".join(f"{Path(row.session).name}: {row.note}" for row in survey.sessions)
+            overlap = "\n".join(f"{Path(a).name} / {Path(b).name}: {value:.2%} del FOV menor"
+                                for (a, b), value in survey.overlaps.items())
+            self.setToolTip(f"{survey.classification}\n{detail}\n{overlap}\n"
+                            "Estimación por esquinas; no acredita toda la sesión ni construye un mosaico.\n"
+                            "Campos muy separados pueden quedar fuera de la vista; arrastra para inspeccionarlos.")
+        else:
+            self.setToolTip("Comparación de FOV entre sesiones pendiente.")
+        self.setAccessibleDescription(self.toolTip())
+        self.update()
 
     def mostrar(self, ficha: FichaFITS | None) -> None:
         """Centra la carta en la captura; sin coordenadas no dibuja FOV falso."""
+        self._survey = None
         campo = campo_vision(ficha) if ficha else None
         self._crota_fits = ficha.rotacion_deg if ficha else None
         self._objeto_ficha = (ficha.objeto or "") if ficha else ""
@@ -118,6 +163,9 @@ class CieloCapturado(PlanetarioVisual):
 
     def _draw_framing(self, painter: QPainter, ppr: float) -> None:
         """Pinta el marco con la rotación disponible y su cruz de centro."""
+        if self._survey is not None and any(row.primary or row.check for row in self._survey.sessions):
+            self._draw_session_fields(painter, ppr)
+            return
         if not self.framing:
             return
         painter.save()
@@ -126,6 +174,37 @@ class CieloCapturado(PlanetarioVisual):
         painter.translate(-self.width() / 2, -self.height() / 2)
         super()._draw_framing(painter, ppr)
         self._draw_cruz_centro(painter, ppr)
+        painter.restore()
+
+    def _draw_session_fields(self, painter: QPainter, ppr: float) -> None:
+        """Dibuja polígonos celestes por sesión; comprobaciones y datos dudosos llevan línea discontinua."""
+        ra0, dec0 = self.center_deg
+        painter.save()
+        labels = []
+        for index, row in enumerate(self._survey.sessions):
+            for capture, check in ((row.primary, False), (row.check, True)):
+                if capture is None or (check and row.state != "discrepante"):
+                    continue
+                ras, decs = zip(*capture.corners, strict=True)
+                xi, eta, ok = gnomonic(ras, decs, ra0, dec0)
+                if not all(ok):
+                    continue
+                xs, ys = self._to_screen(xi, eta, ppr)
+                selected = row.session == self._selected_session
+                color = QColor(_FIELD_COLORS[index % len(_FIELD_COLORS)])
+                style = Qt.PenStyle.DashLine if check or row.state != "válido" else Qt.PenStyle.SolidLine
+                painter.setPen(QPen(color, 2 if selected else 1, style))
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                polygon = QPolygonF([QPointF(float(x), float(y)) for x, y in zip(xs, ys, strict=True)])
+                painter.drawPolygon(polygon)
+                label = f"{index + 1}" + ("?" if check else "")
+                rect = QRectF(painter.fontMetrics().boundingRect(label))
+                rect.moveTopLeft(polygon.boundingRect().topLeft() + QPointF(4, 4))
+                while any(rect.intersects(other) for other in labels):
+                    rect.translate(0, painter.fontMetrics().lineSpacing())
+                if self.rect().contains(rect.toRect()):
+                    labels.append(rect)
+                    painter.drawText(rect, Qt.AlignmentFlag.AlignLeft, label)
         painter.restore()
 
     def _draw_cruz_centro(self, painter: QPainter, ppr: float) -> None:
@@ -171,6 +250,19 @@ class CieloCapturado(PlanetarioVisual):
         fuente.setPointSize(9)
         painter.setFont(fuente)
         painter.setPen(QColor("#c9d1d9"))
+        if self._survey is not None:
+            text = self._survey.classification + (" · vista parcial" if self._fov_parcial else "")
+            status = painter.fontMetrics().elidedText(text,
+                                                     Qt.TextElideMode.ElideRight, max(0, ancho - 175))
+            painter.drawText(12, 54, status)
+            for index, row in enumerate(self._survey.sessions[:5]):
+                painter.setPen(QColor(_FIELD_COLORS[index % len(_FIELD_COLORS)]))
+                label = f"{index + 1}: {Path(row.session).name}" + (" · revisar" if row.state != "válido" else "")
+                painter.drawText(12, 70 + 15 * index, painter.fontMetrics().elidedText(
+                    label, Qt.TextElideMode.ElideRight, max(0, min(270, ancho - 175))))
+            if len(self._survey.sessions) > 5:
+                painter.drawText(12, 145, f"+{len(self._survey.sessions) - 5} sesiones: ver ayuda")
+            painter.setPen(QColor("#c9d1d9"))
         marco = self.framing
         if marco:
             painter.drawText(
@@ -183,7 +275,8 @@ class CieloCapturado(PlanetarioVisual):
             )
             painter.drawText(
                 12, 38,
-                f"Rotación Sensor: {round(self._rotacion)}°{crota}",
+                "Encuadres de cabecera · fuentes en la ayuda" if self._survey is not None
+                else f"Rotación Sensor: {round(self._rotacion)}°{crota}",
             )
 
         # Leyenda de catálogos, a la derecha y por debajo del botón flotante.
@@ -220,6 +313,9 @@ class CieloCapturado(PlanetarioVisual):
 
     def reset_view(self) -> None:
         """Restaura centro y campo de la captura, no el origen genérico (0°,0°)."""
+        if self._survey is not None and self._survey.overview() is not None:
+            self.poner_campos(self._survey, self._selected_session)
+            return
         if self._captura:
             ra, dec, ancho, alto = self._captura
             self.set_center(ra, dec, self.center_label)

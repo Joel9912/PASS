@@ -27,6 +27,7 @@ from PyQt6.QtWidgets import (
 )
 
 from equipment.metrics import escala_imagen
+from stacks.session_fov import FieldSurvey
 from stacks.session_parser import FichaFITS, Session
 from ui.style import FONT_FAMILY
 
@@ -72,6 +73,10 @@ class PanelSesiones(QWidget):
         super().__init__(parent)
         self._ficha_actual: FichaFITS | None = None
         self._escala_cabecera: float | None = None
+        self._campos: FieldSurvey | None = None
+        self._sesiones_actuales: list[Session] = []
+        self._fichas_actuales: dict[str, FichaFITS] = {}
+        self._calibradas_actuales: set[str] = set()
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 8, 10, 8)
@@ -124,7 +129,7 @@ class PanelSesiones(QWidget):
         self._tabla.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._tabla.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self._tabla.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._tabla.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._tabla.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._tabla.setStyleSheet(_ESTILO_TABLA)
         cabecera = self._tabla.horizontalHeader()
         cabecera.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
@@ -317,8 +322,12 @@ class PanelSesiones(QWidget):
         con el nombre.
         """
         fichas = fichas or {}
+        keys = {clave_sesion(sesion) for sesion in sesiones}
+        if self._campos is not None and {row.session for row in self._campos.sessions} != keys:
+            self._campos = None
         self._sesiones_actuales = list(sesiones)
         self._fichas_actuales = fichas
+        self._calibradas_actuales = set(calibradas)
         self._tabla.setRowCount(0)
         total_lights = 0
         total_segundos = 0.0
@@ -383,6 +392,47 @@ class PanelSesiones(QWidget):
         self._poner_conmutador(primer_fits is not None)
         self._rellenar_campos(ficha)
         self._actualizar_detalles(ficha)
+        self._poner_comparacion(sesion)
+
+    def _poner_comparacion(self, sesion: Session) -> None:
+        """Actualiza solo la carta de huellas; nunca vuelve a cargar el FITS ni reinicia su zoom."""
+        self._cielo.poner_campos(self._campos, clave_sesion(sesion))
+        comparando = self._campos is not None and any(row.primary or row.check for row in self._campos.sessions)
+        self._panel_rot.setEnabled(not comparando)
+        if comparando:
+            self._panel_rot.hide()
+        self._panel_rot.setToolTip("La comparación usa la orientación de las cabeceras, sin rotación manual."
+                                  if comparando else "Rotación visual del encuadre individual.")
+
+    def poner_campos(self, survey: FieldSurvey | None) -> None:
+        """Añade resultados derivados a la carta y a la ayuda, sin recargar tabla ni cambiar selección."""
+        self._campos = survey
+        names = {clave_sesion(session): session.path.name for session in self._sesiones_actuales}
+        results = {row.session: row for row in survey.sessions} if survey else {}
+        overlaps = {}
+        if survey is not None:
+            for (first, second), value in survey.overlaps.items():
+                overlaps.setdefault(first, []).append(f"Solape con {names.get(second, second)}: {value:.2%} del FOV menor")
+                overlaps.setdefault(second, []).append(f"Solape con {names.get(first, first)}: {value:.2%} del FOV menor")
+        for index, session in enumerate(self._sesiones_actuales):
+            item = self._tabla.item(index, 0)
+            if item is None:
+                continue
+            base = _ayuda_fila(session, clave_sesion(session) in self._calibradas_actuales,
+                               self._fichas_actuales.get(clave_sesion(session)))
+            result = results.get(clave_sesion(session))
+            detail = f"FOV: {result.state}. {result.note}" if result else ""
+            detail += "\n" + "\n".join(overlaps.get(clave_sesion(session), [])) if overlaps else ""
+            item.setToolTip(base + ("<br>" + escape(detail).replace("\n", "<br>") if detail else ""))
+            item.setData(Qt.ItemDataRole.AccessibleDescriptionRole, detail)
+        index = self._tabla.currentRow()
+        if 0 <= index < len(self._sesiones_actuales):
+            session = self._sesiones_actuales[index]
+            self._cielo.mostrar(self._fichas_actuales.get(clave_sesion(session)))
+            self._recalcular_escala()
+            self._poner_comparacion(session)
+        else:
+            self._cielo.poner_campos(survey)
 
     def _poner_conmutador(self, hay_fits: bool) -> None:
         """«Ver FITS» solo existe cuando hay imagen que enseñar.
