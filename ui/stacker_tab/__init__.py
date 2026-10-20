@@ -10,6 +10,7 @@ from collections.abc import Callable
 from concurrent.futures import CancelledError, ThreadPoolExecutor
 from pathlib import Path
 from threading import Event
+from time import monotonic
 from weakref import ref
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
@@ -42,6 +43,7 @@ from stacks.calibrator import (
     output_dir_for,
     save_calibration,
 )
+from stacks.estimates import TimingSample, estimate_processing, read_geometry
 from stacks.frame_metrics import FrameMetrics, extract_metrics
 from stacks.global_pool import GlobalPool, pool_desde_calibradas
 from stacks.registration import (
@@ -154,6 +156,8 @@ class StackerPage(QWidget):
     dato = pyqtSignal(object)
     registro_terminado = pyqtSignal(object)
     _campos_listos = pyqtSignal(int, object)
+    _geometria_lista = pyqtSignal(object, object)
+    _tiempo_medido = pyqtSignal(object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         """Monta barra de pasos, los 5 paneles, navegación, progreso y log."""
@@ -165,6 +169,15 @@ class StackerPage(QWidget):
         self._exposiciones: dict[str, list[float]] = {}  # sesión → exposición por frame
         self._fichas: dict[str, FichaFITS] = {}  # sesión → cabeceras FITS
         self._campos: FieldSurvey | None = None
+        self._geometry_registry = None
+        self._geometry = None
+        self._geometry_future = None
+        self._geometry_cancel_state = [Event()]
+        geometry_cancel = self._geometry_cancel_state
+        self.destroyed.connect(lambda *_: geometry_cancel[0].set())
+        self._geometria_lista.connect(self._recibir_geometria)
+        self._timing_sample = None
+        self._tiempo_medido.connect(self._recibir_tiempo)
         self._fov_generation = 0
         self._fov_future = None
         self._fov_cancel_state = [Event()]
@@ -285,6 +298,8 @@ class StackerPage(QWidget):
         self.panel_auditar.auditar.connect(lambda: self.auditar())
         self.panel_auditar.descartar.connect(self.descartar_recomendados)
         self.panel_apilar.apilar.connect(lambda: self.apilar())
+        self.panel_apilar.estimacion_cambiada.connect(self._actualizar_estimacion)
+        self.panel_auditar.seleccion_cambiada.connect(self._actualizar_estimacion)
         self.panel_final.reiniciar.connect(self.reiniciar)
         # La tarea emite cada sesión calibrada; aquí se guarda en la BD
         # (siempre en el hilo principal: SQLite no admite otro hilo).
@@ -326,6 +341,85 @@ class StackerPage(QWidget):
         from equipment.localizations import list_locations
 
         self.panel_auditar.configurar_ubicaciones(list_locations(), get_setting("audit_default_location"))
+
+    def _cancelar_geometria(self) -> None:
+        """Cancela lecturas antiguas; las estimaciones no sobreviven al registro del que procedían."""
+        self._geometry_cancel_state[0].set()
+        if self._geometry_future is not None:
+            self._geometry_future.cancel()
+        self._geometry_future = None
+        self._geometry_registry = None
+        self._geometry = None
+
+    def _actualizar_estimacion(self) -> None:
+        """Recalcula al cambiar casillas u opciones; las únicas lecturas de cabecera se ejecutan fuera de Qt."""
+        if self.registro is None:
+            self._cancelar_geometria()
+            self.panel_apilar.mostrar_estimacion(None, "Estimación pendiente de la auditoría y sus cabeceras.")
+            return
+        if self._geometry_registry is not self.registro:
+            self._cancelar_geometria()
+            registry = self.registro
+            self._geometry_registry = registry
+            cancelled = Event()
+            self._geometry_cancel_state[0] = cancelled
+            owner = ref(self)
+
+            def checkpoint():
+                """Interrumpe la lectura cuando se cierra, reinicia o cambia la auditoría."""
+                if cancelled.is_set():
+                    raise CancelledError
+
+            future = _FOV_EXECUTOR.submit(read_geometry, list(registry.frames), checkpoint)
+            self._geometry_future = future
+
+            def deliver(done):
+                """Entrega por señal encolada sin retener la página ni tocar Qt desde el lector."""
+                try:
+                    result = done.result()
+                except CancelledError:
+                    return
+                except Exception as exc:
+                    result = exc
+                page = owner()
+                if page is not None and not cancelled.is_set():
+                    try:
+                        page._geometria_lista.emit(registry, result)
+                    except RuntimeError:
+                        pass
+
+            future.add_done_callback(deliver)
+        if self._geometry is None:
+            self.panel_apilar.mostrar_estimacion(None, "Leyendo cabeceras para estimar espacio y tiempo…")
+            return
+        try:
+            estimate = self._estimacion_actual()
+        except ValueError:
+            self.panel_apilar.mostrar_estimacion(None, "Revisa las opciones de apilado para obtener una estimación.")
+        else:
+            self.panel_apilar.mostrar_estimacion(estimate)
+
+    def _estimacion_actual(self):
+        """Comparte el cálculo informativo entre la presentación y la muestra de tiempo real."""
+        accepted = set(self.panel_auditar.aceptados())
+        frames = [frame for index, frame in enumerate(self.registro.frames, 1) if index in accepted]
+        return estimate_processing(
+            frames, self._geometry or {}, options=self.panel_apilar.opciones(), sample=self._timing_sample,
+            **{**self.panel_apilar.opciones_registro(), "flat": self.panel_apilar._flat_drizzle.isChecked()},
+        )
+
+    def _recibir_geometria(self, registry: object, result: object) -> None:
+        """Ignora cabeceras obsoletas sin recargar tabla, alterar selección ni iniciar SirIL."""
+        if registry is not self.registro or registry is not self._geometry_registry:
+            return
+        self._geometry = result if isinstance(result, dict) else {}
+        self._actualizar_estimacion()
+
+    def _recibir_tiempo(self, sample: object) -> None:
+        """Recuerda solo una medida completa durante esta apertura, sin persistir una velocidad universal."""
+        if isinstance(sample, TimingSample):
+            self._timing_sample = sample
+            self._actualizar_estimacion()
 
     def _cancelar_revision_campos(self) -> None:
         """Invalida resultados tardíos sin tocar permisos, borradores ni decisiones de auditoría."""
@@ -555,6 +649,7 @@ class StackerPage(QWidget):
         self._paso = indice
         if indice == 3:
             self.panel_apilar.actualizar_conteo(len(self.panel_auditar.aceptados()))
+            self._actualizar_estimacion()
         self._limpiar.setVisible(indice == 1)
         self._paneles.setCurrentIndex(indice)
         self._terminal.setVisible(self._log_abierto)
@@ -740,6 +835,7 @@ class StackerPage(QWidget):
         if self._worker is not None or not self._draft.clear():
             return
         self._cancelar_revision_campos()
+        self._cancelar_geometria()
         self._campos = None
         self.panel_sesiones.poner_campos(None)
         self._input_stamps = {}
@@ -1166,8 +1262,13 @@ class StackerPage(QWidget):
         # Con drizzle, SirIL rebayeriza él solo al rezumar; sin drizzle los
         # CFA se debayerizan antes (``_debayerizar`` no toca RGB/mono).
         debayer = not drizzle
+        try:
+            timing_estimate = self._estimacion_actual()
+        except ValueError:
+            timing_estimate = None
 
         def tarea(progress_cb, log_cb):
+            started = monotonic()
             if registro_recuperado is not None:
                 registro = registro_recuperado
                 log_cb("Registro final verificado y recuperado; no se repetirá con SirIL.")
@@ -1211,6 +1312,11 @@ class StackerPage(QWidget):
                 log_cb=log_cb,
             )
             exportadas = exportar_apilados(salidas, madre)
+            if (registro_recuperado is None and timing_estimate is not None
+                    and not timing_estimate.unknown and timing_estimate.work_pixels):
+                self._tiempo_medido.emit(TimingSample(
+                    timing_estimate.signature, timing_estimate.work_pixels, monotonic() - started,
+                ))
             log_cb(f"Apilado copiado a {madre}: {', '.join(p.name for p in exportadas)}")
             return salidas, registro
 
@@ -1362,6 +1468,7 @@ class StackerPage(QWidget):
     def _parar_todo(self) -> None:
         """Cierre de la aplicación: ninguna tarea ni SirIL se quedan colgados."""
         self._cancelar_revision_campos()
+        self._cancelar_geometria()
         if hasattr(self, "_draft"):
             self._draft.flush()
         if self._worker is not None:

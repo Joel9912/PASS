@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from stacks.estimates import ProcessingEstimate, format_estimate
 from stacks.stacker import (
     INTEGRACIONES,
     NORMS,
@@ -39,6 +40,7 @@ class PanelApilar(QWidget):
     """Paso 4: registro final (drizzle/debayer), opciones de ``stack`` y salidas."""
 
     apilar = pyqtSignal()  # «Apilar»
+    estimacion_cambiada = pyqtSignal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         """Monta nombre, registro final, opciones de stack, botón y salidas."""
@@ -245,6 +247,16 @@ class PanelApilar(QWidget):
         self._guia = _pista("")
         self._conteo_aceptados = 0
         guia_bloque.addWidget(self._guia)
+        self._estimacion = _pista("Estimación pendiente de la auditoría y sus cabeceras.")
+        self._estimacion.setAccessibleName("Estimación de espacio y tiempo del apilado")
+        self._estimacion.setToolTip(
+            "Aproximación con dimensiones de cabecera, registro/debayer a 32 bits, másters, mapas y exportación. "
+            "No incluye calibrados ya existentes, temporales internos ni reserva espacio. El recorte o expansión "
+            "del encuadre y la compresión de SirIL pueden cambiar el volumen. El tiempo usa una corrida completa "
+            "comparable de esta apertura de PASS; hardware, disco, carga y drizzle afectan al resultado. "
+            "Una recuperación de registro no sirve de muestra para una corrida completa."
+        )
+        guia_bloque.addWidget(self._estimacion)
         self._integracion.currentIndexChanged.connect(self._actualizar_guia)
         self._rechazo.currentIndexChanged.connect(self._actualizar_guia)
         self._drizzle.toggled.connect(self._actualizar_guia)
@@ -261,6 +273,15 @@ class PanelApilar(QWidget):
                         self._flat_drizzle, self._ruta_flat, buscar_flat):
             control.setEnabled(False)
         self._actualizar_guia()
+        for control in (self._integracion, self._ponderacion, self._norm, self._framing,
+                        self._rechazo, self._scale, self._kernel):
+            control.currentIndexChanged.connect(self.estimacion_cambiada)
+        for control in (self._drizzle, self._flat_drizzle, self._bit32, self._output_norm,
+                        self._rgb_equal, self._fastnorm, self._rejmaps, self._merge_rejmaps):
+            control.toggled.connect(self.estimacion_cambiada)
+        for control in (self._sigma_low, self._sigma_high, self._pixfrac):
+            control.valueChanged.connect(self.estimacion_cambiada)
+        self._extra.textChanged.connect(self.estimacion_cambiada)
 
         self._salidas_titulo = QLabel("Salidas:")
         self._salidas_titulo.hide()
@@ -294,6 +315,12 @@ class PanelApilar(QWidget):
         self._conteo_aceptados = n
         self._actualizar_guia()
 
+    def mostrar_estimacion(self, estimate: ProcessingEstimate | None, message: str = "") -> None:
+        """Presenta una previsión sin tocar opciones, casillas ni permisos de ejecución."""
+        text = format_estimate(estimate) if estimate is not None else message
+        self._estimacion.setText(text)
+        self._estimacion.setAccessibleDescription(text + " " + self._estimacion.toolTip())
+
     def _elegir_flat(self) -> None:
         """Permite elegir explícitamente el flat de drizzle, sin tocar los originales."""
         ruta, _ = QFileDialog.getOpenFileName(
@@ -311,6 +338,7 @@ class PanelApilar(QWidget):
         self._salidas.clear()
         self._salidas.hide()
         self._salidas_titulo.hide()
+        self.mostrar_estimacion(None, "Estimación pendiente de la auditoría y sus cabeceras.")
 
     def nombre(self) -> str:
         """Nombre escrito por el usuario, o vacío para generar uno con la exposición."""
