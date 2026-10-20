@@ -26,7 +26,7 @@ from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QPolygonF
 from PyQt6.QtWidgets import QWidget
 
-from planners.sky_loader import load_objects, load_stars
+from planners.sky_loader import load_sky
 
 #: Nº máximo de estrellas pintadas por refresco (más allá se ven las más brillantes).
 MAX_STARS_DRAWN = 6000
@@ -173,14 +173,12 @@ class PlanetarioVisual(QWidget):
         self._framing: tuple[float, float, float, float, int, int] | None = None
         self._selected: tuple[str, str] | None = None
 
-        self._stars = load_stars()
-        self._objects = load_objects()
+        self._stars, self._objects = load_sky()
 
     # ------------------------------------------------------------ API pública
     def reload_catalogs(self) -> None:
         """Recarga estrellas y objetos tras instalar paquetes sin cambiar el encuadre."""
-        self._stars = load_stars()
-        self._objects = load_objects()
+        self._stars, self._objects = load_sky()
         self._selected = None
         self.update()
 

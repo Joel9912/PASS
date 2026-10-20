@@ -25,6 +25,7 @@ import math
 from hashlib import sha256
 from pathlib import Path
 
+from db.catalog_editions import require_legacy_catalog
 from db.connection import get_connection
 
 #: Descargas cacheadas (compartidas con catalog_loader).
@@ -204,6 +205,7 @@ def load_ldn() -> int:
     Devuelve el nº de filas insertadas.
     """
     conn = get_connection()
+    require_legacy_catalog(conn)
     text = _download_tap(QUERY_LDN, "ldn.csv").decode("utf-8")
     validar_csv(text, (("LDN",), ("_RA_icrs", "_RA.icrs"), ("_DE_icrs", "_DE.icrs")))
     rows = parse_ldn_rows(text)

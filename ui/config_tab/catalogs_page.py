@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
 )
 
 from db import connection
+from db.catalog_editions import restore_previous, status
 from pass_logging import record_action
 from planners import catalog_packages
 from ui.style import PALETTE
@@ -38,6 +39,7 @@ class CatalogsPage(QWidget):
         super().__init__(parent)
         self._packages = None
         self._busy = False
+        self._restoring = False
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self._panel = QFrame()
@@ -77,6 +79,10 @@ class CatalogsPage(QWidget):
         self._update.clicked.connect(self.start_update)
         buttons.addWidget(self._update)
         layout.addLayout(buttons)
+        self._restore = QPushButton("Recuperar edición anterior")
+        self._restore.setToolTip("Cambia solo el catálogo; conserva equipos, ubicaciones, notas y sesiones posteriores.")
+        self._restore.clicked.connect(self.start_restore)
+        layout.addWidget(self._restore)
         self._progress = QProgressBar()
         self._progress.setRange(0, 1)
         self._progress.setValue(0)
@@ -96,6 +102,7 @@ class CatalogsPage(QWidget):
     def refresh(self):
         """No confunde catálogos heredados sin metadatos con una versión vigente."""
         versions = catalog_packages.installed(connection.get_connection())
+        health = status(connection.get_connection())
         self._pending = []
         for row, group in enumerate(catalog_packages.GROUPS):
             version = versions[group]
@@ -103,16 +110,20 @@ class CatalogsPage(QWidget):
             state = "Vigencia no comprobada"
             if self._packages:
                 item = self._packages[group]
-                current = version and version.get("sha256") == item["sha256"]
+                current = health["available"] and version and version.get("sha256") == item["sha256"]
                 state = "Actualizado" if current else "Paquete disponible"
                 if not current:
                     self._pending.append(group)
+            if not health["available"]:
+                state = "Edición no disponible"
             date = version["date"] if version else "—"
             for column, value in enumerate((group.upper(), text, f"{date}\n{state}")):
                 item = QTableWidgetItem(value)
                 item.setToolTip(state)
                 if not version:
                     item.setToolTip(state + ". Versión sin identificar o catálogo no instalado.")
+                if not health["available"]:
+                    item.setToolTip(health["error"])
                 item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | (
                     Qt.AlignmentFlag.AlignLeft if column == 0 else Qt.AlignmentFlag.AlignHCenter
                 ))
@@ -123,7 +134,7 @@ class CatalogsPage(QWidget):
                     item.setFont(font)
                 elif version:
                     color = PALETTE["text"]
-                if column == 2 and self._packages:
+                if column == 2 and (self._packages or not health["available"]):
                     color = PALETTE["ok"] if state == "Actualizado" else PALETTE["warn"]
                 item.setForeground(QColor(color))
                 item.setBackground(QColor(PALETTE["panel"] if row % 2 else PALETTE["bg"]))
@@ -131,6 +142,9 @@ class CatalogsPage(QWidget):
                 self._table.setItem(row, column, item)
         self._check.setEnabled(not self._busy)
         self._update.setEnabled(not self._busy and bool(self._pending))
+        self._restore.setEnabled(not self._busy and health["previous"])
+        if health["prepared"] and self._status.text().startswith("Comprueba si"):
+            self._status.setText("Hay archivos preparados sin activar; no se adoptarán ni borrarán automáticamente.")
 
     def _submit(self, operation, *args):
         """Encola una sola operación y devuelve su resultado mediante señal Qt."""
@@ -168,7 +182,8 @@ class CatalogsPage(QWidget):
             return
         answer = QMessageBox.question(self, "Actualizar catálogos",
                                       "¿Descargar e instalar los paquetes disponibles?\n"
-                                      "Tus objetos guardados y equipos se conservarán.")
+                                      "Tus objetos guardados y equipos se conservarán.\n"
+                                      "Las ediciones anteriores se conservan y ocuparán espacio adicional.")
         if answer != QMessageBox.StandardButton.Yes:
             record_action("catálogos", "Actualización cancelada por el usuario")
             return
@@ -176,6 +191,21 @@ class CatalogsPage(QWidget):
         self._status.setText("Descargando, verificando e instalando catálogos…")
         self._submit(catalog_packages.update_packages, connection.DB_PATH,
                      self._packages, tuple(self._pending))
+
+    def start_restore(self):
+        """Recupera únicamente el catálogo anterior, siempre con consentimiento y sin restaurar pass.db."""
+        if self._busy or not status(connection.get_connection())["previous"]:
+            return
+        answer = QMessageBox.question(
+            self, "Recuperar catálogo",
+            "¿Activar la edición anterior del catálogo?\n"
+            "Se conservan tus equipos, ubicaciones, notas, regiones y sesiones, incluidas las posteriores a la actualización.",
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        self._restoring = True
+        self._status.setText("Verificando y recuperando la edición anterior…")
+        self._submit(restore_previous, connection.DB_PATH)
 
     def _finished(self, result, error):
         """Actualiza el estado solo después de terminar o confirmar la transacción."""
@@ -187,6 +217,10 @@ class CatalogsPage(QWidget):
             self._packages = None
             self._status.setText("⚠ No se pudo completar la operación. Los catálogos anteriores se conservan.")
             self._status.setToolTip(error)
+        elif self._restoring:
+            self._status.setText("Edición anterior recuperada; tus datos personales se conservan.")
+            self._status.setToolTip("")
+            self.catalogs_changed.emit()
         elif isinstance(result, dict):
             self._packages = result
             self._status.setText("Comprobación completada.")
@@ -195,6 +229,7 @@ class CatalogsPage(QWidget):
             self._status.setText("Catálogos actualizados.")
             self._status.setToolTip("")
             self.catalogs_changed.emit()
+        self._restoring = False
         self.refresh()
         record_action("catálogos", self._status.text())
         if error:

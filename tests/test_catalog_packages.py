@@ -3,10 +3,18 @@ import gzip
 import hashlib
 import json
 import sqlite3
+from contextlib import closing
 
 import pytest
 
+from db.catalog_editions import catalog_snapshot
 from planners import catalog_packages as packages
+
+
+def _catalog_rows(path, sql):
+    """Consulta la edición seleccionada en vez de confundir las tablas legacy conservadas con los datos activos."""
+    with closing(sqlite3.connect(path)) as personal, catalog_snapshot(personal) as catalog:
+        return [tuple(row) for row in catalog.execute(sql)]
 
 
 def _package(rows):
@@ -90,8 +98,7 @@ def test_valores_ausentes_y_magnitud_negativa_no_se_convierten_en_ceros(tmp_path
     data, item = _package([[None, -1.46, 6.75, -16.7, None, None]])
     monkeypatch.setattr(packages, "_read", lambda *args: data)
     packages.update_packages(path, {"hyg": item}, ["hyg"])
-    with sqlite3.connect(path) as conn:
-        assert conn.execute("SELECT name,magnitude,color,constellation FROM stars").fetchone() == (None, -1.46, None, None)
+    assert _catalog_rows(path, "SELECT name,magnitude,color,constellation FROM stars") == [(None, -1.46, None, None)]
 
 
 @pytest.mark.parametrize("group", ["hyg", "openngc"])
@@ -117,8 +124,7 @@ def test_no_fusiona_estrellas_anonimas_solo_por_coincidir_coordenadas(tmp_path, 
     data, item = _package([row, row])
     monkeypatch.setattr(packages, "_read", lambda *args: data)
     packages.update_packages(path, {"hyg": item}, ["hyg"])
-    with sqlite3.connect(path) as conn:
-        assert conn.execute("SELECT count(*) FROM stars WHERE name IS NULL").fetchone()[0] == 2
+    assert _catalog_rows(path, "SELECT count(*) FROM stars WHERE name IS NULL")[0][0] == 2
 
 
 def test_version_booleana_no_se_interpreta_como_formato_uno():
@@ -194,7 +200,8 @@ def test_install_integrity_and_preserve_user(tmp_path, monkeypatch, corrupt):
     else:
         packages.update_packages(path, {"hyg": item}, ["hyg"])
     with sqlite3.connect(path) as conn:
-        assert conn.execute("SELECT name FROM stars").fetchone()[0] == ("Anterior" if corrupt else "Nueva")
+        assert conn.execute("SELECT name FROM stars").fetchone()[0] == "Anterior"
+        assert _catalog_rows(path, "SELECT name FROM stars")[0][0] == ("Anterior" if corrupt else "Nueva")
         assert conn.execute("SELECT value FROM settings WHERE key='personal'").fetchone()[0] == "intacto"
         assert bool(packages.installed(conn)["hyg"]) is not corrupt
 
@@ -239,19 +246,21 @@ def test_bundled_install_offline_preserves_legacy(tmp_path, monkeypatch):
     packages.install_bundled(path, folder)
     with sqlite3.connect(path) as conn:
         assert conn.execute("SELECT COUNT(*) FROM catalog").fetchone()[0] == 2
-        assert conn.execute("SELECT name FROM stars").fetchone()[0] == "Nueva"
+        assert conn.execute("SELECT count(*) FROM stars").fetchone()[0] == 0
+        assert _catalog_rows(path, "SELECT name FROM stars")[0][0] == "Nueva"
         assert packages.installed(conn)["openngc"] is None
 
 
 def test_install_sql_failure_rolls_back(tmp_path, monkeypatch):
-    """Un fallo después del DELETE conserva filas y versión anterior."""
+    """Un fallo de activación conserva catálogo, selección y versiones anteriores."""
     from db.connection import SCHEMA_PATH
 
     path = tmp_path / "db.sqlite"
     with sqlite3.connect(path) as conn:
         conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
         conn.execute("INSERT INTO stars(name,magnitude,ra_hours,dec_deg) VALUES ('Anterior',1,2,3)")
-        conn.execute("CREATE TRIGGER fallo BEFORE INSERT ON stars BEGIN SELECT RAISE(ABORT,'fallo'); END")
+        conn.execute("CREATE TRIGGER fallo BEFORE INSERT ON settings WHEN NEW.key='catalog_active_edition' "
+                     "BEGIN SELECT RAISE(ABORT,'fallo'); END")
     data, item = _package([["Nueva", 2, 3, 4, "A0", "Ori"]])
     monkeypatch.setattr(packages, "_read", lambda *args: data)
     with pytest.raises(sqlite3.IntegrityError):

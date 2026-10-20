@@ -11,11 +11,15 @@ from contextlib import closing
 from pathlib import Path
 from urllib.parse import urlparse
 
+from db.catalog_editions import (
+    CAT_COLUMNS,
+    STAR_COLUMNS,
+    catalog_snapshot,
+    install_edition,
+)
+
 RELEASES_URL = "https://api.github.com/repos/Joel9912/PASS/releases?per_page=5"
 GROUPS = ("openngc", "hyg", "ldn")
-CAT_COLUMNS = ("object_id,catalog,messier_num,ngc_num,ic_num,name,type,magnitude,"
-               "ra_hours,dec_deg,size_major_arcmin,size_minor_arcmin,constellation")
-STAR_COLUMNS = "name,magnitude,ra_hours,dec_deg,color,constellation"
 MAX_PACKAGE = 64 * 1024 * 1024
 _OBJECT_CATALOGS = {"messier", "ngc", "ic", "barnard", "caldwell", "other"}
 
@@ -136,11 +140,12 @@ def validate_rows(group, rows):
             seen.add(key)
 
 
-def update_packages(db_path, packages, groups, *, reader=None):
-    """Valida todas las descargas antes de reemplazar datos y versiones en una transacción.
+def update_packages(db_path, packages, groups, *, reader=None, only_missing=False):
+    """Valida todas las descargas y prepara una edición externa antes de activar sus versiones.
 
     Abre una conexión propia en el hilo llamante; jamás reutiliza la conexión Qt.
-    Solo modifica catalog, stars y sus claves de versión.
+    Conserva tablas legacy y ediciones anteriores; solo selección/versiones
+    se confirman en pass.db. Los archivos se validan antes de activarlos.
     """
     prepared = {}
     reader = reader or _read
@@ -158,20 +163,11 @@ def update_packages(db_path, packages, groups, *, reader=None):
         rows = json.loads(payload)
         validate_rows(group, rows)
         prepared[group] = rows
-    with closing(sqlite3.connect(db_path, timeout=5)) as conn, conn:
-        conn.execute("PRAGMA foreign_keys=ON")
-        for group, rows in prepared.items():
-            table = "stars" if group == "hyg" else "catalog"
-            columns = STAR_COLUMNS if group == "hyg" else CAT_COLUMNS
-            clause = "" if group == "hyg" else (" WHERE catalog='ldn'" if group == "ldn"
-                                                else " WHERE catalog!='ldn'")
-            conn.execute(f"DELETE FROM {table}{clause}")
-            placeholders = ",".join("?" for _ in columns.split(","))
-            conn.executemany(f"INSERT INTO {table} ({columns}) VALUES ({placeholders})", rows)
-            item = packages[group]
-            conn.execute("INSERT OR REPLACE INTO settings(key,value) VALUES (?,?)",
-                         (f"catalog_package_{group}", json.dumps({"version": item["version"],
-                          "date": item["date"], "sha256": item["sha256"]})))
+    replacements = {group: (STAR_COLUMNS if group == "hyg" else CAT_COLUMNS, rows)
+                    for group, rows in prepared.items()}
+    versions = {group: {"version": packages[group]["version"], "date": packages[group]["date"],
+                        "sha256": packages[group]["sha256"]} for group in prepared}
+    install_edition(Path(db_path), replacements, versions, GROUPS, only_missing=only_missing)
 
 
 def install_bundled(db_path, folder):
@@ -184,7 +180,7 @@ def install_bundled(db_path, folder):
         raise ValueError("Manifiesto incluido demasiado grande.")
     packages = parse_manifest(manifest_path.read_bytes())
     missing = []
-    with closing(sqlite3.connect(db_path)) as conn:
+    with closing(sqlite3.connect(db_path)) as personal, catalog_snapshot(personal) as conn:
         for group in GROUPS:
             query = ("SELECT COUNT(*) FROM stars" if group == "hyg" else
                      "SELECT COUNT(*) FROM catalog WHERE catalog " +
@@ -201,4 +197,4 @@ def install_bundled(db_path, folder):
         with path.open("rb") as stream:
             return stream.read(limit + 1)
 
-    update_packages(db_path, packages, missing, reader=read_local)
+    update_packages(db_path, packages, missing, reader=read_local, only_missing=True)

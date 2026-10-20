@@ -35,6 +35,7 @@ pip install -r requirements.txt
 
 - **El arranque no espera descargas.** Los paquetes incluidos en la distribución se importan en segundo plano si faltan catálogos. En **Configuración → Catálogos** puedes consultar versiones, comprobar paquetes publicados por PASS y autorizar su actualización. Si no hay paquete incluido ni una release con los adjuntos publicados, la búsqueda permanece sin esos datos; los catálogos existentes se conservan.
 - **SirIL solo es necesario para la pestaña Apilador.** El resto del programa (Planificador, Equipo, etc.) funciona sin él.
+- Las actualizaciones preparan el catálogo en `data/catalog-editions/`; los datos personales permanecen en `data/pass.db` y las tablas antiguas se conservan. **Configuración → Catálogos → Recuperar edición anterior** cambia solo el catálogo, no tus notas o sesiones posteriores. Si una edición falta o falla su integridad, no se activa otra automáticamente. No borres los archivos de ediciones mientras estén en uso.
 
 ## Ejecución
 

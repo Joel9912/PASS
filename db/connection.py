@@ -14,6 +14,7 @@ _connection: sqlite3.Connection | None = None
 #: SQLite no admite ``ADD COLUMN IF NOT EXISTS``, así que se comprueba con
 #: ``PRAGMA table_info`` antes de alterar cada tabla.
 _MIGRATIONS: dict[str, tuple[str, ...]] = {
+    "catalog_editions": ("schema_version INTEGER NOT NULL DEFAULT 1",),
     "locations": (
         # Desfase horario para pasar efemérides de UTC a hora de reloj.
         "utc_offset_hours REAL",

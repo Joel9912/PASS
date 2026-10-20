@@ -11,6 +11,7 @@ sí la calcula :mod:`planners.transit` con astropy.
 import re
 from dataclasses import dataclass, field
 
+from db.catalog_editions import read_rows
 from db.connection import get_connection
 from planners.analytical_transit import (
     format_transit_hours,
@@ -250,7 +251,7 @@ def search(filters: SearchFilters, limit: int = DEFAULT_LIMIT) -> list[dict]:
         sql += " LIMIT ?"
         params.append(limit)
     conn = get_connection()
-    rows = [dict(row) for row in conn.execute(sql, params)]
+    rows = [dict(row) for row in read_rows(conn, sql, params)]
 
     _annotate_transit(rows, filters)
 
@@ -315,16 +316,12 @@ def get_object(object_id: str) -> dict | None:
     if designation is None:
         return None
     canonical, column, number, suffix = designation
-    conn = get_connection()
-    row = conn.execute(
-        "SELECT * FROM catalog WHERE object_id = ? COLLATE NOCASE", (canonical,)
-    ).fetchone()
-    if row is not None:
-        return dict(row)
-    if column is None or suffix:
-        return None  # sin columna de cruce, o componente: solo el ID exacto
-    row = conn.execute(
-        f"SELECT * FROM catalog WHERE {column} = ? ORDER BY object_id",
-        (number,),
-    ).fetchone()
-    return dict(row) if row else None
+    where = "object_id = ? COLLATE NOCASE"
+    parameters = [canonical]
+    if column is not None and not suffix:
+        where += f" OR {column} = ?"
+        parameters.append(number)
+    parameters.append(canonical)
+    rows = read_rows(get_connection(), "SELECT * FROM catalog WHERE " + where
+                     + " ORDER BY (object_id = ? COLLATE NOCASE) DESC, object_id LIMIT 1", parameters)
+    return dict(rows[0]) if rows else None

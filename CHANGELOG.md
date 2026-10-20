@@ -7,6 +7,7 @@ Cambios relevantes para quienes usan PASS. Los detalles de implementación y cad
 Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado**; se completará cuando se apruebe el lanzamiento.
 
 ### Añadido
+- Las actualizaciones de catálogos preparan una SQLite separada y verificada antes de activarla. Se conservan las tablas legacy y la edición anterior; Configuración permite recuperarla con consentimiento sin restaurar notas, equipos o sesiones antiguos. Búsqueda y cartas fijan una edición coherente, y los archivos ausentes, alterados o de formato incompatible se señalan sin recurrir silenciosamente a otra edición.
 - Los cálculos de planificación validan el rango de noches 1950–2100 y el intervalo completo solicitado. Fuera de él se avisa, sin recortar fechas ni conservar resultados de otro cálculo; las sesiones guardadas no se reescriben. Este límite no garantiza precisión uniforme ni sustituye la selección pendiente de efemérides offline.
 - El paso Apilar estima el espacio adicional y la exportación a partir de las cabeceras de las tomas seleccionadas, con recálculo de drizzle, canales y mapas de rechazo. El tiempo se extrapola únicamente de una corrida completa comparable medida durante la misma apertura; sin datos suficientes se muestra desconocido. Son previsiones informativas, no reservas ni garantías de espacio o duración.
 - En Sesiones del Apilador se comparan y superponen los FOV disponibles de cada carpeta. El área común se mide respecto al campo menor: >80 % indica el mismo encuadre y <80 % mosaico según esa regla. Los encuadres aislados se contrastan con otro FITS aleatorio; discrepancias, límites y datos ausentes se señalan para revisión. Solo lee cabeceras y muestra geometría estimada: no construye mosaicos ni modifica las tomas o su selección.
@@ -24,6 +25,7 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 - Captura Ideal reserva al menos cinco minutos dentro de ambos extremos de la noche astronómica; los márgenes válidos quedan como Posible.
 
 ### Corregido
+- La carga inicial de paquetes vuelve a comprobar que cada componente siga vacío y no sustituye el catálogo instalado por otra operación mientras tanto (B-0011).
 - Tres filtros que no forman un R/G/B inequívoco, por ejemplo R/r/G, conservan sus pilas separadas sin fallar ni inventar el canal ausente (S-0032).
 - Se rechazan antes de limpiar o ejecutar las ponderaciones wfwhm/nbstars cuando una secuencia por canal o recortada pierde los datos de registro necesarios. La elección no se sustituye silenciosamente; en varios filtros se avisa antes del registro final (S-0010).
 - Los paquetes de catálogos validan también tipos, familias e identidades antes de sustituir datos o versiones, aunque el tamaño y SHA sean correctos. El preparador usa el mismo contrato y no escribe artefactos inválidos; los fallos conservan los catálogos anteriores y los datos personales (B-0010).

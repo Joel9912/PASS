@@ -8,6 +8,7 @@ Además de objetos del catálogo global, admite **regiones de interés**
 definidos por el usuario. Las regiones NO se pintan en el planetario (solo
 se usan en planificación) para no ensuciar la vista estelar.
 """
+from db.catalog_editions import active_id, read_rows
 from db.connection import get_connection
 
 
@@ -98,6 +99,24 @@ def list_objects() -> list[dict]:
     la región, para que la UI pueda leer siempre una coordenada.
     """
     conn = get_connection()
+    if active_id(conn) is not None:
+        rows = conn.execute(
+            "SELECT object_id,catalog,kind,notes,created_at,ra_hours AS region_ra_hours,"
+            "dec_deg AS region_dec_deg,fov_major_arcmin,fov_minor_arcmin,tiles_x,tiles_y "
+            "FROM personal_catalog ORDER BY created_at"
+        ).fetchall()
+        objects = {(row["object_id"], row["catalog"]): dict(row)
+                   for row in read_rows(conn, "SELECT * FROM catalog")}
+        result = []
+        for row in rows:
+            item = dict(row)
+            source = objects.get((item["object_id"], item["catalog"]), {}) if item["kind"] != "region" else {}
+            for field in ("name", "type", "magnitude", "size_major_arcmin", "size_minor_arcmin", "constellation"):
+                item[field] = source.get(field)
+            for field in ("ra_hours", "dec_deg"):
+                item[field] = source.get(field) if source.get(field) is not None else item[f"region_{field}"]
+            result.append(item)
+        return result
     rows = conn.execute(
         "SELECT p.object_id, p.catalog, p.kind, p.notes, p.created_at,"
         "       p.ra_hours AS region_ra_hours, p.dec_deg AS region_dec_deg,"

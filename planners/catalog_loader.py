@@ -20,6 +20,7 @@ import sys
 import urllib.request
 from pathlib import Path
 
+from db.catalog_editions import read_rows, require_legacy_catalog
 from db.connection import get_connection
 from planners import ldn_loader
 
@@ -235,6 +236,7 @@ def load_catalog() -> int:
     Devuelve el nº de filas insertadas.
     """
     conn = get_connection()
+    require_legacy_catalog(conn)
     all_rows: list[tuple] = []
     for url in (URL_NGC, URL_ADDENDUM):
         text = _download(url).decode("utf-8")
@@ -262,6 +264,7 @@ def load_stars(mag_limit: float = STAR_MAG_LIMIT) -> int:
     no las deduplica el UNIQUE de SQLite al volver a cargar.
     """
     conn = get_connection()
+    require_legacy_catalog(conn)
     data = _download(URL_HYG)
     text = gzip.decompress(data).decode("utf-8")
     ldn_loader.validar_csv(text, (("mag",), ("ra",), ("dec",)))
@@ -281,9 +284,9 @@ def load_stars(mag_limit: float = STAR_MAG_LIMIT) -> int:
 def catalog_counts() -> dict[str, int]:
     """Filas actuales de ``catalog``, ``stars`` y objetos LDN."""
     conn = get_connection()
-    n_catalog = conn.execute("SELECT COUNT(*) FROM catalog").fetchone()[0]
-    n_stars = conn.execute("SELECT COUNT(*) FROM stars").fetchone()[0]
-    n_ldn = conn.execute("SELECT COUNT(*) FROM catalog WHERE catalog = 'ldn'").fetchone()[0]
+    rows = read_rows(conn, "SELECT (SELECT COUNT(*) FROM catalog), (SELECT COUNT(*) FROM stars), "
+                     "(SELECT COUNT(*) FROM catalog WHERE catalog='ldn')")
+    n_catalog, n_stars, n_ldn = rows[0] if rows else (0, 0, 0)
     return {"catalog": n_catalog, "stars": n_stars, "ldn": n_ldn}
 
 

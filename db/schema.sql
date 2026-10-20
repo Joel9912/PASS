@@ -186,6 +186,18 @@ CREATE TABLE IF NOT EXISTS planned_sessions (
 );
 
 -- Configuración general (ruta de SirIL, API keys, idioma, etc.)
+-- Ediciones de catálogo externas; solo metadatos y activación viven en la base personal.
+CREATE TABLE IF NOT EXISTS catalog_editions (
+    edition_id TEXT PRIMARY KEY,
+    schema_version INTEGER NOT NULL DEFAULT 1,
+    relative_path TEXT NOT NULL UNIQUE,
+    sha256 TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    versions TEXT NOT NULL,
+    previous_id TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Estado persistente del calibrado: originales solo como rutas, salida en working.
 CREATE TABLE IF NOT EXISTS calibrated_sessions (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
