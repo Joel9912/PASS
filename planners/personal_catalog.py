@@ -22,10 +22,10 @@ def add(
     fov_minor_arcmin: float | None = None,
     tiles_x: int | None = None,
     tiles_y: int | None = None,
-) -> None:
-    """Guarda un objeto (o región) en el catálogo personal (idempotente)."""
+) -> bool:
+    """Guarda idempotentemente e indica si insertó; los duplicados conservan los valores originales."""
     conn = get_connection()
-    conn.execute(
+    inserted = conn.execute(
         "INSERT OR IGNORE INTO personal_catalog (object_id, catalog, kind, notes,"
         " ra_hours, dec_deg, fov_major_arcmin, fov_minor_arcmin, tiles_x, tiles_y)"
         " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -33,6 +33,7 @@ def add(
          fov_major_arcmin, fov_minor_arcmin, tiles_x, tiles_y),
     )
     conn.commit()
+    return inserted.rowcount == 1
 
 
 def add_region(
@@ -48,9 +49,10 @@ def add_region(
     """Crea una región de interés (mosaico o encuadre libre) guardada.
 
     El ``catalog`` es ``'region'``: así nunca choca con los catálogos reales
-    y la región se distingue de un objeto con la misma designación.
+    y la región se distingue de un objeto con la misma designación. Un nombre
+    regional repetido se rechaza con aviso, sin modificar la región existente.
     """
-    add(
+    inserted = add(
         object_id=name,
         catalog="region",
         notes=notes,
@@ -62,6 +64,8 @@ def add_region(
         tiles_x=tiles_x,
         tiles_y=tiles_y,
     )
+    if not inserted:
+        raise ValueError("Ya existe una región con ese nombre. Se conserva la existente; elige otro nombre.")
 
 
 def remove(object_id: str, catalog: str) -> None:

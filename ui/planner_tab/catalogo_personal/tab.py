@@ -15,6 +15,8 @@ Señales: ``target_selected(object_id, catalog)`` al marcar una fila y
 """
 from __future__ import annotations
 
+import sqlite3
+
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog,
@@ -328,13 +330,18 @@ class CatalogoPersonalTab(QWidget):
             self.refresh()
 
     def _on_add_region(self) -> None:
-        """Abre ``RegionDialog`` y, si se acepta, crea la región y refresca."""
+        """Reintenta sobre el mismo formulario tras un rechazo, sin falso éxito ni perder las entradas."""
         dialog = RegionDialog(self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            values = dialog.values()
-            personal_catalog.add_region(**values)
-            self.region_added.emit(values["name"])
-            self.refresh()
-        # El diálogo se construye con padre: sin borrarlo se acumula como
-        # hijo oculto en cada clic (fuga medida en la auditoría, M-14).
-        dialog.deleteLater()
+        try:
+            while dialog.exec() == QDialog.DialogCode.Accepted:
+                values = dialog.values()
+                try:
+                    personal_catalog.add_region(**values)
+                except (ValueError, sqlite3.Error) as exc:
+                    QMessageBox.warning(self, "No se pudo añadir la región", str(exc))
+                    continue
+                self.region_added.emit(values["name"])
+                self.refresh()
+                break
+        finally:
+            dialog.deleteLater()

@@ -24,8 +24,8 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 
 ## Resumen
 
-**105 hallazgos**: 🔴 18 graves · 🟠 60 medios · 🟡 18 bajos · 9 decisiones (5 pendientes).
-Estado: ✅ 87 corregidos · 🟡 2 contenidos · ⏳ 6 pendientes · 🔎 1 sin reproducir.
+**107 hallazgos**: 🔴 18 graves · 🟠 61 medios · 🟡 19 bajos · 9 decisiones (5 pendientes).
+Estado: ✅ 87 corregidos · 🟡 2 contenidos · ⏳ 8 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -98,6 +98,7 @@ Estado: ✅ 87 corregidos · 🟡 2 contenidos · ⏳ 6 pendientes · 🔎 1 sin
 | **P-0013** | El minuto anterior a la salida lunar se cuenta completo aunque la Luna cruce el horizonte dentro de él e invalide la captura. | ✅ `c21be5f` (cruces interpolados de 0°/5° y margen lunar bajo aprobado) |
 | **P-0014** | El resumen puede extender captura más allá del fin de la noche astronómica al contar completa la última muestra nocturna. | ✅ `f9aef1c` |
 | **P-0015** | Guardar una sesión usa las coordenadas originales del objetivo e ignora el centro editado del encuadre. | ✅ `b4262de` |
+| **P-0016** | Guardar de nuevo una sesión idéntica inserta otra fila sin aviso; falta concretar la identidad que debe impedir duplicados. | ⏳ criterio del usuario |
 | **U-0002** | Arrastrar la vista no actualiza el encuadre visible antes de guardar. | ✅ `885ba55` |
 | **U-0003** | Quitar el último target deja el plan y el planetario obsoletos. | ✅ `885ba55` |
 | **U-0004** | Si la región no está en el cielo, el target anterior queda resaltado. | ✅ `885ba55` |
@@ -139,6 +140,7 @@ Estado: ✅ 87 corregidos · 🟡 2 contenidos · ⏳ 6 pendientes · 🔎 1 sin
 | **X-0014** | Errata «conversión» en el README de planificación. | ✅ |
 | **X-0015** | Prosas extensas en la documentación frente a la regla de brevedad. | ⏳ poda continua |
 | **X-0016** | El README público citaba documentos de trabajo que no se distribuyen. | ✅ `0da24f5` |
+| **X-0017** | La documentación atribuía al arranque descargas automáticas de catálogos que ya se habían retirado. | ⏳ |
 
 ## Decisiones
 
