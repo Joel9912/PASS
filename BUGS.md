@@ -24,8 +24,8 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 
 ## Resumen
 
-**107 hallazgos**: 🔴 18 graves · 🟠 61 medios · 🟡 19 bajos · 9 decisiones (5 pendientes).
-Estado: ✅ 87 corregidos · 🟡 2 contenidos · ⏳ 8 pendientes · 🔎 1 sin reproducir.
+**107 hallazgos**: 🔴 18 graves · 🟠 61 medios · 🟡 19 bajos · 9 decisiones (4 pendientes).
+Estado: ✅ 88 corregidos · 🟡 2 contenidos · ⏳ 7 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -140,7 +140,7 @@ Estado: ✅ 87 corregidos · 🟡 2 contenidos · ⏳ 8 pendientes · 🔎 1 sin
 | **X-0014** | Errata «conversión» en el README de planificación. | ✅ |
 | **X-0015** | Prosas extensas en la documentación frente a la regla de brevedad. | ⏳ poda continua |
 | **X-0016** | El README público citaba documentos de trabajo que no se distribuyen. | ✅ `0da24f5` |
-| **X-0017** | La documentación atribuía al arranque descargas automáticas de catálogos que ya se habían retirado. | ⏳ |
+| **X-0017** | La documentación atribuía al arranque descargas automáticas de catálogos que ya se habían retirado. | ✅ `2c7035b` |
 
 ## Decisiones
 
@@ -148,7 +148,7 @@ Cuestiones que requieren decidir el comportamiento; las resueltas indican su acu
 
 | ID | Pendiente |
 |---|---|
-| **B-0008** | Añadir una región con un nombre repetido se descarta en silencio (`INSERT OR IGNORE`). |
+| **B-0008** | ✅ Región con nombre repetido rechazada con aviso, original/formulario conservados para renombrar o cancelar; sin falso éxito ni refresco. Aplicado en `2c7035b`. |
 | **E-0011** | ✅ Migración conservadora por equipo, sin fusiones por nombre; originales y vínculos conservados. Casillas sin marcar = No. Conflictos con asignaciones actuales se conservan sin sobrescribir. Aplicado en `4ca5a73`. |
 | **E-0012** | ✅ Todo o nada para guardar setups: BD y adjuntos; aplicado en `e5bf105`. |
 | **E-0013** | ✅ Total guardado y previsualización diferenciados; Guardar/Descartar/Cancelar con guardados separados de piezas y equipo. Descartar recupera lo persistido; Cancelar mantiene ediciones. Aplicado en `f5d02d7`. |
