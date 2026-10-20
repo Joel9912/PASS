@@ -127,6 +127,16 @@ class StackOptions:
             raise ValueError("-rgb_equal solo aplica a integración med o mean.")
 
 
+def require_registration_weights(options: StackOptions, *, registration_data: bool) -> None:
+    """Rechaza pesos estelares cuando la ruta pierde filas R, sin escoger otra ponderación por el usuario."""
+    if options.weighting in ("wfwhm", "nbstars") and not registration_data:
+        raise SirilError(
+            f"La ponderación {options.weighting} requiere datos de registro (filas R). "
+            "Las secuencias por canal o recortadas no los conservan. "
+            "Elige explícitamente otra ponderación o apila una secuencia completa de un solo canal."
+        )
+
+
 def apilar_pool(
     registro: Registro,
     nombre: str,
@@ -145,15 +155,14 @@ def apilar_pool(
       exactamente R/G/B, composición final ``<nombre>_rgb.fit``.
     - ``aceptados`` (índices 1-based que la auditoría dejó marcados) → se
       apilan solo esos; si recortan la secuencia se hace con una
-      secuencia de enlaces propia (sin filas R: sin ponderación
-      wfwhm/nbstars, se avisa).
+      secuencia de enlaces propia. Sin filas R, pedir ponderación
+      wfwhm/nbstars se rechaza antes de limpiar o ejecutar.
 
     Todo acaba en ``working/apilados/<nombre>/`` (se limpia antes: nada
     viejo se mezcla con lo nuevo).
     """
     opciones = opciones or StackOptions()
-    salida = WORKING_FOLDER / APILADOS_DIR / nombre
-    limpiar_trabajo(salida, raiz=WORKING_FOLDER / APILADOS_DIR)
+    opciones.to_siril_args()
 
     grupos = _grupos_filtrados(registro, aceptados)
     if not grupos:
@@ -165,22 +174,21 @@ def apilar_pool(
     completos = not registro.transformadas or (
         len(list(registro.dir.glob("r_*.fit"))) == len(registro.frames)
     )
-    if (
+    direct = (
         un_grupo
         and sum(len(v) for v in grupos.values()) == len(registro.frames)
         and completos
-    ):
+    )
+    require_registration_weights(opciones, registration_data=direct)
+    salida = WORKING_FOLDER / APILADOS_DIR / nombre
+    limpiar_trabajo(salida, raiz=WORKING_FOLDER / APILADOS_DIR)
+    if direct:
         return [_apilar_secuencia(
             registro.dir, registro.seq_apilable, salida / f"{nombre}.fit",
             opciones, progress_cb, log_cb,
         )]
 
     apiladas = []
-    if opciones.weighting in ("wfwhm", "nbstars") and log_cb:
-        log_cb(
-            "Ponderación wfwhm/nbstars pedida sobre secuencias de enlaces: los "
-            "datos de registro (filas R) no viajan con ellas."
-        )
     nombres = [_canal(filtro) for filtro in grupos]
     colision = len({nombre.casefold() for nombre in nombres}) != len(nombres)
     for numero, (filtro, indices) in enumerate(grupos.items(), start=1):
@@ -333,7 +341,7 @@ def _componer_rgb(
         (filtro or "").upper(): path
         for filtro, path in zip(grupos, apiladas, strict=True)
     }
-    if "" in canales or not set(canales) <= {"R", "G", "B"}:
+    if set(canales) != {"R", "G", "B"}:
         if log_cb:
             log_cb(
                 "Tres canales que no son R/G/B: el orden de la composición "

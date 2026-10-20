@@ -26,6 +26,16 @@ def test_filtros_normalizados_homonimos_no_comparten_salidas(tmp_path, siril_fal
     assert all(p.is_file() for p in salidas)
 
 
+@pytest.mark.parametrize("filters", [["R", "r", "G"], ["R", "g", "G"], ["b", "B", "R"]])
+def test_tres_filtros_sin_rgb_inequivoco_no_componen_ni_lanzan_keyerror(tmp_path, siril_falso, apilados, filters):
+    """Tres carpetas no implican tres canales distintos: preservar pilas sin inventar ni sobrescribir colores."""
+    registry = _registro(tmp_path, filters)
+    outputs = apilar_pool(registry, "canales")
+    assert len(outputs) == 3 and len({path.name.casefold() for path in outputs}) == 3
+    assert all(path.is_file() for path in outputs)
+    assert not any(command.startswith("rgbcomp") for call in siril_falso.llamadas for command in call["comandos"])
+
+
 class _SirilFalso:
     """Doble de ejecutar_script: link renumera; stack/rgbcomp crean su -out=."""
 
@@ -202,12 +212,11 @@ def test_aceptados_todos_es_apilado_directo(tmp_path, siril_falso, apilados):
 
 def test_aceptados_recortados_se_estagean(tmp_path, siril_falso, apilados):
     """Descartar un frame apila una secuencia propia solo con los aceptados."""
-    avisos = []
     registro = _registro(tmp_path, [None, None, None])
 
     salidas = apilar_pool(
         registro, "p", aceptados=[1, 3],
-        opciones=StackOptions(weighting="wfwhm"), log_cb=avisos.append,
+        opciones=StackOptions(),
     )
 
     # nombre del apilado (no el de grupo) y solo los aceptados estageados
@@ -217,7 +226,63 @@ def test_aceptados_recortados_se_estagean(tmp_path, siril_falso, apilados):
         "r_registro_00001.fit",
         "r_registro_00003.fit",
     ]
-    assert any("no viajan con ellas" in a for a in avisos)  # sin filas R: sin wfwhm
+
+
+@pytest.mark.parametrize("weighting", ["wfwhm", "nbstars"])
+@pytest.mark.parametrize("reason", ["subset", "channels", "missing"])
+def test_peso_estelar_sin_datos_falla_antes_de_limpiar_o_ejecutar(tmp_path, siril_falso, apilados, weighting, reason):
+    """No envía a SirIL pesos sin filas R ni borra salidas cuando ya sabe que la secuencia no los admite."""
+    registro = _registro(tmp_path, ["R", "G", "B"] if reason == "channels" else [None] * 3)
+    accepted = [1, 3] if reason == "subset" else None
+    if reason == "missing":
+        (registro.dir / "r_registro_00002.fit").unlink()
+    saved = apilados / "apilados" / "conservar" / "anterior.fit"
+    saved.parent.mkdir(parents=True)
+    saved.write_bytes(b"resultado anterior sintetico")
+    with pytest.raises(SirilError, match="datos de registro"):
+        apilar_pool(registro, "conservar", aceptados=accepted, opciones=StackOptions(weighting=weighting))
+    assert saved.read_bytes() == b"resultado anterior sintetico"
+    assert siril_falso.llamadas == []
+    assert not (registro.dir / "secuencias").exists()
+
+
+@pytest.mark.parametrize("weighting", ["wfwhm", "nbstars"])
+def test_peso_estelar_se_conserva_en_secuencia_completa(tmp_path, siril_falso, apilados, weighting):
+    """La protección no sustituye la ponderación elegida cuando se apila la secuencia con datos de registro."""
+    registro = _registro(tmp_path, [None] * 3)
+    apilar_pool(registro, "valido", opciones=StackOptions(weighting=weighting))
+    assert f"-weight={weighting}" in siril_falso.llamadas[0]["comandos"][0]
+
+
+@pytest.mark.parametrize("weighting", ["wfwhm", "nbstars"])
+def test_ui_canales_con_peso_sin_datos_no_registra_ni_cambia_opciones(qt_app, memory_db, tmp_path, monkeypatch, weighting):
+    """La UI detecta incompatibilidad antes del registro final; no elige otro peso ni modifica casillas."""
+    from stacks.global_pool import GlobalPool
+    from ui.stacker_tab import StackerPage
+
+    page = StackerPage()
+    messages = []
+    monkeypatch.setattr(page, "_decir", messages.append)
+    monkeypatch.setattr(page, "_asegurar_siril", lambda: True)
+    monkeypatch.setattr(page.panel_auditar, "aceptados", lambda: [1, 2])
+
+    def forbidden(*args, **kwargs):
+        """Falla si se intenta lanzar procesamiento pese a la incompatibilidad conocida."""
+        pytest.fail("No debe registrar ni apilar con pesos ausentes por canal")
+
+    monkeypatch.setattr(page, "_lanzar", forbidden)
+    try:
+        page.panel_apilar._ponderacion.setCurrentIndex(page.panel_apilar._ponderacion.findData(weighting))
+        page.registro = _registro(tmp_path, ["R", "G"])
+        page._pool = GlobalPool(entries=page.registro.frames)
+        page.apilar()
+        assert messages and "datos de registro" in messages[-1]
+        assert page.panel_apilar._ponderacion.currentData() == weighting
+        assert page.panel_auditar.aceptados() == [1, 2]
+        assert page._worker is None
+    finally:
+        page._cancelar_geometria()
+        page.deleteLater()
 
 
 def test_aceptados_por_canal_intersecta(tmp_path, siril_falso, apilados):

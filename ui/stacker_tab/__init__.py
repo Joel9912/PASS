@@ -68,7 +68,12 @@ from stacks.siril_runner import (
     binario_de_tarea,
     eliminar_salidas_trabajo,
 )
-from stacks.stacker import APILADOS_DIR, apilar_pool, exportar_apilados
+from stacks.stacker import (
+    APILADOS_DIR,
+    apilar_pool,
+    exportar_apilados,
+    require_registration_weights,
+)
 from ui.draft_recovery import (
     DraftRecovery,
     capture_controls,
@@ -1218,6 +1223,11 @@ class StackerPage(QWidget):
         ]
         if not marcas:
             self._decir("Los frames marcados ya no existen: vuelve a auditar.")
+            return
+        try:
+            require_registration_weights(opciones, registration_data=len({frame.filtro for frame in marcas}) == 1)
+        except SirilError as exc:
+            self._decir(str(exc))
             return
         if not nombre:
             try:
