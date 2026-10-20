@@ -668,13 +668,15 @@ class PlanificacionTab(QWidget):
         if ra is None or dec is None:
             self._curve.clear("El objeto no tiene coordenadas")
             return
-        self._curve.show_curve(
-            night_curve(
+        try:
+            curve = night_curve(
                 ra, dec, self._latitude, self._longitude,
                 self._date_iso(), self._utc_offset_hours,
-            ),
-            target_label=str(target["object_id"]),
-        )
+            )
+        except ValueError as exc:
+            self._curve.clear(str(exc))
+            return
+        self._curve.show_curve(curve, target_label=str(target["object_id"]))
 
     def _invalidate_plan(self) -> None:
         """Vacía el plan cuando cambian los datos que lo condicionan."""
@@ -719,6 +721,11 @@ class PlanificacionTab(QWidget):
                 top_n=self.PLAN_TOP,
                 utc_offset_hours=self._utc_offset_hours,
             )
+        except ValueError as exc:
+            self._plan = []
+            self._plan_table.setRowCount(0)
+            self._window_label.setText(str(exc))
+            return
         finally:
             QApplication.restoreOverrideCursor()
             self._plan_button.setEnabled(True)

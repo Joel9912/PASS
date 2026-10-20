@@ -48,6 +48,7 @@ from planners.celestial_search import (
     SearchFilters,
     search,
 )
+from planners.planning_dates import planning_date
 from planners.transit import night_curve
 
 from ...style import PALETTE
@@ -363,6 +364,17 @@ class BusquedaTab(QWidget):
         cambiaron**: cambiar solo un filtro o pulsar Enter dos veces no
         vuelve a calcular ~1,1 s de efemérides+curva (M-01).
         """
+        try:
+            planning_date(self.current_date_iso())
+        except ValueError as exc:
+            self._rows = []
+            self._table.setRowCount(0)
+            self._add_button.setEnabled(False)
+            self._count.setText("Fecha fuera de 1950–2100")
+            self._curve.clear(str(exc))
+            self._ephemeris.show_invalid_date(str(exc))
+            self._clave_ephemeris = self._clave_curva = self._clave_clima = None
+            return
         self._run_search()
         self._refresh_ephemeris()
         self._refresh_selected_curve()

@@ -39,6 +39,7 @@ from planners.moon_distance import (
     capture_summary_from_samples,
     min_moon_distance,
 )
+from planners.planning_dates import planning_interval
 from planners.timefmt import format_hhmm
 from planners.transit import night_curve, night_info
 
@@ -210,7 +211,7 @@ def best_dates(
     ``transit_local`` y los rangos de ``windows``.
     """
     weights = weights or CaptureWeights()
-    first = date.fromisoformat(start_date) if start_date else date.today()
+    first = planning_interval(start_date if start_date is not None else date.today(), date_range_days)
 
     max_alt = max_altitude(latitude, target_dec_deg)
     if max_alt <= 0.0:

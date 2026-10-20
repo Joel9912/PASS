@@ -18,6 +18,7 @@ from planners.analytical_transit import (
     max_altitude,
     transit_local_hours,
 )
+from planners.planning_dates import planning_date
 
 #: Catálogos disponibles en el programa (cargados por catalog_loader).
 CATALOGS: tuple[str, ...] = (
@@ -186,6 +187,8 @@ def search(filters: SearchFilters, limit: int = DEFAULT_LIMIT) -> list[dict]:
     ese orden el ``limit`` también se aplica allí, porque el tránsito no
     vive en la tabla y una ventana SQL por magnitud desplazaría el resultado.
     """
+    if filters.latitude is not None and filters.date_iso is not None:
+        planning_date(filters.date_iso)
     where: list[str] = ["1=1"]
     params: list = []
 

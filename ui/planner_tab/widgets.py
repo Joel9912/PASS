@@ -1262,9 +1262,16 @@ class EphemerisPanel(QFrame):
         self._utc_offset_hours = utc_offset_hours
         self.set_date(date_iso)
 
-        info: NightInfo = night_info(
-            latitude, longitude, date_iso, utc_offset_hours=utc_offset_hours
-        )
+        try:
+            info: NightInfo = night_info(
+                latitude, longitude, date_iso, utc_offset_hours=utc_offset_hours
+            )
+        except ValueError as exc:
+            self.show_invalid_date(str(exc))
+            return
+        self._moon_icon.show()
+        self._date.setToolTip("")
+        self._date.setAccessibleDescription("")
         illumination = info.moon_illumination
 
         self._moon_icon.set_phase(illumination, info.waxing)
@@ -1304,6 +1311,17 @@ class EphemerisPanel(QFrame):
                 f'<span style="color:#60a5fa">{_local_label(dusk)} – '
                 f"{_local_label(dawn)}</span>"
             )
+
+    def show_invalid_date(self, message: str) -> None:
+        """Retira resultados antiguos sin corregir la fecha elegida ni dibujar una fase lunar ficticia."""
+        self._moon_icon.hide()
+        self._phase_label.setText("Fecha no admitida")
+        self._illum_label.setText("Sin cálculo")
+        self._bar.set_marks(None, None, None, None)
+        self._sunset_label.setText("Puesta de Sol: —")
+        self._night_label.setText("Planificación: 1950–2100")
+        self._date.setToolTip(message)
+        self._date.setAccessibleDescription(message)
 
     def current_date_iso(self) -> str:
         """Fecha visible como ``yyyy-MM-dd``."""

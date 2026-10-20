@@ -28,6 +28,7 @@ from astropy.time import Time
 from astropy.utils import iers
 
 from .analytical_transit import local_utc_offset
+from .planning_dates import planning_date
 
 # Offline: nada de descargar tablas IERS al importar (arranque rápido y sin red).
 iers.conf.auto_download = False
@@ -167,6 +168,7 @@ def _night_times(
     local, muestreada cada ``sample_min`` minutos. Trabaja en UTC; el
     desfase local lo pone :func:`local_utc_offset`.
     """
+    date_iso = planning_date(date_iso).isoformat()
     start = Time(date_iso) + (
         16.0 - local_utc_offset(longitude_deg, utc_offset_hours)
     ) * u.hour
