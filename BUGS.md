@@ -24,8 +24,8 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 
 ## Resumen
 
-**110 hallazgos**: 🔴 18 graves · 🟠 64 medios · 🟡 19 bajos · 9 decisiones (4 pendientes).
-Estado: ✅ 89 corregidos · 🟡 2 contenidos · ⏳ 9 pendientes · 🔎 1 sin reproducir.
+**110 hallazgos**: 🔴 18 graves · 🟠 64 medios · 🟡 19 bajos · 9 decisiones (3 pendientes).
+Estado: ✅ 91 corregidos · 🟡 2 contenidos · ⏳ 7 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -79,7 +79,7 @@ Estado: ✅ 89 corregidos · 🟡 2 contenidos · ⏳ 9 pendientes · 🔎 1 sin
 | **S-0029** | El autoestirado de las previsualizaciones FITS levanta demasiado el fondo y el ruido, dificultando la inspección de los lights. | ✅ `b2cbeba` |
 | **S-0030** | El pie del visor de Auditar ocupa varias líneas con fecha y motivos largos, reduciendo el espacio de la imagen FITS. | ✅ `836f23b` |
 | **S-0031** | Los avisos separados de operación y borrador del Apilador consumen altura y favorecen solapamientos entre tabla, pie FITS y controles de gráfica en ventanas ajustadas. | ✅ `98b2053` |
-| **S-0032** | Tres filtros cuyos nombres solo representan dos canales al ignorar mayúsculas, como R/r/G, provocan KeyError al intentar componer RGB. | ⏳ |
+| **S-0032** | Tres filtros cuyos nombres solo representan dos canales al ignorar mayúsculas, como R/r/G, provocan KeyError al intentar componer RGB. | ✅ `111bcea` |
 | **E-0003** | Una pieza usada en dos roles deja el formulario y los totales desactualizados tras editar o borrar. | ✅ `dbc82e4` |
 | **E-0004** | El precio de un filtro editado no repinta el total hasta otra interacción. | ✅ `dbc82e4` |
 | **E-0005** | `NaN`/infinito y precio o peso negativos no se filtran antes de persistir un setup. | ✅ `a491664` |
@@ -114,7 +114,7 @@ Estado: ✅ 89 corregidos · 🟡 2 contenidos · ⏳ 9 pendientes · 🔎 1 sin
 | **T-0006** | Tests con geometría dependiente de temporizadores o DPI de la pantalla. | ✅ `09d0a8f` |
 | **T-0007** | El modo offscreen se activa con `setdefault` y puede no aplicarse. | ✅ `8930f6d` |
 | **T-0008** | Algunos tests de Configuración crean widgets sin solicitar QApplication y abortan al ejecutarlos aisladamente. | ✅ `e07a987` |
-| **T-0009** | La prueba de recuperación puede intentar borrar un FITS mientras la lectura asíncrona de estimaciones mantiene su cabecera abierta en Windows. | ⏳ |
+| **T-0009** | La prueba de recuperación puede intentar borrar un FITS mientras la lectura asíncrona de estimaciones mantiene su cabecera abierta en Windows. | ✅ `84abf8b` |
 | **X-0001** | El README raíz contradice la GPL al prohibir la venta. | ✅ `18c384e` |
 | **X-0002** | El README raíz describe un ranking de objetos que no existe. | ✅ `18c384e` |
 | **X-0003** | El README raíz presenta el Planetario como dependiente de red. | ✅ `18c384e` |
@@ -155,7 +155,7 @@ Cuestiones que requieren decidir el comportamiento; las resueltas indican su acu
 | **E-0011** | ✅ Migración conservadora por equipo, sin fusiones por nombre; originales y vínculos conservados. Casillas sin marcar = No. Conflictos con asignaciones actuales se conservan sin sobrescribir. Aplicado en `4ca5a73`. |
 | **E-0012** | ✅ Todo o nada para guardar setups: BD y adjuntos; aplicado en `e5bf105`. |
 | **E-0013** | ✅ Total guardado y previsualización diferenciados; Guardar/Descartar/Cancelar con guardados separados de piezas y equipo. Descartar recupera lo persistido; Cancelar mantiene ediciones. Aplicado en `f5d02d7`. |
-| **S-0010** | Una secuencia nueva pide métricas `wfwhm`/`nbstars` que SirIL no vuelve a calcular. |
+| **S-0010** | ✅ Sin datos de registro, wfwhm/nbstars se rechazan antes de limpiar o ejecutar, sin cambiar la ponderación elegida. Aplicado en `111bcea`. |
 | **P-0011** | Las horas se calculan con un offset fijo por ubicación: no se tiene en cuenta el cambio de hora (DST). |
 | **U-0007** | Al planificar no está decidido si se selecciona la noche sugerida o la fecha guardada por el usuario. |
 | **U-0008** | No está definida la precedencia del FOV entre la región del objetivo y el encuadre del equipo. |

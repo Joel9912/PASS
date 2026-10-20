@@ -4,7 +4,7 @@
 
 > La base del programa es la planificación (sesiones y equipo). El planetario y el apilador son añadidos que lo completan.
 
-**Estado: `v0.2` (alpha).** Es software libre en desarrollo activo: funciona sobre capturas reales, pero algunas pestañas siguen en construcción (indicadas abajo).
+**Estado: `v0.2-alpha` en preparación, todavía sin publicar.** Es software libre en desarrollo activo. La base de Equipo, Planificador y Apilador está implementada, pero eso no significa que todas sus funciones previstas estén terminadas. Los paquetes de datos definitivos y su cobertura/licencias siguen en preparación.
 
 ## Pestañas
 
@@ -14,14 +14,14 @@
 | **Planetario** | Planetario con imágenes DSS2: esfera de fondo + esfera de objetos (Messier, NGC, IC, LDN) | 🔶 placeholder |
 | **Equipo** | Setups y localizaciones del equipo con datos fríos y adjuntos visuales | ✅ |
 | **Planificador de Equipo** | Comparativas de equipo por características comparables y presupuesto | 🔶 placeholder |
-| **Planificador** ⭐ | Búsqueda con filtros, tránsito/luna/noche astronómica, selección de fechas para captura, catálogo personal y sesiones planificadas | ✅ |
-| **Apilador** | Escaneo de sesiones, calibración automática, auditoría con métricas de SirIL y apilado (drizzle, rechazo, ponderación, RGB) | ✅ |
+| **Planificador** ⭐ | Búsqueda, tránsito/luna/noche, catálogo personal y sesiones planificadas | Base implementada; rediseño previsto para v0.3-alpha |
+| **Apilador** | Sesiones y FOV, calibración, métricas de SirIL y apilado con drizzle, rechazo, ponderación y RGB | Flujo implementado; diagnóstico avanzado y nuevos modos pendientes |
 
 ## Requisitos
 
 - Windows, PowerShell
 - Python 3.12
-- [SirIL](https://siril.org/) para la pestaña Apilador (se detecta desde el `PATH`; si no, el usuario indica la ruta en Configuración)
+- [SirIL](https://siril.org/) para el Apilador: la ruta elegida en Configuración tiene prioridad; `PATH` solo se usa sin una elección. Una ruta elegida inválida avisa y no cambia de instalación automáticamente.
 
 ## Instalación
 
@@ -63,7 +63,7 @@ Planning Stacking Suite/
 ├── equipment/         # Modelos y CRUD de equipo/localizaciones
 ├── planetary/         # Planetario (esferas DSS2 y de objetos)
 ├── ui/                # 6 pestañas PyQt6 (una carpeta por pestaña)
-├── i18n/              # Traducciones Qt (es/en)
+├── i18n/              # Plantillas Qt es/en, todavía sin integrar
 ├── scripts/           # Herramientas de mantenimiento
 ├── tests/             # Tests pytest
 └── data/              # Base de datos local (no versionada)
