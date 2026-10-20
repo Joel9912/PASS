@@ -300,6 +300,7 @@ def test_catalog_config_no_network_on_open(qt_app, monkeypatch):
 
 def test_catalogos_tabla_botones_y_progreso(qt_app):
     """El diseño aprobado muestra columnas, botones en una fila y progreso honesto."""
+    from PyQt6.QtCore import Qt
     from PyQt6.QtWidgets import QHBoxLayout
 
     from ui.config_tab.catalogs_page import CatalogsPage
@@ -309,6 +310,8 @@ def test_catalogos_tabla_botones_y_progreso(qt_app):
         "Catálogo", "Versión", "Actualizado",
     ]
     assert page._table.rowCount() == len(packages.GROUPS)
+    assert all(page._table.item(row, column).textAlignment() == Qt.AlignmentFlag.AlignCenter
+               for row in range(page._table.rowCount()) for column in range(3))
     panel = page._panel.layout()
     rows = [panel.itemAt(i).layout() for i in range(panel.count())]
     assert page._panel.objectName() == "GroupFrame"
@@ -320,6 +323,8 @@ def test_catalogos_tabla_botones_y_progreso(qt_app):
     page._progress.setRange(0, 0)
     page._finished({}, "Sin red")
     assert page._progress.maximum() == 1 and page._progress.value() == 0
+    assert all(page._table.item(row, 0).textAlignment() == Qt.AlignmentFlag.AlignCenter
+               for row in range(page._table.rowCount()))
     page.deleteLater()
 
 

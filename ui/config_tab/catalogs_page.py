@@ -124,9 +124,7 @@ class CatalogsPage(QWidget):
                     item.setToolTip(state + ". Versión sin identificar o catálogo no instalado.")
                 if not health["available"]:
                     item.setToolTip(health["error"])
-                item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | (
-                    Qt.AlignmentFlag.AlignLeft if column == 0 else Qt.AlignmentFlag.AlignHCenter
-                ))
+                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 color = PALETTE["accentLight"] if column == 0 else PALETTE["textDim"]
                 if column == 0:
                     font = item.font()
