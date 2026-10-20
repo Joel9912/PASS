@@ -6,6 +6,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from uuid import uuid4
 
+from .catalog_records import resolve
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS identity_schema(version INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS objects(pass_id TEXT PRIMARY KEY);
@@ -118,6 +120,7 @@ def link_personal_references(personal: sqlite3.Connection, registry: sqlite3.Con
     control de cualquier transacción previa del llamante, incluida activación.
     """
     counts = {"linked": 0, "unresolved": 0, "preserved": 0, "regions": 0}
+    edition_records = any(row[1] == "row_kind" for row in registry.execute("PRAGMA table_info(objects)"))
     personal.execute("SAVEPOINT pass_catalog_links")
     try:
         for table, kind_column in (("personal_catalog", "kind"), ("planned_sessions", "target_kind")):
@@ -131,11 +134,14 @@ def link_personal_references(personal: sqlite3.Connection, registry: sqlite3.Con
                     continue
                 if table == "personal_catalog":
                     namespace = personal.execute("SELECT catalog FROM personal_catalog WHERE id=?", (row_id,)).fetchone()[0]
-                    pass_id = resolve_designation(registry, namespace, designation)
+                    pass_id = resolve(registry, designation, namespace) if edition_records else resolve_designation(registry, namespace, designation)
                 else:
-                    matches = registry.execute("SELECT DISTINCT pass_id FROM designations WHERE designation=? LIMIT 2",
-                                               (designation,)).fetchall()
-                    pass_id = matches[0][0] if len(matches) == 1 else None
+                    if edition_records:
+                        pass_id = resolve(registry, designation)
+                    else:
+                        matches = registry.execute("SELECT DISTINCT pass_id FROM designations WHERE designation=? LIMIT 2",
+                                                   (designation,)).fetchall()
+                        pass_id = matches[0][0] if len(matches) == 1 else None
                 if pass_id is None:
                     counts["unresolved"] += 1
                 else:

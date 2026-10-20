@@ -17,6 +17,7 @@ from db.catalog_editions import (
     catalog_snapshot,
     install_edition,
 )
+from planners.catalog_records import validate_records
 
 RELEASES_URL = "https://api.github.com/repos/Joel9912/PASS/releases?per_page=5"
 GROUPS = ("openngc", "hyg", "ldn")
@@ -64,6 +65,8 @@ def parse_manifest(data):
     for item in packages.values():
         if not isinstance(item, dict):
             raise TypeError("Entrada de paquete inválida.")
+        if type(item.get("payload_format", 1)) is not int or item.get("payload_format", 1) not in (1, 2):
+            raise ValueError("Formato del contenido de paquete no compatible.")
         if (not isinstance(item.get("version"), str) or not item["version"]
                 or not isinstance(item.get("date"), str)
                 or not isinstance(item.get("url"), str)
@@ -148,6 +151,7 @@ def update_packages(db_path, packages, groups, *, reader=None, only_missing=Fals
     se confirman en pass.db. Los archivos se validan antes de activarlos.
     """
     prepared = {}
+    records = {}
     reader = reader or _read
     for group in groups:
         if group not in GROUPS:
@@ -160,14 +164,27 @@ def update_packages(db_path, packages, groups, *, reader=None, only_missing=Fals
             payload = stream.read(MAX_PACKAGE + 1)
         if len(payload) > MAX_PACKAGE:
             raise ValueError("El paquete descomprimido es demasiado grande.")
-        rows = json.loads(payload)
+        content = json.loads(payload)
+        payload_format = item.get("payload_format", 1)
+        if type(payload_format) is not int or payload_format not in (1, 2):
+            raise ValueError("Formato del contenido de paquete no compatible.")
+        if payload_format == 2:
+            if (not isinstance(content, dict) or set(content) != {"format", "rows", "records"}
+                    or type(content["format"]) is not int or content["format"] != 2):
+                raise ValueError("Contenido con identidades incompatible.")
+            rows = content["rows"]
+            validate_rows(group, rows)
+            validate_records(rows, content["records"])
+            records[group] = content["records"]
+        else:
+            rows = content
         validate_rows(group, rows)
         prepared[group] = rows
     replacements = {group: (STAR_COLUMNS if group == "hyg" else CAT_COLUMNS, rows)
                     for group, rows in prepared.items()}
     versions = {group: {"version": packages[group]["version"], "date": packages[group]["date"],
                         "sha256": packages[group]["sha256"]} for group in prepared}
-    install_edition(Path(db_path), replacements, versions, GROUPS, only_missing=only_missing)
+    install_edition(Path(db_path), replacements, versions, GROUPS, only_missing=only_missing, records=records)
 
 
 def install_bundled(db_path, folder):

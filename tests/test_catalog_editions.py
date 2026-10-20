@@ -59,7 +59,7 @@ def test_actualizar_no_escribe_tablas_legacy_ni_exporta_datos_personales(file_db
     assert conn.execute("SELECT count(*) FROM catalog_editions").fetchone()[0] == 2
     with editions.catalog_snapshot(conn) as snapshot:
         assert {row[0] for row in snapshot.execute("SELECT name FROM sqlite_master WHERE type='table'")} == {
-            "catalog", "stars", "sqlite_sequence",
+            "catalog", "stars", "sqlite_sequence", "objects", "source_records", "designations", "object_relations",
         }
         assert "nota privada" not in "\n".join(snapshot.iterdump())
         assert "no_exportar_al_catalogo" not in "\n".join(snapshot.iterdump())

@@ -11,7 +11,8 @@ sí la calcula :mod:`planners.transit` con astropy.
 import re
 from dataclasses import dataclass, field
 
-from db.catalog_editions import read_rows
+from db.catalog_editions import CatalogUnavailableError, catalog_snapshot, read_rows
+from db.catalog_records import has_records
 from db.connection import get_connection
 from planners.analytical_transit import (
     format_transit_hours,
@@ -310,18 +311,38 @@ def get_object(object_id: str) -> dict | None:
     Acepta los alias habituales del usuario (mayúsculas, espacios de más o
     de menos, ceros a la izquierda). Un alias numérico que no es la
     designación principal ('NGC 224' de M31) resuelve por su columna de
-    cruce, con la misma fila que devolvería el catálogo OpenNGC.
+    cruce en datos legacy. Con identidades explícitas solo usa los alias
+    declarados y rechaza coincidencias ambiguas, sin elegir por orden.
     """
     designation = _canonical_designation(object_id)
-    if designation is None:
+    personal = get_connection()
+    try:
+        with catalog_snapshot(personal) as catalog:
+            identified = catalog is not personal and has_records(catalog)
+            if identified:
+                canonical = designation[0] if designation else object_id
+                rows = catalog.execute(
+                    "SELECT DISTINCT c.*,o.pass_id FROM catalog c "
+                    "LEFT JOIN objects o ON o.row_kind='catalog' AND o.row_id=c.id "
+                    "WHERE c.object_id=? COLLATE NOCASE OR o.pass_id IN "
+                    "(SELECT pass_id FROM designations WHERE designation=? COLLATE NOCASE) LIMIT 2",
+                    (canonical, canonical),
+                ).fetchall()
+                if rows:
+                    return dict(rows[0]) if len(rows) == 1 else None
+            if designation is None:
+                return None
+            canonical, column, number, suffix = designation
+            where = "object_id = ? COLLATE NOCASE"
+            parameters = [canonical]
+            if column is not None and not suffix:
+                where += f" OR {column} = ?"
+                parameters.append(number)
+            if identified:
+                where = "(" + where + ") AND id NOT IN (SELECT row_id FROM objects WHERE row_kind='catalog')"
+            parameters.append(canonical)
+            rows = catalog.execute("SELECT * FROM catalog WHERE " + where
+                                   + " ORDER BY (object_id = ? COLLATE NOCASE) DESC, object_id LIMIT 1", parameters).fetchall()
+            return dict(rows[0]) if rows else None
+    except CatalogUnavailableError:
         return None
-    canonical, column, number, suffix = designation
-    where = "object_id = ? COLLATE NOCASE"
-    parameters = [canonical]
-    if column is not None and not suffix:
-        where += f" OR {column} = ?"
-        parameters.append(number)
-    parameters.append(canonical)
-    rows = read_rows(get_connection(), "SELECT * FROM catalog WHERE " + where
-                     + " ORDER BY (object_id = ? COLLATE NOCASE) DESC, object_id LIMIT 1", parameters)
-    return dict(rows[0]) if rows else None

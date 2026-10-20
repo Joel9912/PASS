@@ -7,6 +7,7 @@ Además de la fecha y el equipo, cada sesión guarda los parámetros del
 encuadre (centro RA/Dec, FOV, teselas) y las notas, para que la sesión sea
 reproducible sin volver a calcularla.
 """
+from db.catalog_editions import reference_id
 from db.connection import get_connection
 
 #: Columnas que :func:`update_session` permite modificar.
@@ -53,11 +54,11 @@ def add(
         cur = conn.execute(
             "INSERT INTO planned_sessions (object_id, target_name, setup_id,"
             " session_date, planned_exposure_s, target_kind, ra_hours, dec_deg,"
-            " fov_major_arcmin, fov_minor_arcmin, tiles_x, tiles_y, notes)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " fov_major_arcmin, fov_minor_arcmin, tiles_x, tiles_y, notes, pass_object_id)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (object_id, target_name, setup_id, session_date, planned_exposure_s,
              target_kind, ra_hours, dec_deg, fov_major_arcmin, fov_minor_arcmin,
-             tiles_x, tiles_y, notes),
+             tiles_x, tiles_y, notes, reference_id(conn, object_id) if target_kind != "region" else None),
         )
     return cur.lastrowid
 

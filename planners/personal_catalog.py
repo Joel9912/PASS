@@ -8,7 +8,13 @@ Además de objetos del catálogo global, admite **regiones de interés**
 definidos por el usuario. Las regiones NO se pintan en el planetario (solo
 se usan en planificación) para no ensuciar la vista estelar.
 """
-from db.catalog_editions import active_id, read_rows
+from db.catalog_editions import (
+    CatalogUnavailableError,
+    active_id,
+    catalog_snapshot,
+    reference_id,
+)
+from db.catalog_records import lookup, object_rows
 from db.connection import get_connection
 
 
@@ -28,10 +34,11 @@ def add(
     conn = get_connection()
     inserted = conn.execute(
         "INSERT OR IGNORE INTO personal_catalog (object_id, catalog, kind, notes,"
-        " ra_hours, dec_deg, fov_major_arcmin, fov_minor_arcmin, tiles_x, tiles_y)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " ra_hours, dec_deg, fov_major_arcmin, fov_minor_arcmin, tiles_x, tiles_y, pass_object_id)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (object_id, catalog, kind, notes, ra_hours, dec_deg,
-         fov_major_arcmin, fov_minor_arcmin, tiles_x, tiles_y),
+         fov_major_arcmin, fov_minor_arcmin, tiles_x, tiles_y,
+         reference_id(conn, object_id, catalog) if kind != "region" else None),
     )
     conn.commit()
     return inserted.rowcount == 1
@@ -97,20 +104,36 @@ def list_objects() -> list[dict]:
     llevan su centro y encuadre en sus propias columnas; ``ra_hours``/
     ``dec_deg`` del resultado son los del catálogo si existen y si no los de
     la región, para que la UI pueda leer siempre una coordenada.
+
+    Con identidades explícitas prima el vínculo estable; si falta en la
+    edición no se sustituye por otro objeto homónimo. No modifica notas,
+    coordenadas guardadas ni designación personal al actualizar el catálogo.
     """
     conn = get_connection()
     if active_id(conn) is not None:
         rows = conn.execute(
-            "SELECT object_id,catalog,kind,notes,created_at,ra_hours AS region_ra_hours,"
+            "SELECT object_id,catalog,kind,notes,created_at,pass_object_id,ra_hours AS region_ra_hours,"
             "dec_deg AS region_dec_deg,fov_major_arcmin,fov_minor_arcmin,tiles_x,tiles_y "
             "FROM personal_catalog ORDER BY created_at"
         ).fetchall()
-        objects = {(row["object_id"], row["catalog"]): dict(row)
-                   for row in read_rows(conn, "SELECT * FROM catalog")}
+        try:
+            with catalog_snapshot(conn) as catalog:
+                projected = object_rows(catalog)
+                unlinked = {(row["object_id"], row["catalog"]): lookup(catalog, row["object_id"], row["catalog"])
+                            for row in rows if row["kind"] != "region" and row["pass_object_id"] is None}
+        except CatalogUnavailableError:
+            projected = []
+            unlinked = {}
+        identities = {row["pass_id"]: row for row in projected if row.get("pass_id")}
         result = []
         for row in rows:
             item = dict(row)
-            source = objects.get((item["object_id"], item["catalog"]), {}) if item["kind"] != "region" else {}
+            if item["kind"] == "region":
+                source = {}
+            elif item["pass_object_id"] is not None:
+                source = identities.get(item["pass_object_id"], {})
+            else:
+                source = unlinked.get((item["object_id"], item["catalog"])) or {}
             for field in ("name", "type", "magnitude", "size_major_arcmin", "size_minor_arcmin", "constellation"):
                 item[field] = source.get(field)
             for field in ("ra_hours", "dec_deg"):

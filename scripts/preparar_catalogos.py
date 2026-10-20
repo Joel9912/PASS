@@ -16,6 +16,60 @@ from pathlib import Path
 
 from db import connection
 from planners import catalog_loader, catalog_packages, ldn_loader
+from planners.catalog_records import validate_records
+
+
+def export_identified(version, output, components, registry):
+    """Exporta componentes explícitamente revisados con IDs de un registro existente, sin red ni datos personales.
+
+    Cada componente contiene ``rows`` y ``records`` del contrato formato 2.
+    La validez estructural no acredita cobertura ni autoriza redistribuir
+    una fuente: el llamante debe revisar sus permisos y atribuciones.
+    No cambia la ruta CLI legacy ni genera el paquete global definitivo.
+    """
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", version):
+        raise ValueError("Versión no válida para un adjunto de release.")
+    output = Path(output)
+    if output.exists() or not isinstance(components, dict) or set(components) != set(catalog_packages.GROUPS):
+        raise ValueError("Destino nuevo y manifiesto completo de componentes conocidos requeridos.")
+    artifacts, packages = {}, {}
+    identities, source_keys, targets = set(), set(), set()
+    for group, content in components.items():
+        if not isinstance(content, dict) or set(content) != {"rows", "records"}:
+            raise ValueError("Componente con identidades incompatible.")
+        rows, records = content["rows"], content["records"]
+        catalog_packages.validate_rows(group, rows)
+        validate_records(rows, records)
+        for record in records:
+            if record["pass_id"] in identities:
+                raise ValueError("Identidad repetida entre componentes; no se fusionan filas automáticamente.")
+            identities.add(record["pass_id"])
+            targets.update(relation["target"] for relation in record["relations"])
+            for source in record["sources"]:
+                key = source["source"], source["key"]
+                if key in source_keys:
+                    raise ValueError("Registro de fuente repetido entre componentes.")
+                source_keys.add(key)
+                known = registry.execute("SELECT pass_id FROM source_records WHERE source=? AND source_key=?",
+                                         (source["source"], source["key"])).fetchone()
+                if known is None or known[0] != record["pass_id"]:
+                    raise ValueError("La identidad de la fuente no coincide con el registro persistente del preparador.")
+        name = f"catalog-{group}-{version}.json.gz"
+        payload = json.dumps({"format": 2, **content}, ensure_ascii=False, allow_nan=False).encode()
+        data = gzip.compress(payload, mtime=0)
+        if max(len(data), len(payload)) > catalog_packages.MAX_PACKAGE:
+            raise ValueError("Paquete demasiado grande para el instalador.")
+        artifacts[name] = data
+        packages[group] = {"version": version, "date": datetime.now(UTC).date().isoformat(),
+                           "payload_format": 2, "size": len(data), "sha256": hashlib.sha256(data).hexdigest(),
+                           "url": f"https://github.com/Joel9912/PASS/releases/download/{version}/{name}"}
+    if not targets <= identities:
+        raise ValueError("La exportación contiene relaciones con identidades ausentes.")
+    output.mkdir(parents=True)
+    for name, data in artifacts.items():
+        (output / name).write_bytes(data)
+    (output / "catalogs-manifest.json").write_text(
+        json.dumps({"format": 1, "packages": packages}, indent=2), encoding="utf-8")
 
 
 def prepare(version, output):

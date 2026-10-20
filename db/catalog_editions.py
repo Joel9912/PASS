@@ -9,6 +9,15 @@ from contextlib import closing, contextmanager
 from pathlib import Path
 from uuid import uuid4
 
+from .catalog_identity import link_personal_references
+from .catalog_records import (
+    TABLES,
+    has_records,
+    insert_records,
+    resolve,
+    validate_continuity,
+)
+
 ACTIVE_KEY = "catalog_active_edition"
 EDITION_FOLDER = "catalog-editions"
 CATALOG_SCHEMA = Path(__file__).with_name("catalog_schema.sql")
@@ -79,7 +88,7 @@ def _open(root: Path, record: dict) -> sqlite3.Connection:
     """Verifica tamaño/huella y abre readonly; una edición corrupta nunca se sustituye silenciosamente."""
     conn = None
     try:
-        if record["schema_version"] != 1:
+        if record["schema_version"] not in (1, 2):
             raise CatalogUnavailableError("Formato de edición no compatible; se conserva sin convertir.")
         path = _path(root, record)
         if not path.is_file() or path.stat().st_size != record["size_bytes"] or _digest(path) != record["sha256"]:
@@ -92,6 +101,11 @@ def _open(root: Path, record: dict) -> sqlite3.Connection:
             raise CatalogUnavailableError("La edición no supera la comprobación SQLite.")
         for table, columns in (("catalog", CAT_COLUMNS), ("stars", STAR_COLUMNS)):
             conn.execute(f"SELECT id,{columns} FROM {table} LIMIT 0")
+        if record["schema_version"] == 2:
+            for table, columns in TABLES.items():
+                conn.execute(f"SELECT {columns} FROM {table} LIMIT 0")
+            if conn.execute("PRAGMA foreign_key_check").fetchone() is not None:
+                raise CatalogUnavailableError("Relaciones de catálogo incompletas.")
         return conn
     except (OSError, sqlite3.Error, CatalogUnavailableError) as exc:
         if conn is not None:
@@ -118,6 +132,17 @@ def read_rows(personal: sqlite3.Connection, sql: str, parameters=()) -> list:
     except CatalogUnavailableError as exc:
         logging.getLogger(__name__).error("%s", exc)
         return []
+
+
+def reference_id(personal: sqlite3.Connection, designation: str, namespace: str | None = None) -> str | None:
+    """Vincula nuevas referencias solo a una identidad explícita de la edición activa; legacy sigue sin atribución."""
+    if active_id(personal) is None:
+        return None
+    try:
+        with catalog_snapshot(personal) as catalog:
+            return resolve(catalog, designation, namespace)
+    except CatalogUnavailableError:
+        return None
 
 
 def status(personal: sqlite3.Connection) -> dict:
@@ -151,17 +176,20 @@ def _unactivated_count(personal: sqlite3.Connection) -> int:
         return 0
 
 
-def _capture(source: sqlite3.Connection) -> dict:
+def _capture(source: sqlite3.Connection, *, include_records: bool = False) -> dict:
     """Captura solo tablas astronómicas; nunca clona equipo, ubicaciones, sesiones, notas o claves."""
     result = {}
     for table, fields in (("catalog", CAT_COLUMNS), ("stars", STAR_COLUMNS)):
         columns = "id," + fields
         cursor = source.execute(f"SELECT {columns} FROM {table} ORDER BY id")
         result[table] = (columns, [tuple(row) for row in cursor])
+    if include_records and has_records(source):
+        for table, columns in TABLES.items():
+            result[table] = (columns, [tuple(row) for row in source.execute(f"SELECT {columns} FROM {table}")])
     return result
 
 
-def _candidate(root: Path, captured: dict, replacements: dict, versions: dict, previous: str | None) -> dict:
+def _candidate(root: Path, captured: dict, replacements: dict, versions: dict, previous: str | None, *, records=None) -> dict:
     """Construye un archivo nuevo; un fallo elimina solo este candidato, nunca un recurso activo o anterior."""
     folder = root / EDITION_FOLDER
     if folder.is_symlink() or folder.is_junction():
@@ -173,22 +201,36 @@ def _candidate(root: Path, captured: dict, replacements: dict, versions: dict, p
         pass
     try:
         with closing(sqlite3.connect(path)) as target, target:
+            target.execute("PRAGMA foreign_keys=ON")
             statement = ""
             for line in CATALOG_SCHEMA.read_text(encoding="utf-8").splitlines(keepends=True):
                 statement += line
                 if sqlite3.complete_statement(statement):
                     target.execute(statement)
                     statement = ""
+            target.execute("BEGIN")
+            target.execute("PRAGMA defer_foreign_keys=ON")
             for table, (columns, rows) in captured.items():
                 placeholders = ",".join("?" for _ in columns.split(","))
                 target.executemany(f"INSERT INTO {table} ({columns}) VALUES ({placeholders})", rows)
             for group, (columns, rows) in replacements.items():
                 table = "stars" if group == "hyg" else "catalog"
+                old_ids = target.execute("SELECT 1 FROM objects WHERE package_group=? LIMIT 1", (group,)).fetchone()
+                if old_ids and group not in (records or {}):
+                    raise ValueError("El componente ya tiene identidades: no se admite una actualización que las pierda.")
+                target.execute("DELETE FROM objects WHERE package_group=?", (group,))
                 clause = "" if group == "hyg" else (" WHERE catalog='ldn'" if group == "ldn" else " WHERE catalog!='ldn'")
                 target.execute(f"DELETE FROM {table}{clause}")
                 placeholders = ",".join("?" for _ in columns.split(","))
-                target.executemany(f"INSERT INTO {table} ({columns}) VALUES ({placeholders})", rows)
-        record = {"edition_id": edition_id, "schema_version": 1, "relative_path": f"{EDITION_FOLDER}/{path.name}",
+                sql = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"
+                if group in (records or {}):
+                    row_ids = [target.execute(sql, row).lastrowid for row in rows]
+                    insert_records(target, group, table, row_ids, records[group])
+                else:
+                    target.executemany(sql, rows)
+            if target.execute("PRAGMA foreign_key_check").fetchone() is not None:
+                raise ValueError("Una relación del paquete apunta a una identidad ausente; no se activa una edición incompleta.")
+        record = {"edition_id": edition_id, "schema_version": 2, "relative_path": f"{EDITION_FOLDER}/{path.name}",
                   "sha256": _digest(path), "size_bytes": path.stat().st_size,
                   "versions": json.dumps(versions, ensure_ascii=False), "previous_id": previous}
         with closing(_open(root, record)):
@@ -208,7 +250,22 @@ def _legacy_versions(conn: sqlite3.Connection, groups) -> dict:
     return result
 
 
-def install_edition(db_path: Path, replacements: dict, versions: dict, groups, *, only_missing: bool = False) -> None:
+def _validate_history(personal: sqlite3.Connection, records: dict) -> None:
+    """Contrasta identidades con todas las ediciones conservadas, también las posteriores a una recuperación.
+
+    Sin un recurso histórico verificable no se puede descartar un reciclado
+    de identidad: se conserva la selección y se exige reparar ese recurso.
+    """
+    if not records:
+        return
+    root = _root(personal)
+    for (edition_id,) in personal.execute("SELECT edition_id FROM catalog_editions WHERE schema_version!=1"):
+        with closing(_open(root, _record(personal, edition_id))) as catalog:
+            previous = [tuple(row) for row in catalog.execute("SELECT source,source_key,pass_id,payload FROM source_records")]
+            validate_continuity({"source_records": (None, previous)}, records)
+
+
+def install_edition(db_path: Path, replacements: dict, versions: dict, groups, *, only_missing: bool = False, records=None) -> None:
     """Prepara fuera de pass.db y activa con comparación optimista, sin borrar tablas legacy ni edición anterior."""
     if not replacements:
         return
@@ -218,7 +275,7 @@ def install_edition(db_path: Path, replacements: dict, versions: dict, groups, *
         personal.execute("BEGIN")
         before = active_id(personal)
         with catalog_snapshot(personal) as source:
-            captured = _capture(source)
+            captured = _capture(source, include_records=source is not personal)
         old_versions = _legacy_versions(personal, groups)
         personal.rollback()
         if only_missing:
@@ -228,16 +285,20 @@ def install_edition(db_path: Path, replacements: dict, versions: dict, groups, *
                        "openngc": not any(row[catalog_index] != "ldn" for row in captured["catalog"][1])}
             replacements = {group: rows for group, rows in replacements.items() if missing[group]}
             versions = {group: value for group, value in versions.items() if group in replacements}
+            records = {group: value for group, value in (records or {}).items() if group in replacements}
             if not replacements:
                 return
+        _validate_history(personal, records or {})
         baseline = None if before else _candidate(root, captured, {}, old_versions, None)
         previous = before or baseline["edition_id"]
         updated = {**old_versions, **versions}
-        candidate = _candidate(root, captured, replacements, updated, previous)
+        validate_continuity(captured, records or {})
+        candidate = _candidate(root, captured, replacements, updated, previous, records=records)
         with personal:
             personal.execute("BEGIN IMMEDIATE")
             if active_id(personal) != before or _legacy_versions(personal, groups) != old_versions:
                 raise ValueError("Otra operación cambió los catálogos; comprueba las ediciones antes de reintentar.")
+            _validate_history(personal, records or {})
             if before is None and _capture(personal) != captured:
                 raise ValueError("El catálogo legacy cambió durante la preparación; se conserva sin sustituir.")
             for record in ([baseline, candidate] if baseline else [candidate]):
@@ -247,7 +308,10 @@ def install_edition(db_path: Path, replacements: dict, versions: dict, groups, *
 
 
 def _activate(personal: sqlite3.Connection, record: dict, versions: dict) -> None:
-    """Solo cambia selección/versiones; no restaura una copia vieja de la base personal."""
+    """Confirma selección/versiones y vínculos aditivos; nunca restaura una copia vieja de la base personal."""
+    if record["schema_version"] == 2:
+        with closing(_open(_root(personal), record)) as catalog:
+            link_personal_references(personal, catalog)
     personal.execute("INSERT OR REPLACE INTO settings VALUES (?,?)", (ACTIVE_KEY, record["edition_id"]))
     for group, version in versions.items():
         key = f"catalog_package_{group}"
