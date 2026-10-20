@@ -5,6 +5,7 @@ import gzip
 import hashlib
 import json
 import sqlite3
+from contextlib import contextmanager
 from uuid import uuid4
 
 import pytest
@@ -16,6 +17,7 @@ from planners import (
     celestial_search,
     personal_catalog,
     planned_sessions,
+    sky_loader,
 )
 from planners.catalog_records import prepare_record, validate_records
 
@@ -392,3 +394,219 @@ def test_manifiesto_no_acepta_formato_de_contenido_desconocido(payload_format):
             "size": 1, "payload_format": payload_format}
     with pytest.raises(ValueError, match="contenido"):
         catalog_packages.parse_manifest(json.dumps({"format": 1, "packages": {group: item for group in catalog_packages.GROUPS}}))
+
+
+def test_busqueda_por_alias_sin_duplicar_y_con_filtros_habituales(personal):
+    """Una misma proyección puede pertenecer a Caldwell por alias sin crear filas ni eludir filtros/límites."""
+    _, path = personal
+    record = _record(aliases=[{"namespace": "caldwell", "designation": "Caldwell 1"},
+                              {"namespace": "other", "designation": "Paloma sintética"}])
+    _install(path, [_row()], [record])
+    filters = celestial_search.SearchFilters(catalogs=["caldwell"], text="Caldwell 1")
+    rows = celestial_search.search(filters)
+    assert [row["object_id"] for row in rows] == ["M31"]
+    filters.text = "Paloma"
+    assert len(celestial_search.search(filters, limit=1)) == 1
+    filters.max_magnitude = 1
+    assert celestial_search.search(filters) == []
+    filters.max_magnitude = None
+    filters.constellation = "Ori"
+    assert celestial_search.search(filters) == []
+
+
+def test_busqueda_alias_ambiguo_muestra_candidatos_sin_elegir_uno(personal):
+    """Buscar texto devuelve candidatos distintos; resolver/centrar requiere una coincidencia inequívoca."""
+    _, path = personal
+    records = [_record(aliases=[{"namespace": "other", "designation": "Alias compartido"}]),
+               _record(row=1, key="segunda", aliases=[{"namespace": "other", "designation": "Alias compartido"}])]
+    _install(path, [_row(), _row("M32")], records)
+    rows = celestial_search.search(celestial_search.SearchFilters(text="Alias compartido"))
+    assert {row["object_id"] for row in rows} == {"M31", "M32"}
+    assert celestial_search.get_object("Alias compartido") is None
+
+
+def test_carta_alias_centra_y_resalta_proyeccion_principal_sin_cambiar_encuadre(qt_app, personal, monkeypatch):
+    """El rótulo puede conservar lo solicitado; el resaltado pertenece a la fila real, no a una estrella duplicada."""
+    from ui.planner_tab.planificacion.planetario_visual import PlanetarioVisual
+
+    _, path = personal
+    _install(path, [_row()], [_record(aliases=[{"namespace": "caldwell", "designation": "Caldwell 1"}])])
+    sky = PlanetarioVisual()
+    try:
+        monkeypatch.setattr(sky_loader, "get_connection", lambda: pytest.fail("Centrar no debe volver a abrir la base"))
+        sky.set_framing(1, 2, 3, 4, 2, 3)
+        sky.set_fov_deg(12)
+        framing = sky.framing
+        assert sky.set_target("Caldwell 1", "caldwell")
+        assert sky.center_deg == (90, 40)
+        assert sky._selected == ("M31", "messier")
+        assert sky.center_label == "Caldwell 1"
+        assert sky.framing == framing and sky.view[2] == 12
+        assert len(sky._objects["ids"]) == 1
+    finally:
+        sky.deleteLater()
+
+
+@pytest.mark.parametrize("missing_coordinates", [False, True])
+def test_carta_no_elige_alias_ambiguo_aunque_un_candidato_no_se_pinte(qt_app, personal, missing_coordinates):
+    """Filtrar objetos sin posición para pintar no elimina su reclamación de la misma designación."""
+    from ui.planner_tab.planificacion.planetario_visual import PlanetarioVisual
+
+    _, path = personal
+    other = _row("M32", ra=None if missing_coordinates else 7)
+    _install(path, [_row(), other], [_record(), _record(row=1, key="segunda")])
+    sky = PlanetarioVisual()
+    try:
+        sky.set_center(10, 20, "Centro manual")
+        assert not sky.set_target("M31", "messier")
+        assert sky.center_deg == (150, 20)
+        assert sky._selected is None and sky.center_label == ""
+    finally:
+        sky.deleteLater()
+
+
+def test_carta_conserva_alias_de_su_edicion_hasta_recarga(qt_app, personal):
+    """La navegación no consulta una edición recién activada usando los índices de otra todavía dibujada."""
+    from ui.planner_tab.planificacion.planetario_visual import PlanetarioVisual
+
+    _, path = personal
+    record = _record(aliases=[{"namespace": "other", "designation": "Alias inicial"}])
+    _install(path, [_row()], [record])
+    sky = PlanetarioVisual()
+    try:
+        updated = copy.deepcopy(record)
+        updated["aliases"] = [{"namespace": "other", "designation": "Alias posterior"}]
+        _install(path, [_row(ra=8)], [updated])
+        assert sky.set_target("Alias inicial") and sky.center_deg == (90, 40)
+        assert not sky.set_target("Alias posterior")
+        sky.reload_catalogs()
+        assert sky.set_target("Alias posterior") and sky.center_deg == (120, 40)
+        assert not sky.set_target("Alias inicial")
+    finally:
+        sky.deleteLater()
+
+
+@pytest.mark.parametrize("designation,namespace", [("caldwell00001", "caldwell"), ("m 00031", "messier"), ("CALDWELL 1", None)])
+def test_indice_de_carta_admite_variantes_sin_alterar_designaciones(personal, designation, namespace):
+    """Espacios, ceros y mayúsculas son variantes de consulta, no cambios a las fuentes originales."""
+    conn, path = personal
+    record = _record(aliases=[{"namespace": "caldwell", "designation": "Caldwell 1"}])
+    _install(path, [_row()], [record])
+    objects = sky_loader.load_objects()
+    assert sky_loader.target_index(objects, designation, namespace) == 0
+    with editions.catalog_snapshot(conn) as catalog:
+        assert catalog_records.describe(catalog, record["pass_id"])["aliases"] == record["aliases"]
+
+
+def test_alias_sin_coordenadas_no_crea_punto_ficticio(personal):
+    """Tener designación no equivale a conocer la posición para dibujar o centrar."""
+    _, path = personal
+    _install(path, [_row(ra=None)], [_record()])
+    objects = sky_loader.load_objects()
+    assert objects["ids"] == []
+    assert sky_loader.target_index(objects, "M31", "messier") is None
+
+
+def test_alias_estelar_no_interfiere_con_destinos_de_espacio_profundo(personal):
+    """Compartir literal entre HYG y un objeto no convierte la estrella en un target deep-sky."""
+    _, path = personal
+    _install(path, [_row()], [_record()])
+    star = _record(key="estrella-distinta")
+    content = {"format": 2, "rows": [[None, 2, 3, 4, None, None]], "records": [star]}
+    data = gzip.compress(json.dumps(content).encode())
+    item = {"version": "sintetica", "date": "2026-10-20", "size": len(data),
+            "sha256": hashlib.sha256(data).hexdigest(), "url": "sintetico", "payload_format": 2}
+    catalog_packages.update_packages(path, {"hyg": item}, ["hyg"], reader=lambda *args: data)
+    stars, objects = sky_loader.load_sky()
+    assert len(stars["ra"]) == 1 and objects["ids"] == ["M31"]
+    assert sky_loader.target_index(objects, "M31", "messier") == 0
+
+
+def test_busqueda_alias_y_catalogo_fijan_la_misma_edicion(personal, monkeypatch):
+    """Un cambio de catálogo entre comprobar metadatos y ejecutar SQL no mezcla alias ni resultados."""
+    _, path = personal
+    record = _record(aliases=[{"namespace": "caldwell", "designation": "Caldwell 1"}])
+    _install(path, [_row()], [record])
+    original = celestial_search.catalog_snapshot
+
+    @contextmanager
+    def activate_after_snapshot(personal):
+        """Activa otro contenido cuando ya está fijada la conexión readonly de la consulta anterior."""
+        with original(personal) as snapshot:
+            revised = copy.deepcopy(record)
+            revised["aliases"] = [{"namespace": "other", "designation": "Alias nuevo"}]
+            _install(path, [_row(name="Nueva edición")], [revised])
+            yield snapshot
+
+    monkeypatch.setattr(celestial_search, "catalog_snapshot", activate_after_snapshot)
+    filters = celestial_search.SearchFilters(catalogs=["caldwell"], text="Caldwell 1")
+    rows = celestial_search.search(filters)
+    assert [row["name"] for row in rows] == ["Edición"]
+    monkeypatch.setattr(celestial_search, "catalog_snapshot", original)
+    assert celestial_search.search(filters) == []
+
+
+def test_alias_repetidos_de_un_objeto_no_duplican_resultados_ni_se_pierde_el_limite(personal):
+    """Los alias aportan candidaturas, no filas añadidas por cada JOIN coincidente."""
+    _, path = personal
+    aliases = [{"namespace": "other", "designation": f"Paloma {index}"} for index in range(3)]
+    _install(path, [_row("M32"), _row()], [_record(aliases=aliases), _record(row=1, key="segunda", aliases=aliases)])
+    filters = celestial_search.SearchFilters(text="Paloma", sort_by="name")
+    rows = celestial_search.search(filters)
+    assert [row["object_id"] for row in rows] == ["M31", "M32"]
+    assert [row["object_id"] for row in celestial_search.search(filters, limit=1)] == ["M31"]
+
+
+def test_destino_por_identidad_no_adopta_otro_homonimo(personal):
+    """Con vínculo explícito, desaparición de esa identidad no permite volver a una coincidencia solo por nombre."""
+    _, path = personal
+    original = _record()
+    _install(path, [_row()], [original])
+    objects = sky_loader.load_objects()
+    assert sky_loader.target_index(objects, "Nombre anterior cualquiera", pass_id=original["pass_id"]) == 0
+    _install(path, [_row()], [_record(key="otro objeto")])
+    objects = sky_loader.load_objects()
+    assert sky_loader.target_index(objects, "M31", "messier", pass_id=original["pass_id"]) is None
+
+
+def test_planificacion_centra_vinculo_guardado_aunque_desaparezca_su_alias(qt_app, personal):
+    """El combo conserva la designación personal mientras centra/resalta la proyección actual por identidad."""
+    from ui.planner_tab.planificacion.tab import PlanificacionTab
+
+    conn, path = personal
+    record = _record()
+    _install(path, [_row()], [record])
+    renamed = copy.deepcopy(record)
+    renamed["aliases"] = []
+    _install(path, [_row("NGC 224", ra=8)], [renamed])
+    tab = PlanificacionTab()
+    try:
+        assert tab._current_target()["object_id"] == "M31"
+        assert tab._planetario.center_deg == (120, 40)
+        assert tab._planetario._selected == ("NGC 224", "messier")
+        assert tab._planetario.center_label == "M31"
+        assert conn.execute("SELECT object_id,notes FROM personal_catalog").fetchone()[0] == "M31"
+    finally:
+        tab.deleteLater()
+
+
+def test_resaltado_por_identidad_no_vuelve_a_resolver_un_nombre_ambiguo(qt_app, personal):
+    """El aro marca la proyección ya resuelta por ID, incluso si su nombre principal es alias de otro objeto."""
+    from unittest.mock import Mock
+
+    from ui.planner_tab.planificacion.planetario_visual import PlanetarioVisual
+
+    _, path = personal
+    first, second = _record(), _record(row=1, key="segunda")
+    _install(path, [_row(), _row("M32")], [first, second])
+    sky = PlanetarioVisual()
+    try:
+        assert sky.set_target("M31", "messier", pass_object_id=first["pass_id"])
+        painter = Mock()
+        sky._draw_selection(painter, sky._pixels_per_radian())
+        painter.drawEllipse.assert_called_once()
+        sky.clear_target()
+        sky._draw_selection(painter, sky._pixels_per_radian())
+        painter.drawEllipse.assert_called_once()
+    finally:
+        sky.deleteLater()

@@ -11,7 +11,7 @@ sí la calcula :mod:`planners.transit` con astropy.
 import re
 from dataclasses import dataclass, field
 
-from db.catalog_editions import CatalogUnavailableError, catalog_snapshot, read_rows
+from db.catalog_editions import CatalogUnavailableError, catalog_snapshot
 from db.catalog_records import has_records
 from db.connection import get_connection
 from planners.analytical_transit import (
@@ -112,7 +112,7 @@ class SearchFilters:
     utc_offset_hours: float | None = None    # desfase horario de la ubicación (hora de reloj)
 
 
-def _catalog_clause(catalogs: list[str]) -> tuple[str, list]:
+def _catalog_clause(catalogs: list[str], *, identified: bool = False) -> tuple[str, list]:
     """Condición SQL: un objeto pertenece a un catálogo si su cross-ref lo dice."""
     conditions: list[str] = []
     params: list = []
@@ -121,6 +121,10 @@ def _catalog_clause(catalogs: list[str]) -> tuple[str, list]:
             conditions.append(f"{cat}_num IS NOT NULL")
         else:
             conditions.append("catalog = ?")
+            params.append(cat)
+        if identified:
+            conditions.append("catalog.id IN (SELECT o.row_id FROM objects o JOIN designations d ON d.pass_id=o.pass_id "
+                              "WHERE o.row_kind='catalog' AND d.namespace=?)")
             params.append(cat)
     if not conditions:
         return "", []
@@ -194,11 +198,6 @@ def search(filters: SearchFilters, limit: int = DEFAULT_LIMIT) -> list[dict]:
     where: list[str] = ["1=1"]
     params: list = []
 
-    clause, clause_params = _catalog_clause(filters.catalogs)
-    if clause:
-        where.append(clause)
-        params.extend(clause_params)
-
     if filters.max_magnitude is not None:
         where.append("(magnitude IS NULL OR magnitude <= ?)")
         params.append(filters.max_magnitude)
@@ -234,25 +233,36 @@ def search(filters: SearchFilters, limit: int = DEFAULT_LIMIT) -> list[dict]:
         where.append("dec_deg >= ? AND dec_deg <= ?")
         params.extend([filters.latitude - max_delta, filters.latitude + max_delta])
 
-    if filters.text:
-        where.append("(object_id LIKE ? OR name LIKE ? OR 'NGC ' || ngc_num LIKE ?)")
-        term = f"%{filters.text.strip()}%"
-        params.extend([term, term, term])
-
-    sql = (
-        "SELECT object_id, catalog, messier_num, ngc_num, ic_num, name, type,"
-        " magnitude, ra_hours, dec_deg, size_major_arcmin, size_minor_arcmin,"
-        " constellation"
-        " FROM catalog WHERE " + " AND ".join(where) +
-        f" ORDER BY {_order_clause(filters.sort_by)}"
-    )
-    if filters.sort_by != "transit":
-        # El tránsito no está en la tabla: limitar antes desplazaría el
-        # resultado, así que ese orden corta al final, en Python.
-        sql += " LIMIT ?"
-        params.append(limit)
-    conn = get_connection()
-    rows = [dict(row) for row in read_rows(conn, sql, params)]
+    personal = get_connection()
+    try:
+        with catalog_snapshot(personal) as catalog:
+            identified = catalog is not personal and has_records(catalog)
+            clause, clause_params = _catalog_clause(filters.catalogs, identified=identified)
+            if clause:
+                where.append(clause)
+                params.extend(clause_params)
+            if filters.text:
+                text = "object_id LIKE ? OR name LIKE ? OR 'NGC ' || ngc_num LIKE ?"
+                term = f"%{filters.text.strip()}%"
+                params.extend([term, term, term])
+                if identified:
+                    text += (" OR catalog.id IN (SELECT o.row_id FROM objects o JOIN designations d ON d.pass_id=o.pass_id "
+                             "WHERE o.row_kind='catalog' "
+                             "AND (d.designation LIKE ? OR d.designation LIKE ?))")
+                    normalized = _canonical_designation(filters.text)
+                    params.extend([term, f"%{normalized[0]}%" if normalized else term])
+                where.append("(" + text + ")")
+            sql = (
+                "SELECT object_id, catalog, messier_num, ngc_num, ic_num, name, type,"
+                " magnitude, ra_hours, dec_deg, size_major_arcmin, size_minor_arcmin, constellation"
+                " FROM catalog WHERE " + " AND ".join(where) + f" ORDER BY {_order_clause(filters.sort_by)}"
+            )
+            if filters.sort_by != "transit":
+                sql += " LIMIT ?"
+                params.append(limit)
+            rows = [dict(row) for row in catalog.execute(sql, params)]
+    except CatalogUnavailableError:
+        rows = []
 
     _annotate_transit(rows, filters)
 
@@ -303,6 +313,12 @@ def _canonical_designation(text: str) -> tuple[str, str | None, int, str] | None
         else f"{forma} {number}{suffix}"
     )
     return canonical, column, int(number), suffix
+
+
+def designation_key(text: str) -> str:
+    """Clave de consulta para designaciones habituales, sin cambiar sus valores originales en disco."""
+    canonical = _canonical_designation(text)
+    return (canonical[0] if canonical else text.strip()).casefold()
 
 
 def get_object(object_id: str) -> dict | None:

@@ -548,7 +548,10 @@ class PlanificacionTab(QWidget):
             return
         object_id = str(target["object_id"])
         catalog = str(target["catalog"])
-        self._planetario.set_target(object_id, catalog)
+        if target.get("pass_object_id") is not None:
+            self._planetario.set_target(object_id, catalog, pass_object_id=target["pass_object_id"])
+        else:
+            self._planetario.set_target(object_id, catalog)
         ra = target.get("ra_hours")
         dec = target.get("dec_deg")
         if ra is not None and dec is not None:

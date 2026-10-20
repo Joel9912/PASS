@@ -26,7 +26,7 @@ from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QPolygonF
 from PyQt6.QtWidgets import QWidget
 
-from planners.sky_loader import load_sky
+from planners.sky_loader import load_sky, target_index
 
 #: Nº máximo de estrellas pintadas por refresco (más allá se ven las más brillantes).
 MAX_STARS_DRAWN = 6000
@@ -172,6 +172,7 @@ class PlanetarioVisual(QWidget):
         # Encuadre y resaltado
         self._framing: tuple[float, float, float, float, int, int] | None = None
         self._selected: tuple[str, str] | None = None
+        self._selected_index: int | None = None
 
         self._stars, self._objects = load_sky()
 
@@ -180,6 +181,7 @@ class PlanetarioVisual(QWidget):
         """Recarga estrellas y objetos tras instalar paquetes sin cambiar el encuadre."""
         self._stars, self._objects = load_sky()
         self._selected = None
+        self._selected_index = None
         self.update()
 
     def set_center(self, ra_hours: float, dec_deg: float, label: str = "") -> None:
@@ -190,13 +192,14 @@ class PlanetarioVisual(QWidget):
         self._emit_view()
         self.update()
 
-    def set_target(self, object_id: str, catalog: str | None = None) -> bool:
+    def set_target(self, object_id: str, catalog: str | None = None, *, pass_object_id: str | None = None) -> bool:
         """Centra la vista en ``object_id`` y lo resalta. Devuelve si existía."""
-        index = self._find_object_index(object_id, catalog)
+        index = self._find_object_index(object_id, catalog, pass_object_id=pass_object_id)
         if index is None:
             self.clear_target()
             return False
-        self._selected = (object_id, self._objects["catalogs"][index])
+        self._selected = (self._objects["ids"][index], self._objects["catalogs"][index])
+        self._selected_index = index
         self.set_center(
             float(self._objects["ra"][index]) / 15.0,
             float(self._objects["dec"][index]),
@@ -207,6 +210,7 @@ class PlanetarioVisual(QWidget):
     def clear_target(self) -> None:
         """Quita resaltado y etiqueta sin desplazar la vista del usuario."""
         self._selected = None
+        self._selected_index = None
         self._label = ""
         self.update()
 
@@ -241,6 +245,7 @@ class PlanetarioVisual(QWidget):
         self._fov_deg = DEFAULT_VIEW_FOV_DEG
         self._label = ""
         self._selected = None
+        self._selected_index = None
         self._emit_view()
         self.update()
 
@@ -278,13 +283,9 @@ class PlanetarioVisual(QWidget):
         self._fov_deg = fov_deg
         self.update()
 
-    def _find_object_index(self, object_id: str, catalog: str | None) -> int | None:
-        """Índice de ``object_id`` (y catálogo si se indica); ``None`` si no está."""
-        ids = self._objects["ids"]
-        for i, oid in enumerate(ids):
-            if oid == object_id and (catalog is None or self._objects["catalogs"][i] == catalog):
-                return i
-        return None
+    def _find_object_index(self, object_id: str, catalog: str | None, *, pass_object_id: str | None = None) -> int | None:
+        """Resuelve designación/alias inequívocos en la misma edición que está dibujada, sin SQL en la UI."""
+        return target_index(self._objects, object_id, catalog, pass_id=pass_object_id)
 
     def _emit_view(self) -> None:
         """Avisa de que la vista cambió (centro en horas, campo en grados)."""
@@ -560,7 +561,7 @@ class PlanetarioVisual(QWidget):
         """Aro alrededor del objeto seleccionado (el que centra la vista)."""
         if not self._selected:
             return
-        index = self._find_object_index(*self._selected)
+        index = self._selected_index
         if index is None:
             return
         xi, eta, ok = gnomonic(
