@@ -22,6 +22,7 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 - Captura Ideal reserva al menos cinco minutos dentro de ambos extremos de la noche astronómica; los márgenes válidos quedan como Posible.
 
 ### Corregido
+- Los paquetes de catálogos validan también tipos, familias e identidades antes de sustituir datos o versiones, aunque el tamaño y SHA sean correctos. El preparador usa el mismo contrato y no escribe artefactos inválidos; los fallos conservan los catálogos anteriores y los datos personales (B-0010).
 - Añadir una región con nombre repetido avisa y conserva la existente, en lugar de simular un guardado. Permite renombrar o cancelar sin perder lo escrito en el formulario (B-0008).
 - Las bases antiguas de Equipo migran sus datos v1 a piezas independientes, sin fusionar por nombre ni perder vínculos de sesiones. Se conservan los valores originales; un conflicto con una asignación actual detiene la migración sin sobrescribir datos. Esquema y piezas se revierten juntos ante un fallo (B-0001, E-0011).
 - La ruta de SirIL elegida en Configuración tiene prioridad sobre PATH. Si es inválida se informa del fallo sin usar otra instalación; «Abrir en SirIL» respeta también la instalación elegida (C-0004).

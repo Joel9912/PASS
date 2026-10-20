@@ -17,6 +17,7 @@ CAT_COLUMNS = ("object_id,catalog,messier_num,ngc_num,ic_num,name,type,magnitude
                "ra_hours,dec_deg,size_major_arcmin,size_minor_arcmin,constellation")
 STAR_COLUMNS = "name,magnitude,ra_hours,dec_deg,color,constellation"
 MAX_PACKAGE = 64 * 1024 * 1024
+_OBJECT_CATALOGS = {"messier", "ngc", "ic", "barnard", "caldwell", "other"}
 
 
 def _read(url, limit):
@@ -51,7 +52,7 @@ def check_manifest():
 def parse_manifest(data):
     """Aplica las mismas reglas a los manifiestos publicados e incluidos en la app."""
     manifest = json.loads(data)
-    if not isinstance(manifest, dict) or manifest.get("format") != 1:
+    if not isinstance(manifest, dict) or type(manifest.get("format")) is not int or manifest["format"] != 1:
         raise ValueError("Formato de manifiesto no compatible.")
     packages = manifest.get("packages")
     if not isinstance(packages, dict) or set(packages) != set(GROUPS):
@@ -80,6 +81,61 @@ def installed(conn):
     return result
 
 
+def _number(value, *, optional=True):
+    """Acepta números finitos almacenables sin convertir texto, booleanos ni ausencias en mediciones."""
+    if value is None:
+        return optional
+    if type(value) is int:
+        return -(2 ** 63) <= value < 2 ** 63
+    return type(value) is float and math.isfinite(value)
+
+
+def validate_rows(group, rows):
+    """Valida el contrato tipado común al preparador y al instalador, sin modificar datos ni demostrar cobertura."""
+    if group not in GROUPS:
+        raise ValueError("Catálogo desconocido.")
+    columns = (STAR_COLUMNS if group == "hyg" else CAT_COLUMNS).split(",")
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("Paquete sin filas.")
+    seen = set()
+    for row in rows:
+        if not isinstance(row, list) or len(row) != len(columns):
+            raise ValueError("Fila de catálogo inválida.")
+        if group == "hyg":
+            texts, numbers, integers = (0, 4, 5), (1, 2, 3), ()
+            required = (1, 2, 3)
+        else:
+            texts, numbers, integers = (0, 1, 5, 6, 12), (7, 8, 9, 10, 11), (2, 3, 4)
+            required = ()
+            if not all(isinstance(row[index], str) and row[index].strip() for index in (0, 1)):
+                raise ValueError("Identidad de objeto inválida en el paquete.")
+            allowed = {"ldn"} if group == "ldn" else _OBJECT_CATALOGS
+            if row[1] not in allowed:
+                raise ValueError("El paquete contiene objetos de otro catálogo.")
+            for index in (10, 11):
+                if row[index] is not None and (not _number(row[index]) or row[index] < 0):
+                    raise ValueError(f"Tamaño inválido en el paquete: {columns[index]}.")
+        for index in texts:
+            if row[index] is not None and not isinstance(row[index], str):
+                raise ValueError(f"Texto inválido en el paquete: {columns[index]}.")
+        for index in numbers:
+            if not _number(row[index], optional=index not in required):
+                raise ValueError(f"Número inválido en el paquete: {columns[index]}.")
+        for index in integers:
+            value = row[index]
+            if value is not None and (type(value) is not int or not 0 < value < 2 ** 63):
+                raise ValueError(f"Identificador numérico inválido en el paquete: {columns[index]}.")
+        ra, dec = (row[2], row[3]) if group == "hyg" else (row[8], row[9])
+        for value, low, high in ((ra, 0, 24), (dec, -90, 90)):
+            if value is not None and not low <= value <= high:
+                raise ValueError("Coordenada inválida en el paquete.")
+        key = (row[0], row[2], row[3]) if group == "hyg" else (row[0], row[1])
+        if key[0] is not None:
+            if key in seen:
+                raise ValueError("Identidad repetida en el paquete; no se fusionan entradas.")
+            seen.add(key)
+
+
 def update_packages(db_path, packages, groups, *, reader=None):
     """Valida todas las descargas antes de reemplazar datos y versiones en una transacción.
 
@@ -100,22 +156,7 @@ def update_packages(db_path, packages, groups, *, reader=None):
         if len(payload) > MAX_PACKAGE:
             raise ValueError("El paquete descomprimido es demasiado grande.")
         rows = json.loads(payload)
-        columns = STAR_COLUMNS if group == "hyg" else CAT_COLUMNS
-        if not isinstance(rows, list) or not rows:
-            raise ValueError("Paquete sin filas.")
-        for row in rows:
-            if (not isinstance(row, list) or len(row) != len(columns.split(","))
-                    or any(type(v) not in (str, int, float, type(None)) for v in row)):
-                raise ValueError("Fila de catálogo inválida.")
-            if any(type(v) is float and not math.isfinite(v) for v in row):
-                raise ValueError("El paquete contiene números no finitos.")
-            ra, dec = (row[2], row[3]) if group == "hyg" else (row[8], row[9])
-            for value, low, high in ((ra, 0, 24), (dec, -90, 90)):
-                if value is not None and (type(value) not in (int, float) or not low <= value <= high):
-                    raise ValueError("Coordenada inválida en el paquete.")
-            if group != "hyg" and (not row[0] or not row[1]
-                    or (row[1] == "ldn") != (group == "ldn")):
-                raise ValueError("El paquete contiene objetos de otro catálogo.")
+        validate_rows(group, rows)
         prepared[group] = rows
     with closing(sqlite3.connect(db_path, timeout=5)) as conn, conn:
         conn.execute("PRAGMA foreign_keys=ON")

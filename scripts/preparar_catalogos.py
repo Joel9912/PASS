@@ -44,9 +44,8 @@ def prepare(version, output):
                 columns = catalog_packages.STAR_COLUMNS if group == "hyg" else catalog_packages.CAT_COLUMNS
                 clause = "" if group == "hyg" else (" WHERE catalog='ldn'" if group == "ldn"
                                                     else " WHERE catalog!='ldn'")
-                rows = conn.execute(f"SELECT {columns} FROM {table}{clause} ORDER BY id").fetchall()
-                if not rows:
-                    raise ValueError("No se publica un paquete vacío.")
+                rows = [list(row) for row in conn.execute(f"SELECT {columns} FROM {table}{clause} ORDER BY id")]
+                catalog_packages.validate_rows(group, rows)
                 name = f"catalog-{group}-{version}.json.gz"
                 data = gzip.compress(json.dumps(rows, allow_nan=False).encode(), mtime=0)
                 if len(data) > catalog_packages.MAX_PACKAGE:
