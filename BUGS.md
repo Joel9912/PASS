@@ -24,8 +24,8 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 
 ## Resumen
 
-**105 hallazgos**: 🔴 18 graves · 🟠 60 medios · 🟡 18 bajos · 9 decisiones (7 pendientes).
-Estado: ✅ 85 corregidos · 🟡 3 contenidos · ⏳ 7 pendientes · 🔎 1 sin reproducir.
+**105 hallazgos**: 🔴 18 graves · 🟠 60 medios · 🟡 18 bajos · 9 decisiones (6 pendientes).
+Estado: ✅ 86 corregidos · 🟡 3 contenidos · ⏳ 6 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -110,7 +110,7 @@ Estado: ✅ 85 corregidos · 🟡 3 contenidos · ⏳ 7 pendientes · 🔎 1 sin
 | **T-0005** | Symlinks en fixtures: no portables en Windows. | ✅ `265d35c` |
 | **T-0006** | Tests con geometría dependiente de temporizadores o DPI de la pantalla. | ✅ `09d0a8f` |
 | **T-0007** | El modo offscreen se activa con `setdefault` y puede no aplicarse. | ✅ `8930f6d` |
-| **T-0008** | Algunos tests de Configuración crean widgets sin solicitar QApplication y abortan al ejecutarlos aisladamente. | ⏳ |
+| **T-0008** | Algunos tests de Configuración crean widgets sin solicitar QApplication y abortan al ejecutarlos aisladamente. | ✅ `e07a987` |
 | **X-0001** | El README raíz contradice la GPL al prohibir la venta. | ✅ `18c384e` |
 | **X-0002** | El README raíz describe un ranking de objetos que no existe. | ✅ `18c384e` |
 | **X-0003** | El README raíz presenta el Planetario como dependiente de red. | ✅ `18c384e` |
@@ -154,4 +154,4 @@ Cuestiones que requieren decidir el comportamiento; las resueltas indican su acu
 | **P-0011** | Las horas se calculan con un offset fijo por ubicación: no se tiene en cuenta el cambio de hora (DST). |
 | **U-0007** | Al planificar no está decidido si se selecciona la noche sugerida o la fecha guardada por el usuario. |
 | **U-0008** | No está definida la precedencia del FOV entre la región del objetivo y el encuadre del equipo. |
-| **C-0004** | Precedencia aprobada: ruta elegida de SirIL primero; PATH solo sin ruta configurada. Ruta elegida inválida produce aviso, sin fallback silencioso. ⏳ Implementación y verificación pendientes. |
+| **C-0004** | ✅ Ruta elegida de SirIL primero; PATH solo sin configuración. Ruta inválida avisa sin fallback, también al abrir la GUI. Aplicado en `e07a987`. |
