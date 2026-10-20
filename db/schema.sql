@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS filters (
 -- Setups de equipo (datos fríos comparables): combinación de componentes
 -- globales + ubicación + categoría. Las columnas embebidas de la v1
 -- (telescope_name, camera_pixel_size_um, mount_name…) viven ahora en sus
--- tablas; una base antigua las pierde por migración (_drop_legacy_columns).
+-- tablas. La migración conserva las columnas legacy pobladas como originales.
 CREATE TABLE IF NOT EXISTS equipment_setups (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     name                TEXT NOT NULL,
@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS equipment_setups (
     camera_id           INTEGER REFERENCES cameras(id) ON DELETE SET NULL,
     guide_camera_id     INTEGER REFERENCES cameras(id) ON DELETE SET NULL,
     mount_id            INTEGER REFERENCES mounts(id) ON DELETE SET NULL,
+    legacy_components_migrated INTEGER NOT NULL DEFAULT 0,
     -- Precio y peso del setup: los exige la comparativa (paso 6); se
     -- añadieron ya (decisión D-3) para migrar el esquema una sola vez.
     price_eur           REAL,
