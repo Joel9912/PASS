@@ -24,8 +24,8 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 
 ## Resumen
 
-**105 hallazgos**: 🔴 18 graves · 🟠 60 medios · 🟡 18 bajos · 9 decisiones (6 pendientes).
-Estado: ✅ 86 corregidos · 🟡 3 contenidos · ⏳ 6 pendientes · 🔎 1 sin reproducir.
+**105 hallazgos**: 🔴 18 graves · 🟠 60 medios · 🟡 18 bajos · 9 decisiones (5 pendientes).
+Estado: ✅ 87 corregidos · 🟡 2 contenidos · ⏳ 6 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -40,7 +40,7 @@ Estado: ✅ 86 corregidos · 🟡 3 contenidos · ⏳ 6 pendientes · 🔎 1 sin
 | **S-0005** | Índices o salidas de registro incompletos o mal nombrados se admiten como válidos: métricas atribuidas al frame equivocado. | ✅ `9bac15a` |
 | **S-0006** | Restos de corridas anteriores en la carpeta de registro se usan como si fueran de la corrida actual. | ✅ limpieza existente desde `01813e3`, verificada en `9bac15a` |
 | **S-0007** | Filtros con nombres normalizados idénticos sobrescriben el mismo canal. | ✅ `69f1c19` |
-| **B-0001** | La migración de BD v1 hacía `DROP COLUMN` sobre `telescope_name` poblado, perdiendo el dato del usuario. | 🟡 `264b5d0` (contenida; la migración espera a una decisión) |
+| **B-0001** | La migración de BD v1 hacía `DROP COLUMN` sobre `telescope_name` poblado, perdiendo el dato del usuario. | ✅ `4ca5a73` |
 | **B-0002** | Una conexión SQLite cuyo esquema fallaba quedaba publicada y era reutilizable en el proceso. | ✅ `e3993a7` |
 | **B-0003** | Una descarga del catálogo vacía o truncada se validaba, borraba y confirmaba el catálogo del usuario. | ✅ `ef62ef6` (política conservadora y caché verificada) |
 | **B-0009** | Refrescar OpenNGC eliminaba los LDN previamente cargados aunque no se refrescara ese catálogo. | ✅ `0da9548` |
@@ -147,7 +147,7 @@ Cuestiones que requieren decidir el comportamiento; las resueltas indican su acu
 | ID | Pendiente |
 |---|---|
 | **B-0008** | Añadir una región con un nombre repetido se descarta en silencio (`INSERT OR IGNORE`). |
-| **E-0011** | Migración aprobada: separar datos de equipo v1 en piezas independientes y vincularlas a equipos, sin inventar características ni fusionar por nombre. ⏳ Implementación y verificación pendientes. |
+| **E-0011** | ✅ Migración conservadora por equipo, sin fusiones por nombre; originales y vínculos conservados. Casillas sin marcar = No. Conflictos con asignaciones actuales se conservan sin sobrescribir. Aplicado en `4ca5a73`. |
 | **E-0012** | ✅ Todo o nada para guardar setups: BD y adjuntos; aplicado en `e5bf105`. |
 | **E-0013** | ✅ Total guardado y previsualización diferenciados; Guardar/Descartar/Cancelar con guardados separados de piezas y equipo. Descartar recupera lo persistido; Cancelar mantiene ediciones. Aplicado en `f5d02d7`. |
 | **S-0010** | Una secuencia nueva pide métricas `wfwhm`/`nbstars` que SirIL no vuelve a calcular. |
