@@ -148,6 +148,7 @@ CREATE TABLE IF NOT EXISTS personal_catalog (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     object_id  TEXT NOT NULL,          -- p. ej. 'M31', 'NGC 7000', 'Mosaico M81'
     catalog    TEXT NOT NULL,          -- 'messier' | 'ngc' | 'ic' | 'ldn' | 'region'
+    pass_object_id TEXT,               -- vínculo aditivo a identidad de catálogo, sin FK entre bases
     kind       TEXT NOT NULL DEFAULT 'catalog',
         -- 'catalog' = objeto del catálogo global | 'region' = región del usuario
     ra_hours   REAL,                   -- centro (solo regiones)
@@ -165,6 +166,7 @@ CREATE TABLE IF NOT EXISTS personal_catalog (
 CREATE TABLE IF NOT EXISTS planned_sessions (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     object_id         TEXT NOT NULL,
+    pass_object_id    TEXT,            -- designación legacy se conserva incluso al resolver identidad
     target_name       TEXT,
     setup_id          INTEGER REFERENCES equipment_setups(id) ON DELETE SET NULL,
     session_date      TEXT NOT NULL,

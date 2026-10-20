@@ -49,6 +49,7 @@ _MIGRATIONS: dict[str, tuple[str, ...]] = {
         "weight_kg REAL",
     ),
     "personal_catalog": (
+        "pass_object_id TEXT",
         "kind TEXT NOT NULL DEFAULT 'catalog'",
         "ra_hours REAL",
         "dec_deg REAL",
@@ -61,6 +62,7 @@ _MIGRATIONS: dict[str, tuple[str, ...]] = {
         "notes TEXT",
     ),
     "planned_sessions": (
+        "pass_object_id TEXT",
         "target_kind TEXT NOT NULL DEFAULT 'catalog'",
         "ra_hours REAL",
         "dec_deg REAL",
