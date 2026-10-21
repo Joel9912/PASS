@@ -5,9 +5,9 @@ objeto, a qué altura llega, qué tan separado está la luna esa noche y
 cuántas horas de noche astronómica (sol a -18°) hay.
 
 Todo trabaja en UTC internamente; la UI convierte a hora local si quiere.
-Las posiciones usan la efeméride interna de astropy (sin red) y IERS en modo
-offline con precisión suficiente para planificar (~1', no para guiar un
-telescopio).
+Las posiciones usan el modelo interno de astropy e IERS local, sin red.
+Cada malla informa de datos/predicciones/extrapolación IERS; no se promete
+precisión uniforme para todo el intervalo admitido ni para guiado.
 """
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ from astropy.time import Time
 from astropy.utils import iers
 
 from .analytical_transit import local_utc_offset
+from .astronomy_status import AstronomyStatus, astronomy_status
 from .planning_dates import planning_date
 
 # Offline: nada de descargar tablas IERS al importar (arranque rápido y sin red).
@@ -92,6 +93,7 @@ class NightInfo:
     sunrise: str | None = None     # salida de sol (ISO, UTC)
     moon_age_days: float = 0.0     # días desde luna nueva (0..29.53)
     waxing: bool = True            # True = creciente (lit en el este/N.)
+    accuracy: AstronomyStatus | None = None
 
 
 @dataclass
@@ -131,6 +133,7 @@ class NightCurve:
     moon_illumination: float
     transit_index: int
     sun_altitudes: list[float] | None = None
+    accuracy: AstronomyStatus | None = None
 
     @property
     def transit_time(self) -> str:
@@ -317,6 +320,7 @@ def night_curve(
         moon_illumination=round(illumination, 3),
         transit_index=int(np.argmax(alts)),
         sun_altitudes=[float(a) for a in sun_alt],
+        accuracy=astronomy_status(times),
     )
 
 
@@ -424,6 +428,7 @@ def night_info(
         sunrise=sunrise,
         moon_age_days=round(float(moon_age), 2),
         waxing=bool(moon_age < SYNODIC_PERIOD_DAYS / 2.0),
+        accuracy=astronomy_status(times),
     )
 
 

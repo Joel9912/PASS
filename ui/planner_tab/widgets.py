@@ -1412,6 +1412,13 @@ class TransitCurve(QWidget):
         self._legend = QLabel(self._legend_text(full=False))
         self._legend.setObjectName("CurveLegend")
         header.addWidget(self._legend)
+        self._accuracy_label = QLabel(" ")
+        self._accuracy_label.setObjectName("HintLabel")
+        self._accuracy_label.setMinimumHeight(self.fontMetrics().height())
+        self._accuracy_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse
+                                                     | Qt.TextInteractionFlag.TextSelectableByKeyboard)
+        self._accuracy_label.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        header.addWidget(self._accuracy_label)
 
         layout.addLayout(header)
 
@@ -1524,6 +1531,10 @@ class TransitCurve(QWidget):
         self._windows_label.setText(" ")
         self._windows_label.show()
         self._legend.setText(self._legend_text(full=False))
+        self._accuracy_label.setText(" ")
+        self._accuracy_label.setToolTip("")
+        self._accuracy_label.setWhatsThis("")
+        self._accuracy_label.setAccessibleDescription("")
         self._altitude_curve.setData([], [])
         self._moon_curve.setData([], [])
         for band in (
@@ -1551,6 +1562,13 @@ class TransitCurve(QWidget):
         se le pasó el ``utc_offset_hours`` de la ubicación, el eje horario ya
         es hora de reloj.
         """
+        status = getattr(curve, "accuracy", None)
+        summary = status.summary if status else "≈ Estado de precisión no informado"
+        details = status.details if status else "Esta curva no informa de su modelo ni de la cobertura IERS; no implica precisión certificada."
+        self._accuracy_label.setText(summary)
+        self._accuracy_label.setToolTip(details)
+        self._accuracy_label.setWhatsThis(details)
+        self._accuracy_label.setAccessibleDescription(details)
         illumination_pct = curve.moon_illumination * 100.0
         min_dist = min_moon_distance(illumination_pct)
 
