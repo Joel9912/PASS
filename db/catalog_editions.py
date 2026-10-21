@@ -17,6 +17,7 @@ from .catalog_records import (
     resolve,
     validate_continuity,
 )
+from .data_resources import verify_binding
 
 ACTIVE_KEY = "catalog_active_edition"
 EDITION_FOLDER = "catalog-editions"
@@ -55,7 +56,7 @@ def require_legacy_catalog(conn: sqlite3.Connection) -> None:
 def _record(conn: sqlite3.Connection, edition_id: str) -> dict:
     """Recupera metadatos del registro local; un puntero huérfano se conserva y se comunica como no disponible."""
     try:
-        cursor = conn.execute("SELECT edition_id,schema_version,relative_path,sha256,size_bytes,versions,previous_id "
+        cursor = conn.execute("SELECT edition_id,schema_version,resource_manifest,relative_path,sha256,size_bytes,versions,previous_id "
                               "FROM catalog_editions WHERE edition_id=?", (edition_id,))
         row = cursor.fetchone()
     except sqlite3.Error as exc:
@@ -90,6 +91,8 @@ def _open(root: Path, record: dict) -> sqlite3.Connection:
     try:
         if record["schema_version"] not in (1, 2):
             raise CatalogUnavailableError("Formato de edición no compatible; se conserva sin convertir.")
+        if record.get("resource_manifest") is not None:
+            verify_binding(root, json.loads(record["resource_manifest"]), json.loads(record["versions"]))
         path = _path(root, record)
         if not path.is_file() or path.stat().st_size != record["size_bytes"] or _digest(path) != record["sha256"]:
             raise CatalogUnavailableError("La edición falta o su integridad no coincide con el registro.")
@@ -107,7 +110,7 @@ def _open(root: Path, record: dict) -> sqlite3.Connection:
             if conn.execute("PRAGMA foreign_key_check").fetchone() is not None:
                 raise CatalogUnavailableError("Relaciones de catálogo incompletas.")
         return conn
-    except (OSError, sqlite3.Error, CatalogUnavailableError) as exc:
+    except (OSError, sqlite3.Error, TypeError, ValueError) as exc:
         if conn is not None:
             conn.close()
         raise CatalogUnavailableError(f"Catálogo no disponible: {exc}") from exc
@@ -122,6 +125,20 @@ def catalog_snapshot(personal: sqlite3.Connection) -> Iterator[sqlite3.Connectio
     else:
         with closing(_open(_root(personal), _record(personal, edition))) as catalog:
             yield catalog
+
+
+@contextmanager
+def data_snapshot(personal: sqlite3.Connection):
+    """Fija catálogo y rutas de recursos de una sola edición, sin consultar otra selección durante la lectura."""
+    edition = active_id(personal)
+    if edition is None:
+        yield personal, {}, None
+        return
+    record = _record(personal, edition)
+    with closing(_open(_root(personal), record)) as catalog:
+        binding = json.loads(record["resource_manifest"]) if record["resource_manifest"] else None
+        resources = verify_binding(_root(personal), binding, json.loads(record["versions"])) if binding else {}
+        yield catalog, resources, binding
 
 
 def read_rows(personal: sqlite3.Connection, sql: str, parameters=()) -> list:
@@ -265,17 +282,24 @@ def _validate_history(personal: sqlite3.Connection, records: dict) -> None:
             validate_continuity({"source_records": (None, previous)}, records)
 
 
-def install_edition(db_path: Path, replacements: dict, versions: dict, groups, *, only_missing: bool = False, records=None) -> None:
+def install_edition(db_path: Path, replacements: dict, versions: dict, groups, *, only_missing: bool = False, records=None,
+                    resource_manifest=None, expected_active=None, require_expected=False, require_empty=False) -> None:
     """Prepara fuera de pass.db y activa con comparación optimista, sin borrar tablas legacy ni edición anterior."""
-    if not replacements:
+    if not replacements and resource_manifest is None:
         return
     uri = Path(db_path).absolute().as_uri() + "?mode=rw"
     with closing(sqlite3.connect(uri, uri=True, timeout=5)) as personal:
         root = _root(personal)
         personal.execute("BEGIN")
         before = active_id(personal)
+        if require_expected and before != expected_active:
+            raise ValueError("La edición cambió mientras se preparaban los recursos; no se activa sobre otra selección.")
+        if before and _record(personal, before)["resource_manifest"] and resource_manifest is None:
+            raise ValueError("Hay una edición global activa; actualiza el conjunto, no un catálogo separado.")
         with catalog_snapshot(personal) as source:
             captured = _capture(source, include_records=source is not personal)
+        if require_empty and (before is not None or captured["catalog"][1] or captured["stars"][1]):
+            return
         old_versions = _legacy_versions(personal, groups)
         personal.rollback()
         if only_missing:
@@ -294,6 +318,9 @@ def install_edition(db_path: Path, replacements: dict, versions: dict, groups, *
         updated = {**old_versions, **versions}
         validate_continuity(captured, records or {})
         candidate = _candidate(root, captured, replacements, updated, previous, records=records)
+        candidate["resource_manifest"] = json.dumps(resource_manifest, ensure_ascii=False) if resource_manifest is not None else None
+        with closing(_open(root, candidate)):
+            pass
         with personal:
             personal.execute("BEGIN IMMEDIATE")
             if active_id(personal) != before or _legacy_versions(personal, groups) != old_versions:
@@ -302,8 +329,9 @@ def install_edition(db_path: Path, replacements: dict, versions: dict, groups, *
             if before is None and _capture(personal) != captured:
                 raise ValueError("El catálogo legacy cambió durante la preparación; se conserva sin sustituir.")
             for record in ([baseline, candidate] if baseline else [candidate]):
-                personal.execute("INSERT INTO catalog_editions(edition_id,schema_version,relative_path,sha256,size_bytes,versions,previous_id) "
-                                 "VALUES (:edition_id,:schema_version,:relative_path,:sha256,:size_bytes,:versions,:previous_id)", record)
+                record.setdefault("resource_manifest", None)
+                personal.execute("INSERT INTO catalog_editions(edition_id,schema_version,resource_manifest,relative_path,sha256,size_bytes,versions,previous_id) "
+                                 "VALUES (:edition_id,:schema_version,:resource_manifest,:relative_path,:sha256,:size_bytes,:versions,:previous_id)", record)
             _activate(personal, candidate, updated)
 
 

@@ -190,6 +190,7 @@ CREATE TABLE IF NOT EXISTS planned_sessions (
 CREATE TABLE IF NOT EXISTS catalog_editions (
     edition_id TEXT PRIMARY KEY,
     schema_version INTEGER NOT NULL DEFAULT 1,
+    resource_manifest TEXT,
     relative_path TEXT NOT NULL UNIQUE,
     sha256 TEXT NOT NULL,
     size_bytes INTEGER NOT NULL,

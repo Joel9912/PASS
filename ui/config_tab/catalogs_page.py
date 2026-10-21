@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
 from db import connection
 from db.catalog_editions import restore_previous, status
 from pass_logging import record_action
-from planners import catalog_packages
+from planners import catalog_packages, data_packages
 from ui.style import PALETTE
 
 _EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="catalog-packages")
@@ -38,6 +38,7 @@ class CatalogsPage(QWidget):
         """Construye una página sin red; conserva el trabajo al cerrar Configuración."""
         super().__init__(parent)
         self._packages = None
+        self._global_manifest = None
         self._busy = False
         self._restoring = False
         layout = QVBoxLayout(self)
@@ -56,6 +57,11 @@ class CatalogsPage(QWidget):
         hint = QLabel("Versiones locales y actualizaciones de los paquetes PASS.")
         hint.setObjectName("HintLabel")
         layout.addWidget(hint)
+        self._edition_label = QLabel()
+        self._edition_label.setObjectName("HintLabel")
+        self._edition_label.setWordWrap(True)
+        self._edition_label.hide()
+        layout.addWidget(self._edition_label)
         self._table = QTableWidget(len(catalog_packages.GROUPS), 3)
         self._table.setObjectName("CatalogPackagesTable")
         self._table.setAlternatingRowColors(True)
@@ -103,6 +109,16 @@ class CatalogsPage(QWidget):
         """No confunde catálogos heredados sin metadatos con una versión vigente."""
         versions = catalog_packages.installed(connection.get_connection())
         health = status(connection.get_connection())
+        try:
+            edition = data_packages.describe(connection.get_connection())
+        except (ValueError, KeyError, TypeError):
+            edition = None
+        self._edition_label.setVisible(edition is not None)
+        if edition:
+            text = f"Edición {edition['edition']} · recursos seleccionados: {len(edition['selected'])}"
+            if edition["absent_optional"]:
+                text += " · opcionales no instalados: " + ", ".join(edition["absent_optional"])
+            self._edition_label.setText(text)
         self._pending = []
         for row, group in enumerate(catalog_packages.GROUPS):
             version = versions[group]
@@ -139,6 +155,8 @@ class CatalogsPage(QWidget):
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
                 self._table.setItem(row, column, item)
         self._check.setEnabled(not self._busy)
+        if self._global_manifest and (not edition or edition["manifest"] != self._global_manifest or not health["available"]):
+            self._pending.append("edición y recursos")
         self._update.setEnabled(not self._busy and bool(self._pending))
         self._restore.setEnabled(not self._busy and health["previous"])
         if health["prepared"] and self._status.text().startswith("Comprueba si"):
@@ -170,6 +188,7 @@ class CatalogsPage(QWidget):
         if self._busy:
             return
         self._packages = None
+        self._global_manifest = None
         record_action("catálogos", "Comprobar actualizaciones")
         self._status.setText("Comprobando paquetes publicados…")
         self._submit(catalog_packages.check_manifest)
@@ -181,14 +200,18 @@ class CatalogsPage(QWidget):
         answer = QMessageBox.question(self, "Actualizar catálogos",
                                       "¿Descargar e instalar los paquetes disponibles?\n"
                                       "Tus objetos guardados y equipos se conservarán.\n"
-                                      "Las ediciones anteriores se conservan y ocuparán espacio adicional.")
+                                      "Las ediciones anteriores se conservan y ocuparán espacio adicional.\n"
+                                      "Una edición global incluye sus recursos obligatorios y opciones ya instaladas; no añade opcionales nuevos.")
         if answer != QMessageBox.StandardButton.Yes:
             record_action("catálogos", "Actualización cancelada por el usuario")
             return
         record_action("catálogos", "Actualización autorizada: " + ", ".join(self._pending))
         self._status.setText("Descargando, verificando e instalando catálogos…")
-        self._submit(catalog_packages.update_packages, connection.DB_PATH,
-                     self._packages, tuple(self._pending))
+        if self._global_manifest:
+            self._submit(data_packages.install, connection.DB_PATH, self._global_manifest)
+        else:
+            self._submit(catalog_packages.update_packages, connection.DB_PATH,
+                         self._packages, tuple(self._pending))
 
     def start_restore(self):
         """Recupera únicamente el catálogo anterior, siempre con consentimiento y sin restaurar pass.db."""
@@ -196,7 +219,7 @@ class CatalogsPage(QWidget):
             return
         answer = QMessageBox.question(
             self, "Recuperar catálogo",
-            "¿Activar la edición anterior del catálogo?\n"
+            "¿Activar la edición anterior del catálogo y sus recursos asociados?\n"
             "Se conservan tus equipos, ubicaciones, notas, regiones y sesiones, incluidas las posteriores a la actualización.",
         )
         if answer != QMessageBox.StandardButton.Yes:
@@ -213,6 +236,7 @@ class CatalogsPage(QWidget):
         self._progress.hide()
         if error:
             self._packages = None
+            self._global_manifest = None
             self._status.setText("⚠ No se pudo completar la operación. Los catálogos anteriores se conservan.")
             self._status.setToolTip(error)
         elif self._restoring:
@@ -220,7 +244,8 @@ class CatalogsPage(QWidget):
             self._status.setToolTip("")
             self.catalogs_changed.emit()
         elif isinstance(result, dict):
-            self._packages = result
+            self._global_manifest = result if result.get("format") == 2 else None
+            self._packages = result["packages"] if self._global_manifest else result
             self._status.setText("Comprobación completada.")
             self._status.setToolTip("")
         else:

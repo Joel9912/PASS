@@ -42,12 +42,17 @@ def _read(url, limit):
 
 def check_manifest():
     """Consulta únicamente el manifiesto; cualquier fallo deja la vigencia desconocida."""
+    from planners.data_packages import parse_manifest as parse_data_manifest
+
     releases = json.loads(_read(RELEASES_URL, 131072))
     if not isinstance(releases, list):
         raise TypeError("No se pudo consultar la lista de releases.")
     for release in releases:
         if not isinstance(release, dict) or release.get("draft"):
             continue
+        for asset in release.get("assets", []):
+            if asset.get("name") == "data-manifest.json":
+                return parse_data_manifest(_read(asset["browser_download_url"], 65536))
         for asset in release.get("assets", []):
             if asset.get("name") == "catalogs-manifest.json":
                 return parse_manifest(_read(asset["browser_download_url"], 65536))
@@ -143,7 +148,8 @@ def validate_rows(group, rows):
             seen.add(key)
 
 
-def update_packages(db_path, packages, groups, *, reader=None, only_missing=False):
+def update_packages(db_path, packages, groups, *, reader=None, only_missing=False, resource_manifest=None,
+                    expected_active=None, require_expected=False, require_empty=False):
     """Valida todas las descargas y prepara una edición externa antes de activar sus versiones.
 
     Abre una conexión propia en el hilo llamante; jamás reutiliza la conexión Qt.
@@ -184,12 +190,32 @@ def update_packages(db_path, packages, groups, *, reader=None, only_missing=Fals
                     for group, rows in prepared.items()}
     versions = {group: {"version": packages[group]["version"], "date": packages[group]["date"],
                         "sha256": packages[group]["sha256"]} for group in prepared}
-    install_edition(Path(db_path), replacements, versions, GROUPS, only_missing=only_missing, records=records)
+    install_edition(Path(db_path), replacements, versions, GROUPS, only_missing=only_missing, records=records,
+                    resource_manifest=resource_manifest, expected_active=expected_active, require_expected=require_expected,
+                    require_empty=require_empty)
 
 
 def install_bundled(db_path, folder):
     """Carga solo catálogos ausentes desde la distribución, sin Internet ni sobrescribir legacy."""
     folder = Path(folder)
+    data_manifest = folder / "data-manifest.json"
+    if data_manifest.is_file():
+        from planners import data_packages
+
+        if data_manifest.is_symlink() or data_manifest.stat().st_size > 65536:
+            raise ValueError("Manifiesto global incluido no permitido.")
+        manifest = data_packages.parse_manifest(data_manifest.read_bytes())
+
+        def read_data_local(url, limit):
+            """Lee adjuntos directos sin red ni extracción de rutas aportadas por el manifiesto."""
+            path = folder / urlparse(url).path.rsplit("/", 1)[-1]
+            if path.is_symlink() or path.is_junction() or path.resolve().parent != folder.resolve():
+                raise ValueError("Ruta de recurso incluido no permitida.")
+            with path.open("rb") as stream:
+                return stream.read(limit + 1)
+
+        data_packages.install(db_path, manifest, reader=read_data_local, expected_empty=True)
+        return
     manifest_path = folder / "catalogs-manifest.json"
     if not manifest_path.is_file():
         return

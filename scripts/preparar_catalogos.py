@@ -19,6 +19,23 @@ from planners import catalog_loader, catalog_packages, ldn_loader
 from planners.catalog_records import validate_records
 
 
+def export_data_manifest(output, edition, packages, resources):
+    """Escribe un manifiesto global nuevo de artefactos ya revisados; no descarga, copia datos personales ni publica.
+
+    Los adjuntos deben haberse preparado/verificado por separado. Esta
+    validación comprueba el contrato técnico, no concede derechos ni
+    acredita los cálculos o la cobertura de sus fuentes.
+    """
+    from planners.data_packages import parse_manifest
+
+    manifest = {"format": 2, "edition": edition, "reader": {"min": 1, "max": 1},
+                "packages": packages, "resources": resources}
+    payload = json.dumps(manifest, ensure_ascii=False, allow_nan=False).encode("utf-8")
+    parse_manifest(payload)
+    with Path(output).open("xb") as stream:
+        stream.write(payload)
+
+
 def export_identified(version, output, components, registry):
     """Exporta componentes explícitamente revisados con IDs de un registro existente, sin red ni datos personales.
 
