@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **112 hallazgos**: 🔴 18 graves · 🟠 65 medios · 🟡 20 bajos · 9 decisiones (3 pendientes).
-Estado: ✅ 92 corregidos · 🟡 2 contenidos · ⏳ 8 pendientes · 🔎 1 sin reproducir.
+Estado: ✅ 93 corregidos · 🟡 2 contenidos · ⏳ 7 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -133,7 +133,7 @@ Estado: ✅ 92 corregidos · 🟡 2 contenidos · ⏳ 8 pendientes · 🔎 1 sin
 | **L-0001** | QMenu y paneles efímeros con parent retenidos: posible fuga de widgets. | ✅ `afe3a09` |
 | **L-0002** | Los diálogos acumulaban hijos ocultos al cerrar (fuga medida 20/20). | ✅ |
 | **U-0006** | El `QDateEdit` de «Editar sesión» no reflejaba la fecha seleccionada. | ✅ |
-| **U-0009** | La sugerencia de nombre de sesión conserva la fecha anterior al cambiar la fecha de Planificación. | ⏳ |
+| **U-0009** | La sugerencia de nombre de sesión conserva la fecha anterior al cambiar la fecha de Planificación. | ✅ `32a49b6` |
 | **X-0005** | `i18n/` declara traducciones vacías como si fueran válidas. | ⏳ (carpeta aún sin implementar) |
 | **X-0006** | Búsqueda decía «sin datos hasta que haya API key» aunque hubiera claves. | ✅ |
 | **X-0008** | `tests/README.md` atribuía la BD a `siril_finder`. | ✅ `bd7211b` (documentación interna cotejada) |
