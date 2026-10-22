@@ -194,6 +194,30 @@ def test_kernel_activo_alterado_no_declara_disponible_la_edicion(bundle):
     assert editions.read_rows(conn, "SELECT * FROM catalog") == []
 
 
+def test_kernel_compartido_ausente_no_finge_recuperacion_ni_sustituye_modelo(bundle):
+    """Recuperar tampoco inventa disponibilidad si ambas ediciones dependen del mismo recurso perdido."""
+    from planners.ephemeris import selected_model
+
+    conn, path, manifest, blobs, _calls, reader = bundle
+    data = synthetic_spk()
+    manifest["resources"]["ephemeris"] = _item(blobs, "kernel.bsp", data, format="spk-planets-v1", optional=False)
+    _install(bundle)
+    manifest["edition"] = "PASS.synthetic.shared-kernel-B"
+    manifest["resources"]["credits"] = _item(blobs, "credits-B.txt", b"Creditos B", format="utf8-v1", optional=False)
+    data_packages.install(path, manifest, reader=reader)
+    selected = editions.active_id(conn)
+    conn.execute("UPDATE personal_catalog SET notes='Posterior al cambio de recurso'")
+    conn.commit()
+    resource = data_resources.resource_path(path.parent, manifest["resources"]["ephemeris"]["sha256"])
+    resource.unlink()
+    with pytest.raises(ValueError):
+        selected_model()
+    with pytest.raises(ValueError):
+        editions.restore_previous(path)
+    assert editions.active_id(conn) == selected and not editions.status(conn)["available"]
+    assert conn.execute("SELECT notes FROM personal_catalog").fetchone()[0] == "Posterior al cambio de recurso"
+
+
 def test_consumidor_lee_kernel_de_seleccion_y_worker_usa_conexion_propia(bundle):
     """La ruta elegida corresponde a la edición activa y se puede leer desde otro hilo sin compartir SQLite."""
     from concurrent.futures import ThreadPoolExecutor
