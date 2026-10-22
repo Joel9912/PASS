@@ -6,7 +6,8 @@ from threading import Event
 
 import numpy as np
 import pytest
-from astropy.coordinates import solar_system_ephemeris
+from astropy.coordinates import AltAz, EarthLocation, get_body, solar_system_ephemeris
+from astropy.time import Time
 from astropy.utils import iers
 
 from planners import capture_plan, ephemeris, transit
@@ -140,3 +141,16 @@ def test_calculo_offline_no_caduca_por_predicciones_locales_y_restaura_configura
         assert info.accuracy.orientation == "outside"
         assert np.isfinite(info.moon_illumination)
         assert iers.conf.auto_max_age == 30 and iers.conf.auto_download
+
+
+def test_modelo_local_calcula_sol_luna_y_planetas_sin_fijar_posiciones_ficticias(models):
+    """El contrato de cadenas SPK alimenta Astropy en los cuerpos acordados, no solo en el segmento lunar."""
+    bodies = ("sun", "moon", "mercury", "venus", "mars", "jupiter", "saturn", "uranus", "neptune")
+    location = EarthLocation.from_geodetic(-3, 40)
+    instant = Time("2020-01-01")
+    with ephemeris.model_scope(models[0]):
+        frame = AltAz(obstime=instant, location=location)
+        for body in bodies:
+            position = get_body(body, instant, location).transform_to(frame)
+            assert np.isfinite([position.az.deg, position.alt.deg, position.distance.value]).all()
+    assert solar_system_ephemeris.get() == "builtin"

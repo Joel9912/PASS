@@ -57,6 +57,8 @@ def validate_manifest(manifest: dict) -> None:
                 raise ValueError("Dependencia de edición ausente o incompatible.")
             if (name in packages or not item["optional"]) and dependency in resources and resources[dependency].get("optional") is not False:
                 raise ValueError("Un componente obligatorio no puede depender de un recurso opcional.")
+    if sum(item.get("format") == "spk-planets-v1" and not item["optional"] for item in resources.values()) > 1:
+        raise ValueError("La edición requiere más de un modelo planetario; no se elige arbitrariamente.")
     done, pending = set(), set()
 
     def visit(name):
@@ -85,6 +87,8 @@ def selected_resources(manifest: dict, optional=()) -> list[str]:
     if optional - resources.keys():
         raise ValueError("Selección de recursos opcionales desconocida.")
     selected = optional | {name for name, item in resources.items() if not item["optional"]}
+    if sum(resources[name]["format"] == "spk-planets-v1" for name in selected) > 1:
+        raise ValueError("Selecciona solo un modelo planetario para mantener cálculos coherentes.")
     available = selected | GROUPS
     if any(set(resources[name]["requires"]) - available for name in selected):
         raise ValueError("Faltan dependencias en la selección opcional; selecciona explícitamente el conjunto requerido.")

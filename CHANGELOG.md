@@ -34,6 +34,7 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 - Captura Ideal reserva al menos cinco minutos dentro de ambos extremos de la noche astronómica; los márgenes válidos quedan como Posible.
 
 ### Corregido
+- Las ediciones rechazan seleccionar dos kernels planetarios antes de descargar o activarlos; no dejan los cálculos bloqueados por una selección ambigua (B-0014).
 - La preparación SIMBAD excluye objetos clasificados como estrellas mediante su jerarquía oficial, sin confundir cúmulos como `Cl*` con estrellas individuales; conserva evidencia de las exclusiones (B-0013).
 - Los cálculos offline no fallan por caducidad de predicciones IERS locales: conservan los avisos de aproximación y no intentan descargar tablas (P-0017).
 - La validación directa de recursos rechaza formatos desconocidos en lugar de interpretarlos como texto (B-0012).

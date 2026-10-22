@@ -153,6 +153,33 @@ def test_kernel_con_huella_correcta_pero_sin_luna_no_activa(bundle):
     assert editions.active_id(conn) == before
 
 
+def test_dos_kernels_seleccionados_no_se_activan_ni_descargan(bundle):
+    """El consumidor exige un modelo único; una edición ambigua se rechaza antes de sustituir la que funciona."""
+    conn, path, manifest, blobs, calls, reader = bundle
+    _install(bundle)
+    before = editions.active_id(conn)
+    manifest["edition"] = "PASS.synthetic.ambiguous-kernel"
+    for name in ("kernel_a", "kernel_b"):
+        manifest["resources"][name] = _item(blobs, name + ".bsp", synthetic_spk(), format="spk-planets-v1", optional=False)
+    calls.clear()
+    with pytest.raises(ValueError, match="modelo planetario"):
+        data_packages.install(path, manifest, reader=reader)
+    assert editions.active_id(conn) == before and not calls
+
+
+@pytest.mark.parametrize("optional", [["kernel_a"], ["kernel_b"], ["kernel_a", "kernel_b"]])
+def test_modelos_opcionales_no_se_combinan_por_accidente(bundle, optional):
+    """Se pueden declarar alternativas sin instalarlas; elegir ambas es error explícito, no una prioridad implícita."""
+    _conn, _path, manifest, blobs, _calls, _reader = bundle
+    for name in ("kernel_a", "kernel_b"):
+        manifest["resources"][name] = _item(blobs, name + ".bsp", synthetic_spk(), format="spk-planets-v1", optional=True)
+    if len(optional) > 1:
+        with pytest.raises(ValueError, match="modelo planetario"):
+            data_resources.selected_resources(manifest, optional)
+    else:
+        assert set(data_resources.selected_resources(manifest, optional)) == {"credits", *optional}
+
+
 def test_kernel_activo_alterado_no_declara_disponible_la_edicion(bundle):
     """La revalidación al leer también incluye el recurso científico y no cae al catálogo legacy."""
     conn, path, manifest, blobs, _calls, _reader = bundle
