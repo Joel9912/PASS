@@ -91,6 +91,7 @@ def sin_red_real(monkeypatch):
         raise AssertionError("La suite debe funcionar sin red; falta un doble HTTP.")
 
     monkeypatch.setattr(urllib.request, "urlopen", rechazar)
+    monkeypatch.setattr(urllib.request.OpenerDirector, "open", rechazar)
 
 
 @pytest.fixture(autouse=True)

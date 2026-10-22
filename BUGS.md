@@ -24,8 +24,8 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 
 ## Resumen
 
-**113 hallazgos**: 🔴 18 graves · 🟠 66 medios · 🟡 20 bajos · 9 decisiones (3 pendientes).
-Estado: ✅ 93 corregidos · 🟡 2 contenidos · ⏳ 8 pendientes · 🔎 1 sin reproducir.
+**115 hallazgos**: 🔴 18 graves · 🟠 68 medios · 🟡 20 bajos · 9 decisiones (3 pendientes).
+Estado: ✅ 94 corregidos · 🟡 2 contenidos · ⏳ 9 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -61,7 +61,7 @@ Estado: ✅ 93 corregidos · 🟡 2 contenidos · ⏳ 8 pendientes · 🔎 1 sin
 | **B-0006** | La conexión SQLite del hilo principal no debe pasar a hilos Qt; hoy se cumple por diseño. | ⏳ revisión continua |
 | **B-0010** | Un paquete con tamaño y SHA correctos puede instalar magnitudes de texto y familias ajenas al catálogo; la validación no comprueba todos los tipos antes de sustituir datos. | ✅ `a4cfedc` |
 | **B-0011** | La importación inicial de paquetes puede sustituir un catálogo que otra operación rellenó después de comprobar que estaba vacío. | ✅ `c898cd8` |
-| **B-0012** | La validación directa de recursos acepta formatos desconocidos si sus bytes se pueden leer como texto UTF-8. | ⏳ |
+| **B-0012** | La validación directa de recursos acepta formatos desconocidos si sus bytes se pueden leer como texto UTF-8. | ✅ `73d7329` |
 | **S-0008** | Mezcla de RAW y FITS en una misma sesión no se rechaza pese al contrato declarado. | ✅ `8210353` (validación por secuencia) |
 | **S-0009** | Una carpeta creada por una calibración fallida bloquea el reintento: `exists()` cuenta como «ya calibrada». Sigue vigente tras **S-0002**. | ✅ `1f91334` |
 | **S-0011** | `_hilo` se libera al recibir el resultado y no al emitir `finished`. | ✅ `7bf6c24` |
@@ -103,6 +103,7 @@ Estado: ✅ 93 corregidos · 🟡 2 contenidos · ⏳ 8 pendientes · 🔎 1 sin
 | **P-0014** | El resumen puede extender captura más allá del fin de la noche astronómica al contar completa la última muestra nocturna. | ✅ `f9aef1c` |
 | **P-0015** | Guardar una sesión usa las coordenadas originales del objetivo e ignora el centro editado del encuadre. | ✅ `b4262de` |
 | **P-0016** | Guardar de nuevo una sesión idéntica inserta otra fila sin aviso; falta concretar la identidad que debe impedir duplicados. | ⏳ aplazado a v0.3-alpha; no bloquea v0.2-alpha |
+| **P-0017** | Los cálculos offline pueden fallar por caducidad de predicciones IERS locales, incluso en fechas admitidas. | ⏳ |
 | **U-0002** | Arrastrar la vista no actualiza el encuadre visible antes de guardar. | ✅ `885ba55` |
 | **U-0003** | Quitar el último target deja el plan y el planetario obsoletos. | ✅ `885ba55` |
 | **U-0004** | Si la región no está en el cielo, el target anterior queda resaltado. | ✅ `885ba55` |
@@ -117,6 +118,7 @@ Estado: ✅ 93 corregidos · 🟡 2 contenidos · ⏳ 8 pendientes · 🔎 1 sin
 | **T-0007** | El modo offscreen se activa con `setdefault` y puede no aplicarse. | ✅ `8930f6d` |
 | **T-0008** | Algunos tests de Configuración crean widgets sin solicitar QApplication y abortan al ejecutarlos aisladamente. | ✅ `e07a987` |
 | **T-0009** | La prueba de recuperación puede intentar borrar un FITS mientras la lectura asíncrona de estimaciones mantiene su cabecera abierta en Windows. | ✅ `84abf8b` |
+| **T-0010** | El bloqueo HTTP de los tests no intercepta los abridores usados por Astropy, permitiendo peticiones reales inesperadas. | ⏳ |
 | **X-0001** | El README raíz contradice la GPL al prohibir la venta. | ✅ `18c384e` |
 | **X-0002** | El README raíz describe un ranking de objetos que no existe. | ✅ `18c384e` |
 | **X-0003** | El README raíz presenta el Planetario como dependiente de red. | ✅ `18c384e` |
