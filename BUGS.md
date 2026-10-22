@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **121 hallazgos**: 🔴 18 graves · 🟠 73 medios · 🟡 21 bajos · 9 decisiones (3 pendientes).
-Estado: ✅ 104 corregidos · 🟡 2 contenidos · ⏳ 5 pendientes · 🔎 1 sin reproducir.
+Estado: ✅ 105 corregidos · 🟡 2 contenidos · ⏳ 4 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -151,7 +151,7 @@ Estado: ✅ 104 corregidos · 🟡 2 contenidos · ⏳ 5 pendientes · 🔎 1 si
 | **X-0012** | Los totales del catálogo se repetían en `MEMORY.md`. | ✅ |
 | **X-0013** | Roadmap histórico obsoleto en `MEMORY.md`. | ✅ |
 | **X-0014** | Errata «conversión» en el README de planificación. | ✅ |
-| **X-0015** | Prosas extensas en la documentación frente a la regla de brevedad. | ⏳ poda continua |
+| **X-0015** | Prosas extensas en la documentación frente a la regla de brevedad. | ✅ `8de278d` (consolidación actual; mantenimiento futuro, no bloqueo indefinido) |
 | **X-0016** | El README público citaba documentos de trabajo que no se distribuyen. | ✅ `0da24f5` |
 | **X-0017** | La documentación atribuía al arranque descargas automáticas de catálogos que ya se habían retirado. | ✅ `2c7035b` |
 | **X-0018** | El cargador documenta HYG v4.0 como CC-BY y omite la condición ShareAlike de su licencia. | ✅ `4815acd` |
