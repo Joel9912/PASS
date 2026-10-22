@@ -24,8 +24,8 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 
 ## Resumen
 
-**112 hallazgos**: 🔴 18 graves · 🟠 65 medios · 🟡 20 bajos · 9 decisiones (3 pendientes).
-Estado: ✅ 93 corregidos · 🟡 2 contenidos · ⏳ 7 pendientes · 🔎 1 sin reproducir.
+**113 hallazgos**: 🔴 18 graves · 🟠 66 medios · 🟡 20 bajos · 9 decisiones (3 pendientes).
+Estado: ✅ 93 corregidos · 🟡 2 contenidos · ⏳ 8 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -61,6 +61,7 @@ Estado: ✅ 93 corregidos · 🟡 2 contenidos · ⏳ 7 pendientes · 🔎 1 sin
 | **B-0006** | La conexión SQLite del hilo principal no debe pasar a hilos Qt; hoy se cumple por diseño. | ⏳ revisión continua |
 | **B-0010** | Un paquete con tamaño y SHA correctos puede instalar magnitudes de texto y familias ajenas al catálogo; la validación no comprueba todos los tipos antes de sustituir datos. | ✅ `a4cfedc` |
 | **B-0011** | La importación inicial de paquetes puede sustituir un catálogo que otra operación rellenó después de comprobar que estaba vacío. | ✅ `c898cd8` |
+| **B-0012** | La validación directa de recursos acepta formatos desconocidos si sus bytes se pueden leer como texto UTF-8. | ⏳ |
 | **S-0008** | Mezcla de RAW y FITS en una misma sesión no se rechaza pese al contrato declarado. | ✅ `8210353` (validación por secuencia) |
 | **S-0009** | Una carpeta creada por una calibración fallida bloquea el reintento: `exists()` cuenta como «ya calibrada». Sigue vigente tras **S-0002**. | ✅ `1f91334` |
 | **S-0011** | `_hilo` se libera al recibir el resultado y no al emitir `finished`. | ✅ `7bf6c24` |

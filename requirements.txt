@@ -1,6 +1,7 @@
 # PASS — Dependencias verificadas con Python 3.12 en .venv
 PyQt6==6.11.0
 astropy==8.0.1
+jplephem==2.24
 numpy==2.5.3
 PyYAML==6.0.3
 pyqtgraph==0.14.0

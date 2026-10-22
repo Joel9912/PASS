@@ -12,6 +12,7 @@ import pytest
 from db import catalog_editions as editions
 from db import connection, data_resources
 from planners import catalog_packages, data_packages
+from tests.spk_factory import synthetic_spk
 
 
 @pytest.fixture
@@ -113,6 +114,57 @@ def test_reinstalar_no_descarga_ni_crea_otra_edicion(bundle):
     calls.clear()
     _install(bundle)
     assert not calls and editions.active_id(conn) == previous
+
+
+def test_kernel_global_actualiza_y_recupera_sin_retroceder_notas(bundle):
+    """El SPK sigue la selección global y su recuperación; notas posteriores permanecen en la base personal."""
+    conn, path, manifest, blobs, calls, reader = bundle
+    original = synthetic_spk()
+    manifest["resources"]["ephemeris"] = _item(blobs, "kernel-A.bsp", original, format="spk-planets-v1", optional=False)
+    _install(bundle)
+    previous = editions.active_id(conn)
+    manifest["edition"] = "PASS.synthetic.kernel-B"
+    manifest["resources"]["ephemeris"] = _item(
+        blobs, "kernel-B.bsp", synthetic_spk(value=2000), format="spk-planets-v1", optional=False,
+    )
+    calls.clear()
+    data_packages.install(path, manifest, reader=reader)
+    assert calls == [manifest["resources"]["ephemeris"]["url"]]
+    assert editions.active_id(conn) != previous
+    conn.execute("UPDATE personal_catalog SET notes='Trabajo posterior al kernel'")
+    conn.commit()
+    editions.restore_previous(path)
+    with editions.data_snapshot(conn) as (_catalog, resources, _binding):
+        assert resources["ephemeris"].read_bytes() == original
+    assert conn.execute("SELECT notes FROM personal_catalog").fetchone()[0] == "Trabajo posterior al kernel"
+
+
+def test_kernel_con_huella_correcta_pero_sin_luna_no_activa(bundle):
+    """Un binario bien transferido pero científicamente incompleto conserva la selección anterior."""
+    conn, path, manifest, blobs, _calls, reader = bundle
+    _install(bundle)
+    before = editions.active_id(conn)
+    manifest["edition"] = "PASS.synthetic.incomplete-kernel"
+    manifest["resources"]["ephemeris"] = _item(
+        blobs, "kernel-invalid.bsp", synthetic_spk(missing=[(3, 301)]), format="spk-planets-v1", optional=False,
+    )
+    with pytest.raises(ValueError, match="cadenas completas"):
+        data_packages.install(path, manifest, reader=reader)
+    assert editions.active_id(conn) == before
+
+
+def test_kernel_activo_alterado_no_declara_disponible_la_edicion(bundle):
+    """La revalidación al leer también incluye el recurso científico y no cae al catálogo legacy."""
+    conn, path, manifest, blobs, _calls, _reader = bundle
+    data = synthetic_spk()
+    manifest["resources"]["ephemeris"] = _item(blobs, "kernel.bsp", data, format="spk-planets-v1", optional=False)
+    _install(bundle)
+    selected = editions.active_id(conn)
+    resource = data_resources.resource_path(path.parent, manifest["resources"]["ephemeris"]["sha256"])
+    resource.write_bytes(data[:-1] + b"X")
+    assert not editions.status(conn)["available"]
+    assert editions.active_id(conn) == selected
+    assert editions.read_rows(conn, "SELECT * FROM catalog") == []
 
 
 def test_opcional_se_instala_solo_con_seleccion_y_se_conserva_al_actualizar(bundle):

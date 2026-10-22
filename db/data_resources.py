@@ -47,7 +47,7 @@ def validate_manifest(manifest: dict) -> None:
         if name in packages:
             if type(item.get("payload_format")) is not int or item["payload_format"] != 2:
                 raise ValueError("La edición global requiere catálogos con procedencia explícita.")
-        elif item.get("format") not in ("utf8-v1", "json-v1") or type(item.get("optional")) is not bool:
+        elif item.get("format") not in ("utf8-v1", "json-v1", "spk-planets-v1") or type(item.get("optional")) is not bool:
             raise ValueError("Formato de recurso no compatible; no se reinterpretan archivos desconocidos.")
         if not isinstance(item.get("requires"), dict):
             raise TypeError("Dependencias de componente inválidas.")
@@ -104,13 +104,20 @@ def resource_path(root: Path, sha256: str) -> Path:
 
 
 def validate_content(data: bytes, item: dict) -> None:
-    """Comprueba bytes, codificación y sintaxis del formato admitido, sin inferir semántica astronómica."""
+    """Comprueba integridad y contrato del formato explícito; SPK exige segmentos y cobertura, no una precisión prometida."""
     if len(data) != item["size"] or hashlib.sha256(data).hexdigest() != item["sha256"]:
         raise ValueError("Integridad del recurso no coincide con su edición.")
-    text = data.decode("utf-8")
-    if item["format"] == "json-v1":
-        content = json.loads(text)
-        json.dumps(content, allow_nan=False)
+    if item["format"] == "spk-planets-v1":
+        from .spk_resources import validate_spk
+
+        validate_spk(data)
+    elif item["format"] in ("utf8-v1", "json-v1"):
+        text = data.decode("utf-8")
+        if item["format"] == "json-v1":
+            content = json.loads(text)
+            json.dumps(content, allow_nan=False)
+    else:
+        raise ValueError("Formato de recurso no compatible.")
 
 
 def prepare_resource(root: Path, item: dict, reader) -> Path:
