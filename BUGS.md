@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **119 hallazgos**: 🔴 18 graves · 🟠 71 medios · 🟡 21 bajos · 9 decisiones (3 pendientes).
-Estado: ✅ 98 corregidos · 🟡 2 contenidos · ⏳ 9 pendientes · 🔎 1 sin reproducir.
+Estado: ✅ 100 corregidos · 🟡 2 contenidos · ⏳ 7 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -110,7 +110,7 @@ Estado: ✅ 98 corregidos · 🟡 2 contenidos · ⏳ 9 pendientes · 🔎 1 sin
 | **U-0003** | Quitar el último target deja el plan y el planetario obsoletos. | ✅ `885ba55` |
 | **U-0004** | Si la región no está en el cielo, el target anterior queda resaltado. | ✅ `885ba55` |
 | **U-0005** | Añadir un duplicado recarga la lista y puede cambiar la selección. | ✅ `885ba55` |
-| **U-0010** | La interfaz confunde recursos astronómicos inválidos con fechas no admitidas; errores de lectura pueden propagarse o dejar cálculos anteriores visibles. | ⏳ |
+| **U-0010** | La interfaz confunde recursos astronómicos inválidos con fechas no admitidas; errores de lectura pueden propagarse o dejar cálculos anteriores visibles. | ✅ `4815acd` |
 | **C-0001** | Se admiten umbrales de sub/sobremuestreo contradictorios entre sí. | ✅ `a7f5ead` |
 | **C-0002** | Configuración guarda varias claves sin atomicidad: un fallo a mitad deja ajustes a medias. | ✅ `a7f5ead` |
 | **C-0003** | Editar la ruta de SirIL deja el ✓ de «encontrado» obsoleto hasta reabrir. | ✅ `600200c` |
@@ -152,7 +152,7 @@ Estado: ✅ 98 corregidos · 🟡 2 contenidos · ⏳ 9 pendientes · 🔎 1 sin
 | **X-0015** | Prosas extensas en la documentación frente a la regla de brevedad. | ⏳ poda continua |
 | **X-0016** | El README público citaba documentos de trabajo que no se distribuyen. | ✅ `0da24f5` |
 | **X-0017** | La documentación atribuía al arranque descargas automáticas de catálogos que ya se habían retirado. | ✅ `2c7035b` |
-| **X-0018** | El cargador documenta HYG v4.0 como CC-BY y omite la condición ShareAlike de su licencia. | ⏳ |
+| **X-0018** | El cargador documenta HYG v4.0 como CC-BY y omite la condición ShareAlike de su licencia. | ✅ `4815acd` |
 
 ## Decisiones
 
