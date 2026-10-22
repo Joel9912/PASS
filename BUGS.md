@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **116 hallazgos**: 🔴 18 graves · 🟠 69 medios · 🟡 20 bajos · 9 decisiones (3 pendientes).
-Estado: ✅ 96 corregidos · 🟡 2 contenidos · ⏳ 8 pendientes · 🔎 1 sin reproducir.
+Estado: ✅ 97 corregidos · 🟡 2 contenidos · ⏳ 7 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -62,7 +62,7 @@ Estado: ✅ 96 corregidos · 🟡 2 contenidos · ⏳ 8 pendientes · 🔎 1 sin
 | **B-0010** | Un paquete con tamaño y SHA correctos puede instalar magnitudes de texto y familias ajenas al catálogo; la validación no comprueba todos los tipos antes de sustituir datos. | ✅ `a4cfedc` |
 | **B-0011** | La importación inicial de paquetes puede sustituir un catálogo que otra operación rellenó después de comprobar que estaba vacío. | ✅ `c898cd8` |
 | **B-0012** | La validación directa de recursos acepta formatos desconocidos si sus bytes se pueden leer como texto UTF-8. | ✅ `73d7329` |
-| **B-0013** | La preparación SIMBAD admite estrellas como objetos de espacio profundo por llevar una designación LDN/Barnard. | ⏳ |
+| **B-0013** | La preparación SIMBAD admite estrellas como objetos de espacio profundo por llevar una designación LDN/Barnard. | ✅ `30d9cd9` |
 | **S-0008** | Mezcla de RAW y FITS en una misma sesión no se rechaza pese al contrato declarado. | ✅ `8210353` (validación por secuencia) |
 | **S-0009** | Una carpeta creada por una calibración fallida bloquea el reintento: `exists()` cuenta como «ya calibrada». Sigue vigente tras **S-0002**. | ✅ `1f91334` |
 | **S-0011** | `_hilo` se libera al recibir el resultado y no al emitir `finished`. | ✅ `7bf6c24` |
