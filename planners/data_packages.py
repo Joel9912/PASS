@@ -69,3 +69,31 @@ def describe(personal) -> dict | None:
     validate_manifest(manifest)
     return {"edition": manifest["edition"], "manifest": manifest, "selected": binding["selected"],
             "absent_optional": sorted(set(manifest["resources"]) - set(binding["selected"]))}
+
+
+def notices(personal) -> str:
+    """Expone procedencia declarada y documentos locales de una edición verificada, sin red ni licencias inferidas."""
+    description = describe(personal)
+    if description is None:
+        return ("Catálogo heredado o sin edición global identificada.\n"
+                "Esta instalación no tiene procedencia y licencias registradas por componente; "
+                "no se deducen por el nombre del catálogo.")
+    with catalog_editions.data_snapshot(personal) as (_catalog, resources, binding):
+        manifest = binding["manifest"]
+        lines = [f"Edición {manifest['edition']}",
+                 "Datos de terceros: las atribuciones no transfieren su autoría a PASS.",
+                 "Las licencias de los datos no son la licencia del código ni de tus notas o sesiones."]
+        document_bytes = 0
+        for name, item in sorted({**manifest["packages"], **manifest["resources"]}.items()):
+            state = "No instalado" if name in manifest["resources"] and name not in resources else "Instalado"
+            lines.extend(["", f"{name} · {state}", f"Versión: {item['version']}",
+                          f"Fuente: {item['source']}", f"Revisión: {item['revision']}",
+                          f"Archivo distribuido: {item['url']}", f"Licencia declarada: {item['license']}",
+                          f"Atribución: {item['attribution']}"])
+            if name in resources and item["format"] == "utf8-v1":
+                if document_bytes + item["size"] <= 512 * 1024:
+                    lines.extend(["Documento incluido (texto original):", resources[name].read_text(encoding="utf-8")])
+                    document_bytes += item["size"]
+                else:
+                    lines.append("Documento incluido demasiado grande para este visor; no se muestra truncado.")
+        return "\n".join(lines)

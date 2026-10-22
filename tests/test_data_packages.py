@@ -185,6 +185,58 @@ def test_consumidor_lee_kernel_de_seleccion_y_worker_usa_conexion_propia(bundle)
         assert executor.submit(selected_model).result(timeout=10) == main
 
 
+def test_avisos_offline_de_edicion_con_documento_y_opcional_no_instalado(bundle):
+    """Origen/revisión y textos locales se consultan sin red y no se atribuye a PASS la autoría de los datos."""
+    conn, _path, manifest, _blobs, _calls, _reader = bundle
+    _install(bundle)
+    text = data_packages.notices(conn)
+    assert manifest["edition"] in text and "Creditos ficticios para prueba" in text
+    assert "Licencia declarada: Solo muestra inventada" in text
+    assert "sample · No instalado" in text
+    assert "no transfieren su autoría a PASS" in text
+    assert "Fuente: Fuente ficticia" in text and "Revisión: sintetica" in text
+
+
+def test_avisos_legacy_no_inventan_fuentes_o_licencias(memory_db):
+    """El nombre del catálogo no acredita qué archivo o licencia se instaló anteriormente."""
+    text = data_packages.notices(memory_db)
+    assert "no tiene procedencia y licencias registradas" in text
+    assert "ODbL" not in text and "CC BY" not in text
+
+
+def test_boton_avisos_abre_texto_seguro_y_escape_libera_dialogo(bundle, qt_app):
+    """Un solo visor por página, texto plano seleccionable, cierre por teclado y sin modificar notas personales."""
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtTest import QTest
+    from PyQt6.QtWidgets import QPlainTextEdit
+
+    from ui.config_tab.catalogs_page import CatalogsPage
+
+    conn, _path, manifest, blobs, _calls, _reader = bundle
+    manifest["resources"]["credits"] = _item(
+        blobs, "credits-literal.txt", b'<script>texto literal, no ejecutar</script>', format="utf8-v1", optional=False,
+    )
+    _install(bundle)
+    page = CatalogsPage()
+    try:
+        page._notices.click()
+        first = page._notices_dialog
+        assert first is not None
+        contents = first.findChild(QPlainTextEdit)
+        assert contents.isReadOnly() and "<script>" in contents.toPlainText()
+        assert contents.accessibleName()
+        page.show_notices()
+        assert page._notices_dialog is first
+        QTest.keyClick(first, Qt.Key.Key_Escape)
+        qt_app.processEvents()
+        assert page._notices_dialog is None
+        assert conn.execute("SELECT notes FROM personal_catalog").fetchone()[0] == "Nota original"
+    finally:
+        if page._notices_dialog is not None:
+            page._notices_dialog.reject()
+        page.deleteLater()
+
+
 def test_opcional_se_instala_solo_con_seleccion_y_se_conserva_al_actualizar(bundle):
     """Un opcional ausente es un estado legítimo; una opción instalada no se pierde al cambiar de edición."""
     conn, path, manifest, _blobs, calls, reader = bundle

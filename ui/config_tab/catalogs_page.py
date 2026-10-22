@@ -6,11 +6,14 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QAbstractItemView,
+    QDialog,
+    QDialogButtonBox,
     QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QMessageBox,
+    QPlainTextEdit,
     QProgressBar,
     QPushButton,
     QTableWidget,
@@ -41,6 +44,7 @@ class CatalogsPage(QWidget):
         self._global_manifest = None
         self._busy = False
         self._restoring = False
+        self._notices_dialog = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self._panel = QFrame()
@@ -88,7 +92,12 @@ class CatalogsPage(QWidget):
         self._restore = QPushButton("Recuperar edición anterior")
         self._restore.setToolTip("Cambia solo el catálogo; conserva equipos, ubicaciones, notas y sesiones posteriores.")
         self._restore.clicked.connect(self.start_restore)
-        layout.addWidget(self._restore)
+        secondary = QHBoxLayout()
+        secondary.addWidget(self._restore)
+        self._notices = QPushButton("Fuentes y licencias")
+        self._notices.clicked.connect(self.show_notices)
+        secondary.addWidget(self._notices)
+        layout.addLayout(secondary)
         self._progress = QProgressBar()
         self._progress.setRange(0, 1)
         self._progress.setValue(0)
@@ -170,6 +179,40 @@ class CatalogsPage(QWidget):
         self.refresh()
         future = _EXECUTOR.submit(operation, *args)
         future.add_done_callback(self._deliver)
+
+    def show_notices(self):
+        """Muestra procedencia y documentos offline como texto seleccionable, sin ejecutar HTML ni abrir enlaces."""
+        if self._notices_dialog is not None:
+            self._notices_dialog.raise_()
+            self._notices_dialog.activateWindow()
+            return
+        try:
+            text = data_packages.notices(connection.get_connection())
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            text = f"No se pueden verificar los avisos de la edición seleccionada.\n{error}"
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Fuentes y licencias de los datos")
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.resize(720, 480)
+        layout = QVBoxLayout(dialog)
+        contents = QPlainTextEdit()
+        contents.setReadOnly(True)
+        contents.setAccessibleName("Procedencia, atribuciones y licencias de los datos")
+        contents.setPlainText(text)
+        layout.addWidget(contents)
+        buttons = QDialogButtonBox()
+        close = buttons.addButton("Cerrar", QDialogButtonBox.ButtonRole.RejectRole)
+        close.setDefault(True)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        dialog.finished.connect(self._notices_closed)
+        self._notices_dialog = dialog
+        dialog.open()
+        contents.setFocus()
+
+    def _notices_closed(self, _result):
+        """Libera la referencia del visor al cerrar para no acumular diálogos invisibles."""
+        self._notices_dialog = None
 
     def _deliver(self, future):
         """Entrega errores sin tocar widgets desde el hilo de trabajo."""
