@@ -173,7 +173,7 @@ def _local_label(local_hours: float | None) -> str:
 TYPE_LABELS: dict[str, str] = {
     "G": "Galaxia", "GPair": "Galaxia", "GTrpl": "Galaxia", "GGroup": "Galaxia",
     "OCl": "Cúmulo abierto", "GCl": "Cúmulo globular", "*Ass": "Asociación",
-    "Cl+N": "Cúmulo y nebulosa",
+    "Cl+N": "Cúmulo y nebulosa", "Cl*": "Cúmulo",
     "Neb": "Nebulosa", "PN": "Nebulosa planetaria", "HII": "Región HII",
     "EmN": "Nebulosa de emisión", "RfN": "Nebulosa de reflexión",
     "SNR": "Resto de supernova", "DrkN": "Nebulosa oscura",
@@ -217,13 +217,18 @@ def format_dec(dec_deg: float | None) -> str:
 
 
 def format_size(major_arcmin: float | None, minor_arcmin: float | None) -> str:
-    """Tamaño angular: grados si es grande, minutos si no (``--`` si falta)."""
-    if not major_arcmin:
+    """Muestra ejes independientes en grados/minutos; una ausencia nunca se sustituye por el eje conocido."""
+    if major_arcmin is None and minor_arcmin is None:
         return "--"
-    minor = minor_arcmin or major_arcmin
-    if major_arcmin >= 60.0:
-        return f"{major_arcmin / 60.0:.2f}°×{minor / 60.0:.2f}°"
-    return f"{major_arcmin:.0f}′×{minor:.0f}′"
+    degrees = max(value for value in (major_arcmin, minor_arcmin) if value is not None) >= 60
+
+    def axis(value):
+        """Conserva el hueco de cada eje sin perder la unidad del otro."""
+        if value is None:
+            return "—"
+        return f"{value / 60.0:.2f}°" if degrees else f"{value:.0f}′"
+
+    return f"{axis(major_arcmin)}×{axis(minor_arcmin)}"
 
 
 def _type_label(type_code: str | None) -> str:

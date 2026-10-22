@@ -139,6 +139,24 @@ def test_exclusiones_no_se_publican_si_falla_el_lote(tmp_path):
         assert identify(registry, SOURCE, "LDN    1") == first
 
 
+@pytest.mark.parametrize("group,expected", [("nebulosa oscura", {"LDN 1"}), ("nebulosa", {"LDN 1"}),
+                                          ("cúmulo", {"LDN 2"}), ("cúmulo abierto", set())])
+def test_filtros_de_busqueda_reconocen_tipos_simbad_sin_inventar_subtipos(tmp_path, memory_db, group, expected):
+    """Las categorías explícitas de SIMBAD no desaparecen al filtrar; un cúmulo genérico no se declara abierto."""
+    from planners.catalog_packages import CAT_COLUMNS
+    from planners.celestial_search import SearchFilters, search
+
+    cluster, unknown = entry("LDN 2", 124), entry("LDN 3", 125)
+    cluster[3], unknown[3] = "Cl*", "MoC"
+    with identity_registry(tmp_path / "registry.sqlite") as registry:
+        rows = prepare_simbad(registry, encode(snapshot([entry(), cluster, unknown])), revision="A",
+                              taxonomy=taxonomy())["ldn"]["rows"]
+    memory_db.execute("DELETE FROM catalog")
+    memory_db.executemany(f"INSERT INTO catalog({CAT_COLUMNS}) VALUES ({','.join('?' for _ in rows[0])})", rows)
+    memory_db.commit()
+    assert {row["object_id"] for row in search(SearchFilters(object_types=[group]))} == expected
+
+
 def test_mismo_oid_explicito_una_proyeccion_y_alias_entre_catalogos(tmp_path):
     """El cruce viene de SIMBAD, no de semejanza de coordenadas; Barnard queda como alias del objeto LDN."""
     data = encode(snapshot([entry(), entry("Barnard  1")]))

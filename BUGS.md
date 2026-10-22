@@ -24,8 +24,8 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 
 ## Resumen
 
-**119 hallazgos**: 🔴 18 graves · 🟠 71 medios · 🟡 21 bajos · 9 decisiones (3 pendientes).
-Estado: ✅ 100 corregidos · 🟡 2 contenidos · ⏳ 7 pendientes · 🔎 1 sin reproducir.
+**121 hallazgos**: 🔴 18 graves · 🟠 73 medios · 🟡 21 bajos · 9 decisiones (3 pendientes).
+Estado: ✅ 100 corregidos · 🟡 2 contenidos · ⏳ 9 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -106,11 +106,13 @@ Estado: ✅ 100 corregidos · 🟡 2 contenidos · ⏳ 7 pendientes · 🔎 1 si
 | **P-0015** | Guardar una sesión usa las coordenadas originales del objetivo e ignora el centro editado del encuadre. | ✅ `b4262de` |
 | **P-0016** | Guardar de nuevo una sesión idéntica inserta otra fila sin aviso; falta concretar la identidad que debe impedir duplicados. | ⏳ aplazado a v0.3-alpha; no bloquea v0.2-alpha |
 | **P-0017** | Los cálculos offline pueden fallar por caducidad de predicciones IERS locales, incluso en fechas admitidas. | ✅ `e533f61` |
+| **P-0018** | El filtro de cúmulos excluye las fichas SIMBAD de tipo genérico `Cl*`. | ⏳ |
 | **U-0002** | Arrastrar la vista no actualiza el encuadre visible antes de guardar. | ✅ `885ba55` |
 | **U-0003** | Quitar el último target deja el plan y el planetario obsoletos. | ✅ `885ba55` |
 | **U-0004** | Si la región no está en el cielo, el target anterior queda resaltado. | ✅ `885ba55` |
 | **U-0005** | Añadir un duplicado recarga la lista y puede cambiar la selección. | ✅ `885ba55` |
 | **U-0010** | La interfaz confunde recursos astronómicos inválidos con fechas no admitidas; errores de lectura pueden propagarse o dejar cálculos anteriores visibles. | ✅ `4815acd` |
+| **U-0011** | Las tablas repiten el eje mayor cuando falta el menor y ocultan el menor cuando solo se conoce este, mostrando tamaños no acreditados. | ⏳ |
 | **C-0001** | Se admiten umbrales de sub/sobremuestreo contradictorios entre sí. | ✅ `a7f5ead` |
 | **C-0002** | Configuración guarda varias claves sin atomicidad: un fallo a mitad deja ajustes a medias. | ✅ `a7f5ead` |
 | **C-0003** | Editar la ruta de SirIL deja el ✓ de «encontrado» obsoleto hasta reabrir. | ✅ `600200c` |

@@ -33,7 +33,7 @@ TYPE_GROUPS: dict[str, tuple[str, ...]] = {
     "galaxia": ("G", "GPair", "GTrpl", "GGroup"),
     "nebulosa": ("Neb", "PN", "HII", "EmN", "RfN", "SNR", "DrkN"),
     "nebulosa oscura": ("DrkN",),
-    "cúmulo": ("OCl", "GCl", "*Ass", "Cl+N"),
+    "cúmulo": ("OCl", "GCl", "*Ass", "Cl+N", "Cl*"),
     "cúmulo abierto": ("OCl", "*Ass"),
     "cúmulo globular": ("GCl",),
     "cúmulo y nebulosa": ("Cl+N",),

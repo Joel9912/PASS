@@ -333,6 +333,16 @@ def test_curve_windows_line_is_reserved(qt_app):
 
 
 
+@pytest.mark.parametrize("major,minor,expected", [(12, None, "12′×—"), (None, 4, "—×4′"),
+                                               (120, None, "2.00°×—"), (None, 120, "—×2.00°"),
+                                               (None, None, "--"), (12, 4, "12′×4′")])
+def test_tamano_no_inventa_un_eje_ausente(major, minor, expected):
+    """Los ejes son medidas independientes: una dimensión ausente no convierte el objeto en un círculo."""
+    from ui.planner_tab.widgets import format_size
+
+    assert format_size(major, minor) == expected
+
+
 def test_hoy_emite_una_sola_vez(qt_app):
     """M-03: «Hoy» emite `date_changed` una vez (no dos, como antes).
 
