@@ -681,7 +681,7 @@ class PlanificacionTab(QWidget):
                 ra, dec, self._latitude, self._longitude,
                 self._date_iso(), self._utc_offset_hours,
             )
-        except ValueError as exc:
+        except (ValueError, OSError, sqlite3.Error) as exc:
             self._curve.clear(str(exc))
             return
         self._curve.show_curve(curve, target_label=str(target["object_id"]))
@@ -729,7 +729,7 @@ class PlanificacionTab(QWidget):
                 top_n=self.PLAN_TOP,
                 utc_offset_hours=self._utc_offset_hours,
             )
-        except ValueError as exc:
+        except (ValueError, OSError, sqlite3.Error) as exc:
             self._plan = []
             self._plan_table.setRowCount(0)
             self._window_label.setText(str(exc))

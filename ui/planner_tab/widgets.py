@@ -55,6 +55,7 @@ from planners.moon_distance import (
     min_moon_distance,
     unwrap_hours,
 )
+from planners.planning_dates import planning_date
 from planners.timefmt import format_hhmm
 from planners.transit import NightCurve, NightInfo, night_info, phase_name
 from planners.weather import (
@@ -1263,11 +1264,16 @@ class EphemerisPanel(QFrame):
         self.set_date(date_iso)
 
         try:
+            planning_date(date_iso)
+        except ValueError as exc:
+            self.show_invalid_date(str(exc))
+            return
+        try:
             info: NightInfo = night_info(
                 latitude, longitude, date_iso, utc_offset_hours=utc_offset_hours
             )
-        except ValueError as exc:
-            self.show_invalid_date(str(exc))
+        except (ValueError, OSError, sqlite3.Error) as exc:
+            self.show_unavailable(str(exc))
             return
         self._moon_icon.show()
         self._date.setToolTip("")
@@ -1314,12 +1320,20 @@ class EphemerisPanel(QFrame):
 
     def show_invalid_date(self, message: str) -> None:
         """Retira resultados antiguos sin corregir la fecha elegida ni dibujar una fase lunar ficticia."""
+        self._clear_results(message, "Fecha no admitida", "Planificación: 1950–2100")
+
+    def show_unavailable(self, message: str) -> None:
+        """Informa de un recurso/cálculo no disponible sin atribuir su fallo a una fecha válida."""
+        self._clear_results(message, "Efemérides no disponibles", "Sin cálculo astronómico")
+
+    def _clear_results(self, message: str, title: str, detail: str) -> None:
+        """Limpia todas las magnitudes derivadas y conserva el motivo íntegro accesible, sin cambiar fecha o modelo."""
         self._moon_icon.hide()
-        self._phase_label.setText("Fecha no admitida")
+        self._phase_label.setText(title)
         self._illum_label.setText("Sin cálculo")
         self._bar.set_marks(None, None, None, None)
         self._sunset_label.setText("Puesta de Sol: —")
-        self._night_label.setText("Planificación: 1950–2100")
+        self._night_label.setText(detail)
         self._date.setToolTip(message)
         self._date.setAccessibleDescription(message)
 

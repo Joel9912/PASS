@@ -3,7 +3,7 @@
 Fuentes:
 - OpenNGC (NGC.csv + addendum.csv): objetos deep-sky NGC/IC/Messier y
   objetos del addendum (Barnard, Caldwell...). Licencia CC-BY-SA.
-- HYG (hygdata_v40.csv.gz): estrellas con magnitud <= 8. Licencia CC-BY.
+- HYG (hygdata_v40.csv.gz): estrellas con magnitud <= 8. Licencia CC-BY-SA 4.0.
 - LDN (VizieR VII/7A/ldn): nebulosas oscuras de Lynds, vía TAP
   (ver :mod:`planners.ldn_loader`). Licencia del catálogo original.
 
