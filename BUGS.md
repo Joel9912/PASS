@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **115 hallazgos**: 🔴 18 graves · 🟠 68 medios · 🟡 20 bajos · 9 decisiones (3 pendientes).
-Estado: ✅ 95 corregidos · 🟡 2 contenidos · ⏳ 8 pendientes · 🔎 1 sin reproducir.
+Estado: ✅ 96 corregidos · 🟡 2 contenidos · ⏳ 7 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -103,7 +103,7 @@ Estado: ✅ 95 corregidos · 🟡 2 contenidos · ⏳ 8 pendientes · 🔎 1 sin
 | **P-0014** | El resumen puede extender captura más allá del fin de la noche astronómica al contar completa la última muestra nocturna. | ✅ `f9aef1c` |
 | **P-0015** | Guardar una sesión usa las coordenadas originales del objetivo e ignora el centro editado del encuadre. | ✅ `b4262de` |
 | **P-0016** | Guardar de nuevo una sesión idéntica inserta otra fila sin aviso; falta concretar la identidad que debe impedir duplicados. | ⏳ aplazado a v0.3-alpha; no bloquea v0.2-alpha |
-| **P-0017** | Los cálculos offline pueden fallar por caducidad de predicciones IERS locales, incluso en fechas admitidas. | ⏳ |
+| **P-0017** | Los cálculos offline pueden fallar por caducidad de predicciones IERS locales, incluso en fechas admitidas. | ✅ `e533f61` |
 | **U-0002** | Arrastrar la vista no actualiza el encuadre visible antes de guardar. | ✅ `885ba55` |
 | **U-0003** | Quitar el último target deja el plan y el planetario obsoletos. | ✅ `885ba55` |
 | **U-0004** | Si la región no está en el cielo, el target anterior queda resaltado. | ✅ `885ba55` |
