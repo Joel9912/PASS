@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **121 hallazgos**: 🔴 18 graves · 🟠 73 medios · 🟡 21 bajos · 9 decisiones (3 pendientes).
-Estado: ✅ 100 corregidos · 🟡 2 contenidos · ⏳ 9 pendientes · 🔎 1 sin reproducir.
+Estado: ✅ 104 corregidos · 🟡 2 contenidos · ⏳ 5 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -47,7 +47,7 @@ Estado: ✅ 100 corregidos · 🟡 2 contenidos · ⏳ 9 pendientes · 🔎 1 si
 | **E-0001** | Dos adjuntos con el mismo nombre se sobrescribían al guardarlos en una entidad de Equipo. | ✅ `ec6d2ee` |
 | **E-0002** | Un filtro inexistente confirmaba el equipo y la imagen antes de que la FK fallara (estado a medias en BD). | ✅ `e5bf105` |
 | **P-0001** | El tránsito UTC del día vecino puede puntuar con la Luna o la altura de la fecha equivocada. | ✅ `97d5787` |
-| **P-0002** | Las mejores noches pueden quedar sin ventana de captura (criterio de recomendación). | ⏳ |
+| **P-0002** | Las mejores noches pueden quedar sin ventana de captura (criterio de recomendación). | ⏳ rediseño de Planificación, v0.3-alpha; puntuación actual provisional |
 | **U-0001** | `_metric_text` lanzaba `KeyError('value')` con valores numéricos en la respuesta del worker. | ✅ `0a04cee` |
 | **T-0001** | `pytest` a secas migraba y escribía la BD real del usuario y descargaba en `data/downloads`. | ✅ `b9118a4` |
 | **T-0002** | Un test escribía, actualizaba y borraba sesiones planificadas en la BD real: se perdió el objeto `M31` del usuario. | ✅ `0407ba9` |
@@ -58,7 +58,7 @@ Estado: ✅ 100 corregidos · 🟡 2 contenidos · ⏳ 9 pendientes · 🔎 1 si
 |---|---|---|
 | **B-0004** | Objetos nuevos del Catálogo Personal no aparecían tras guardarlos (reportado por el usuario). | 🔎 sin reproducir |
 | **B-0005** | El arranque bloquea la ventana hasta 120 s si la red está lenta (`ensure_catalog` antes de pintar). | ✅ `9c86381` |
-| **B-0006** | La conexión SQLite del hilo principal no debe pasar a hilos Qt; hoy se cumple por diseño. | ⏳ revisión continua |
+| **B-0006** | La conexión SQLite del hilo principal no debe pasar a hilos Qt; hoy se cumple por diseño. | ✅ `0a04cee`, `e533f61` (invariante verificada; no un nuevo fallo) |
 | **B-0010** | Un paquete con tamaño y SHA correctos puede instalar magnitudes de texto y familias ajenas al catálogo; la validación no comprueba todos los tipos antes de sustituir datos. | ✅ `a4cfedc` |
 | **B-0011** | La importación inicial de paquetes puede sustituir un catálogo que otra operación rellenó después de comprobar que estaba vacío. | ✅ `c898cd8` |
 | **B-0012** | La validación directa de recursos acepta formatos desconocidos si sus bytes se pueden leer como texto UTF-8. | ✅ `73d7329` |
@@ -106,13 +106,13 @@ Estado: ✅ 100 corregidos · 🟡 2 contenidos · ⏳ 9 pendientes · 🔎 1 si
 | **P-0015** | Guardar una sesión usa las coordenadas originales del objetivo e ignora el centro editado del encuadre. | ✅ `b4262de` |
 | **P-0016** | Guardar de nuevo una sesión idéntica inserta otra fila sin aviso; falta concretar la identidad que debe impedir duplicados. | ⏳ aplazado a v0.3-alpha; no bloquea v0.2-alpha |
 | **P-0017** | Los cálculos offline pueden fallar por caducidad de predicciones IERS locales, incluso en fechas admitidas. | ✅ `e533f61` |
-| **P-0018** | El filtro de cúmulos excluye las fichas SIMBAD de tipo genérico `Cl*`. | ⏳ |
+| **P-0018** | El filtro de cúmulos excluye las fichas SIMBAD de tipo genérico `Cl*`. | ✅ `f98d83a` |
 | **U-0002** | Arrastrar la vista no actualiza el encuadre visible antes de guardar. | ✅ `885ba55` |
 | **U-0003** | Quitar el último target deja el plan y el planetario obsoletos. | ✅ `885ba55` |
 | **U-0004** | Si la región no está en el cielo, el target anterior queda resaltado. | ✅ `885ba55` |
 | **U-0005** | Añadir un duplicado recarga la lista y puede cambiar la selección. | ✅ `885ba55` |
 | **U-0010** | La interfaz confunde recursos astronómicos inválidos con fechas no admitidas; errores de lectura pueden propagarse o dejar cálculos anteriores visibles. | ✅ `4815acd` |
-| **U-0011** | Las tablas repiten el eje mayor cuando falta el menor y ocultan el menor cuando solo se conoce este, mostrando tamaños no acreditados. | ⏳ |
+| **U-0011** | Las tablas repiten el eje mayor cuando falta el menor y ocultan el menor cuando solo se conoce este, mostrando tamaños no acreditados. | ✅ `f98d83a` |
 | **C-0001** | Se admiten umbrales de sub/sobremuestreo contradictorios entre sí. | ✅ `a7f5ead` |
 | **C-0002** | Configuración guarda varias claves sin atomicidad: un fallo a mitad deja ajustes a medias. | ✅ `a7f5ead` |
 | **C-0003** | Editar la ruta de SirIL deja el ✓ de «encontrado» obsoleto hasta reabrir. | ✅ `600200c` |
@@ -142,7 +142,7 @@ Estado: ✅ 100 corregidos · 🟡 2 contenidos · ⏳ 9 pendientes · 🔎 1 si
 | **L-0002** | Los diálogos acumulaban hijos ocultos al cerrar (fuga medida 20/20). | ✅ |
 | **U-0006** | El `QDateEdit` de «Editar sesión» no reflejaba la fecha seleccionada. | ✅ |
 | **U-0009** | La sugerencia de nombre de sesión conserva la fecha anterior al cambiar la fecha de Planificación. | ✅ `32a49b6` |
-| **X-0005** | `i18n/` declara traducciones vacías como si fueran válidas. | ⏳ (carpeta aún sin implementar) |
+| **X-0005** | `i18n/` declara traducciones vacías como si fueran válidas. | ✅ `c1b633e` (plantillas pendientes explícitas; no activa traducciones) |
 | **X-0006** | Búsqueda decía «sin datos hasta que haya API key» aunque hubiera claves. | ✅ |
 | **X-0008** | `tests/README.md` atribuía la BD a `siril_finder`. | ✅ `bd7211b` (documentación interna cotejada) |
 | **X-0009** | `tests/README.md` citaba rutas y tests equivocados. | ✅ `bd7211b` (documentación interna cotejada) |

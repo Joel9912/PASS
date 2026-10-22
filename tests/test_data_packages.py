@@ -218,6 +218,22 @@ def test_kernel_compartido_ausente_no_finge_recuperacion_ni_sustituye_modelo(bun
     assert conn.execute("SELECT notes FROM personal_catalog").fetchone()[0] == "Posterior al cambio de recurso"
 
 
+def test_instalador_y_lector_de_modelo_en_worker_no_reutilizan_sqlite_de_qt(bundle):
+    """Las fronteras asíncronas trabajan con conexiones propias y cierran sin bloquear la conexión principal."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from planners.ephemeris import selected_model
+
+    conn, path, manifest, blobs, _calls, reader = bundle
+    manifest["resources"]["ephemeris"] = _item(blobs, "kernel.bsp", synthetic_spk(), format="spk-planets-v1", optional=False)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        executor.submit(data_packages.install, path, manifest, reader=reader).result(timeout=30)
+        model = executor.submit(selected_model).result(timeout=30)
+    assert model.edition == manifest["edition"] and model.path.is_file()
+    assert editions.status(conn)["available"]
+    assert conn.execute("SELECT notes FROM personal_catalog").fetchone()[0] == "Nota original"
+
+
 def test_consumidor_lee_kernel_de_seleccion_y_worker_usa_conexion_propia(bundle):
     """La ruta elegida corresponde a la edición activa y se puede leer desde otro hilo sin compartir SQLite."""
     from concurrent.futures import ThreadPoolExecutor
