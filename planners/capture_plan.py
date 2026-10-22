@@ -33,6 +33,7 @@ from planners.analytical_transit import (
     max_altitude,
     transit_utc_hours,
 )
+from planners.ephemeris import with_model
 from planners.moon_distance import (
     WINDOW_IDEAL,
     WINDOW_POSSIBLE,
@@ -61,6 +62,7 @@ class CaptureWeights:
     night: float = 20.0
 
 
+@with_model
 def _moon_separation_at_transit(
     ra_hours: float,
     dec_deg: float,
@@ -177,6 +179,7 @@ def _night_max_altitude(
     return altitude_at_utc(ra_hours, dec_deg, latitude, longitude, instant)
 
 
+@with_model
 def best_dates(
     target_ra_hours: float,
     target_dec_deg: float,

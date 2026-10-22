@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **115 hallazgos**: 🔴 18 graves · 🟠 68 medios · 🟡 20 bajos · 9 decisiones (3 pendientes).
-Estado: ✅ 94 corregidos · 🟡 2 contenidos · ⏳ 9 pendientes · 🔎 1 sin reproducir.
+Estado: ✅ 95 corregidos · 🟡 2 contenidos · ⏳ 8 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -118,7 +118,7 @@ Estado: ✅ 94 corregidos · 🟡 2 contenidos · ⏳ 9 pendientes · 🔎 1 sin
 | **T-0007** | El modo offscreen se activa con `setdefault` y puede no aplicarse. | ✅ `8930f6d` |
 | **T-0008** | Algunos tests de Configuración crean widgets sin solicitar QApplication y abortan al ejecutarlos aisladamente. | ✅ `e07a987` |
 | **T-0009** | La prueba de recuperación puede intentar borrar un FITS mientras la lectura asíncrona de estimaciones mantiene su cabecera abierta en Windows. | ✅ `84abf8b` |
-| **T-0010** | El bloqueo HTTP de los tests no intercepta los abridores usados por Astropy, permitiendo peticiones reales inesperadas. | ⏳ |
+| **T-0010** | El bloqueo HTTP de los tests no intercepta los abridores usados por Astropy, permitiendo peticiones reales inesperadas. | ✅ `f87c71e` |
 | **X-0001** | El README raíz contradice la GPL al prohibir la venta. | ✅ `18c384e` |
 | **X-0002** | El README raíz describe un ranking de objetos que no existe. | ✅ `18c384e` |
 | **X-0003** | El README raíz presenta el Planetario como dependiente de red. | ✅ `18c384e` |

@@ -19,8 +19,9 @@ def synthetic_spk(*, missing=(), frame=1, kind=2, value=1000.0, start_jd=2415020
             if (center, target) in missing:
                 continue
             components = 6 if kind == 3 else 3
-            coefficients = [value * (target + 1), value, value] + ([0.0] * 3 if kind == 3 else [])
+            constants = [value * (target + 1), value, value] + ([0.0] * 3 if kind == 3 else [])
+            coefficients = [coefficient for constant in constants for coefficient in (constant, 0.0)]
             daf.add_array(b"PASS original synthetic", (initial, initial + interval, target, center, frame, kind),
                           [initial + interval / 2, interval / 2, *coefficients,
-                           initial, interval, components + 2, 1])
+                           initial, interval, components * 2 + 2, 1])
         return stream.getvalue()

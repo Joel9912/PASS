@@ -5,7 +5,7 @@ objeto, a qué altura llega, qué tan separado está la luna esa noche y
 cuántas horas de noche astronómica (sol a -18°) hay.
 
 Todo trabaja en UTC internamente; la UI convierte a hora local si quiere.
-Las posiciones usan el modelo interno de astropy e IERS local, sin red.
+Las posiciones usan el modelo seleccionado de la edición e IERS local, sin red.
 Cada malla informa de datos/predicciones/extrapolación IERS; no se promete
 precisión uniforme para todo el intervalo admitido ni para guiado.
 """
@@ -29,6 +29,7 @@ from astropy.utils import iers
 
 from .analytical_transit import local_utc_offset
 from .astronomy_status import AstronomyStatus, astronomy_status
+from .ephemeris import current_model, with_model
 from .planning_dates import planning_date
 
 # Offline: nada de descargar tablas IERS al importar (arranque rápido y sin red).
@@ -205,15 +206,27 @@ def _moon_sun_arrays(times: Time, location: EarthLocation):
     """(az de la Luna, alt de la Luna, alt del sol) en grados para ``times``."""
     frame = AltAz(obstime=times, location=location)
     moon = get_body("moon", times, location).transform_to(frame)
-    sun = get_sun(times).transform_to(frame).alt
+    sun = _sun_position(times, location).transform_to(frame).alt
     return moon.az.to_value(u.deg), moon.alt.to_value(u.deg), sun.to_value(u.deg)
+
+
+def _sun_position(times: Time, location: EarthLocation):
+    """Usa el Sol del mismo kernel que la Luna; conserva ERFA únicamente en el modo interno explícito."""
+    model = current_model()
+    return get_body("sun", times, location) if model is not None and model.path is not None else get_sun(times)
+
+
+def _model_cache_key():
+    """Separa series de distintas ediciones/modelos, incluso si comparten fecha y ubicación."""
+    model = current_model()
+    return model.cache_key if model is not None else ("legacy", "builtin")
 
 
 def _lunar_illumination(times: Time, location: EarthLocation) -> float:
     """Fracción iluminada de la Luna en el centro de la ventana nocturna."""
     mid = times[len(times) // 2]
     moon = get_body("moon", mid, location)
-    sun = get_sun(mid)
+    sun = _sun_position(mid, location)
     elongation = angular_separation(moon.ra, moon.dec, sun.ra, sun.dec)
     return float((1.0 - np.cos(elongation.to_value(u.rad))) / 2.0)
 
@@ -258,6 +271,7 @@ def _remember_moon_sun(key: tuple, value: tuple) -> None:
         _MOON_SUN_CACHE[key] = value
 
 
+@with_model
 def night_curve(
     ra_hours: float,
     dec_deg: float,
@@ -289,7 +303,7 @@ def night_curve(
     times = _night_times(date_iso, longitude, utc_offset_hours=utc_offset_hours)
 
     # Luna y sol: solo dependen de la fecha y la ubicación, no del objeto.
-    key = (latitude, longitude, date_iso, utc_offset_hours)
+    key = (latitude, longitude, date_iso, utc_offset_hours, _model_cache_key())
     with _CACHE_LOCK:
         cached = _MOON_SUN_CACHE.get(key)
     if cached is None:
@@ -346,6 +360,7 @@ def _crossing_iso(
     return None
 
 
+@with_model
 def night_info(
     latitude: float,
     longitude: float,
@@ -375,7 +390,7 @@ def night_info(
     times = _night_times(date_iso, longitude, sample_min, utc_offset_hours=utc_offset_hours)
     frame = AltAz(obstime=times, location=location)
 
-    sun_alt = get_sun(times).transform_to(frame).alt
+    sun_alt = _sun_position(times, location).transform_to(frame).alt
     astronomical = sun_alt < ASTRO_TWILIGHT_DEG * u.deg
 
     dusk = dawn = None
@@ -398,7 +413,7 @@ def night_info(
     # el centro de la malla cae en el mismo instante (start + 8 h) sea
     # cual sea sample_min, y la clave de caché incluye el huso (M-09).
     mid = times[len(times) // 2]
-    key = (latitude, longitude, date_iso, utc_offset_hours)
+    key = (latitude, longitude, date_iso, utc_offset_hours, _model_cache_key())
     with _CACHE_LOCK:
         cached = _MOON_SUN_CACHE.get(key)
     if cached is not None:

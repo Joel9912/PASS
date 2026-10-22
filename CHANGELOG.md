@@ -7,7 +7,7 @@ Cambios relevantes para quienes usan PASS. Los detalles de implementación y cad
 Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado**; se completará cuando se apruebe el lanzamiento.
 
 ### Añadido
-- Los paquetes globales pueden almacenar kernels planetarios SPK locales, verificando estructura, segmentos, cobertura y huella antes de activarlos. Actualización y recuperación conservan la edición coherente; el consumidor astronómico del kernel sigue pendiente.
+- Los paquetes globales pueden almacenar kernels planetarios SPK locales, verificando estructura, segmentos, cobertura y huella antes de activarlos. Curvas, efemérides y ranking usan el Sol y la Luna del modelo seleccionado, con cachés separadas por edición y cálculos concurrentes sin mezclar modelos. Un kernel seleccionado ausente o corrupto no provoca descarga ni sustitución silenciosa. Los paquetes científicos definitivos siguen pendientes; no se garantiza precisión uniforme para 1950–2100.
 - Las curvas de tránsito indican el modelo actual y si usan datos IERS locales, predicciones o fechas fuera de tabla. El detalle explica las limitaciones sin prometer precisión uniforme para 1950–2100; no cambia los cálculos ni descarga tablas automáticamente.
 - Soporte de ediciones globales que vinculan catálogo y recursos de texto/JSON mediante versiones, dependencias y huellas. Configuración identifica la edición y los opcionales no instalados; actualizar o recuperar conserva el conjunto y los datos personales posteriores. Los componentes idénticos se reutilizan tras verificarlos y un recurso seleccionado perdido o alterado impide declarar disponible la edición. Imágenes, efemérides binarias y paquetes definitivos aún pendientes.
 - Búsqueda y carta reconocen los alias explícitos de los nuevos paquetes sin duplicar objetos. La búsqueda muestra candidatos si un alias es compartido; la carta solo centra coincidencias inequívocas o el vínculo estable del objeto guardado, manteniendo su rótulo personal y sin mover la vista ante un destino ambiguo o ausente.
@@ -31,6 +31,7 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 - Captura Ideal reserva al menos cinco minutos dentro de ambos extremos de la noche astronómica; los márgenes válidos quedan como Posible.
 
 ### Corregido
+- Los cálculos offline no fallan por caducidad de predicciones IERS locales: conservan los avisos de aproximación y no intentan descargar tablas (P-0017).
 - La validación directa de recursos rechaza formatos desconocidos en lugar de interpretarlos como texto (B-0012).
 - La sugerencia de nombre de sesión se actualiza al cambiar la fecha, sin modificar el nombre escrito por el usuario (U-0009).
 - La carga inicial de paquetes vuelve a comprobar que cada componente siga vacío y no sustituye el catálogo instalado por otra operación mientras tanto (B-0011).

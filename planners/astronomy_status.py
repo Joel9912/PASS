@@ -7,6 +7,8 @@ import numpy as np
 from astropy.coordinates import solar_system_ephemeris
 from astropy.utils import iers
 
+from .ephemeris import current_model
+
 
 @dataclass(frozen=True)
 class AstronomyStatus:
@@ -15,11 +17,13 @@ class AstronomyStatus:
     orientation: str
     moon_model: str
     table: str
+    sun_model: str = "ERFA/Astropy get_sun"
+    model_label: str = ""
 
     @property
     def summary(self) -> str:
         """Rótulo corto visible, sin prometer exactitud instrumental ni ocultar aproximaciones."""
-        model = "Modelo interno" if self.moon_model == "builtin" else "Modelo lunar externo"
+        model = "Modelo interno" if self.moon_model == "builtin" else "Modelo planetario local"
         source = {"local": "IERS local", "prediction": "IERS predicho", "outside": "IERS fuera de tabla",
                   "unknown": "IERS desconocido"}[self.orientation]
         return f"≈ {model} · {source}"
@@ -30,7 +34,7 @@ class AstronomyStatus:
         state = {"local": "Instantes cubiertos por datos locales.", "prediction": "Incluye predicciones IERS.",
                  "outside": "Incluye instantes fuera de la tabla IERS; orientación terrestre aproximada.",
                  "unknown": "No se pudo verificar la orientación terrestre para esta malla."}[self.orientation]
-        return (f"Sol: ERFA/Astropy get_sun. Luna: {Path(self.moon_model).name}.\n"
+        return (f"Sol: {self.sun_model}. Luna: {self.model_label or Path(self.moon_model).name}.\n"
                 f"Tabla IERS: {self.table}. {state}\n"
                 "No se ha certificado precisión uniforme para 1950–2100 ni precisión instrumental. "
                 "Los avisos no corrigen incertidumbres de UTC ni certifican las ventanas de captura.")
@@ -38,7 +42,7 @@ class AstronomyStatus:
 
 def astronomy_status(times, *, table=None) -> AstronomyStatus:
     """Inspecciona UT1 y movimiento polar de toda la malla sin red, ni cambiar sus cálculos o umbrales."""
-    model = str(solar_system_ephemeris.get())
+    model = str(solar_system_ephemeris._value)
     table_name = "no disponible"
     try:
         with iers.conf.set_temp("auto_download", False):
@@ -60,4 +64,7 @@ def astronomy_status(times, *, table=None) -> AstronomyStatus:
             state = "local"
     except (OSError, ValueError, TypeError, IndexError, RuntimeError):
         state = "unknown"
+    chosen = current_model()
+    if chosen is not None and chosen.path is not None:
+        return AstronomyStatus(state, model, table_name, chosen.label, chosen.label)
     return AstronomyStatus(state, model, table_name)

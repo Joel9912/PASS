@@ -75,6 +75,9 @@ def validate_spk(data: bytes) -> None:
                 )
                 if not np.isfinite(positions).all() or not np.isfinite(velocities).all():
                     raise ValueError("Evaluación SPK no finita.")
+                position, velocity = segment.compute_and_differentiate(float((segment.start_jd + segment.end_jd) / 2))
+                if not np.isfinite(position).all() or not np.isfinite(velocity).all():
+                    raise ValueError("Evaluación escalar SPK no finita.")
             if not REQUIRED_PAIRS <= pairs:
                 raise ValueError("Kernel SPK sin cadenas completas para Sol, Tierra, Luna y planetas.")
     except (OSError, StructError, IndexError, KeyError, TypeError, OverflowError) as error:

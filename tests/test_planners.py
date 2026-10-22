@@ -772,7 +772,7 @@ def test_night_info_reutiliza_iluminacion_cacheada(monkeypatch):
 
     monkeypatch.setattr(transit, "_MOON_SUN_CACHE", {})
     transit._remember_moon_sun(
-        (40.4, -3.7, "2026-10-02", 2.0), (None, None, None, 0.42)
+        (40.4, -3.7, "2026-10-02", 2.0, ("legacy", "builtin")), (None, None, None, 0.42)
     )
 
     info = transit.night_info(40.4, -3.7, "2026-10-02", utc_offset_hours=2.0)

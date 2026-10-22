@@ -167,6 +167,24 @@ def test_kernel_activo_alterado_no_declara_disponible_la_edicion(bundle):
     assert editions.read_rows(conn, "SELECT * FROM catalog") == []
 
 
+def test_consumidor_lee_kernel_de_seleccion_y_worker_usa_conexion_propia(bundle):
+    """La ruta elegida corresponde a la edición activa y se puede leer desde otro hilo sin compartir SQLite."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from planners.ephemeris import selected_model
+
+    _conn, _path, manifest, blobs, _calls, _reader = bundle
+    manifest["resources"]["ephemeris"] = _item(
+        blobs, "kernel.bsp", synthetic_spk(), format="spk-planets-v1", optional=False,
+    )
+    _install(bundle)
+    main = selected_model()
+    assert main.sha256 == manifest["resources"]["ephemeris"]["sha256"]
+    assert main.edition == manifest["edition"] and main.path.is_file()
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        assert executor.submit(selected_model).result(timeout=10) == main
+
+
 def test_opcional_se_instala_solo_con_seleccion_y_se_conserva_al_actualizar(bundle):
     """Un opcional ausente es un estado legítimo; una opción instalada no se pierde al cambiar de edición."""
     conn, path, manifest, _blobs, calls, reader = bundle
