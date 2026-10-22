@@ -34,6 +34,17 @@ def encode(content):
     return json.dumps(content, ensure_ascii=False).encode("utf-8")
 
 
+def taxonomy():
+    """Jerarquía sintética explícita que distingue estrellas, cúmulos y nubes sin reglas de coincidencia parcial."""
+    names = ["otype", "label", "path", "description", "is_candidate"]
+    return encode({"metadata": [{"name": name} for name in names], "data": [
+        ["DNe", "DarkNeb", "ISM > Cld > DNe", "Nube oscura de prueba", 0],
+        ["Y*O", "YSO", "* > Y*O", "Estrella joven de prueba", 0],
+        ["Cl*", "Cluster*", "Cl*", "Cúmulo de prueba", 0],
+        ["MoC", "MolCld", "ISM > Cld > MoC", "Nube molecular de prueba", 0],
+    ]})
+
+
 def test_ficha_conserva_fuente_unidades_y_ausencias(tmp_path):
     """La proyección convierte grados a horas, pero conserva datos originales, clave literal y huella de instantánea."""
     content = snapshot([entry()])
@@ -48,6 +59,84 @@ def test_ficha_conserva_fuente_unidades_y_ausencias(tmp_path):
     assert source["key"] == "LDN    1" and source["license"] == "ODbL-1.0"
     assert source["data"]["row"] == dict(zip(FIELDS, entry(), strict=True))
     assert source["data"]["snapshot_sha256"] == hashlib.sha256(data).hexdigest()
+
+
+def test_estrella_simbad_no_se_exporta_como_nebulosa_por_su_designacion(tmp_path):
+    """La pertenencia nominal a LDN no convierte una estrella explícita de la fuente en objeto de espacio profundo."""
+    star = entry("LDN 2", 124)
+    star[3] = "*"
+    with identity_registry(tmp_path / "registry.sqlite") as registry:
+        result = prepare_simbad(registry, encode(snapshot([entry(), star])), revision="A")
+        assert [row[0] for row in result["ldn"]["rows"]] == ["LDN 1"]
+        assert registry.execute("SELECT COUNT(*) FROM objects").fetchone()[0] == 1
+
+
+def test_taxonomia_excluye_estrellas_pero_no_cumulos_y_conserva_evidencia(tmp_path):
+    """El asterisco en un código no es criterio científico: manda la raíz declarada de la jerarquía fijada."""
+    star, cluster, cloud = entry("LDN 2", 124), entry("LDN 3", 125), entry("LDN 4", 126)
+    star[3], cluster[3], cloud[3] = "Y*O", "Cl*", "MoC"
+    excluded = []
+    types = taxonomy()
+    with identity_registry(tmp_path / "registry.sqlite") as registry:
+        result = prepare_simbad(registry, encode(snapshot([entry(), star, cluster, cloud])), revision="A",
+                                taxonomy=types, exclusions=excluded)
+    assert [row[0] for row in result["ldn"]["rows"]] == ["LDN 1", "LDN 3", "LDN 4"]
+    assert excluded[0]["rows"][0]["id"] == "LDN 2" and excluded[0]["reason"] == "stellar_type"
+    assert excluded[0]["type_evidence"]["snapshot_sha256"] == hashlib.sha256(types).hexdigest()
+    source = result["ldn"]["records"][1]["sources"][0]
+    assert source["data"]["type_evidence"]["path"] == "Cl*"
+
+
+def test_taxonomia_admite_candidatos_y_tipos_desconocidos_no_utilizados(tmp_path):
+    """La tabla oficial puede tener tipos sin jerarquía; solo impiden clasificar una ficha que realmente los use."""
+    content = json.loads(taxonomy())
+    content["data"].extend([["Y*?", "YSO?", "* > Y*O", "Candidata de prueba", 1],
+                            ["?", "Unknown", None, "Sin naturaleza conocida", 0]])
+    star = entry("LDN 2", 124)
+    star[3] = "Y*?"
+    excluded = []
+    with identity_registry(tmp_path / "registry.sqlite") as registry:
+        result = prepare_simbad(registry, encode(snapshot([entry(), star])), revision="A",
+                                taxonomy=encode(content), exclusions=excluded)
+        assert len(result["ldn"]["rows"]) == len(excluded) == 1
+        unknown = entry("LDN 3", 125)
+        unknown[3] = "?"
+        with pytest.raises(ValueError, match="Tipo SIMBAD desconocido"):
+            prepare_simbad(registry, encode(snapshot([unknown])), revision="B", taxonomy=encode(content))
+
+
+@pytest.mark.parametrize("damage", ["unknown_type", "duplicate", "path", "candidate"])
+def test_taxonomia_invalida_o_tipo_desconocido_no_genera_identidades(tmp_path, damage):
+    """No se adivina una categoría cuando la taxonomía no acredita su jerarquía."""
+    types = json.loads(taxonomy())
+    row = entry()
+    if damage == "unknown_type":
+        row[3] = "tipo-futuro"
+    elif damage == "duplicate":
+        types["data"].append(types["data"][0])
+    elif damage == "path":
+        types["data"][0][2] = "* > otro-tipo"
+    else:
+        types["data"][0][4] = True
+    with identity_registry(tmp_path / "registry.sqlite") as registry:
+        with pytest.raises(ValueError):
+            prepare_simbad(registry, encode(snapshot([row])), revision="A", taxonomy=encode(types))
+        assert registry.execute("SELECT COUNT(*) FROM objects").fetchone()[0] == 0
+
+
+def test_exclusiones_no_se_publican_si_falla_el_lote(tmp_path):
+    """Una estrella excluida antes de un conflicto no deja un informe de éxito parcial ni escrituras sueltas."""
+    star = entry("LDN 0", 1)
+    star[3] = "*"
+    excluded = []
+    with identity_registry(tmp_path / "registry.sqlite") as registry:
+        first = identify(registry, SOURCE, "LDN    1")
+        second = identify(registry, "fuente-prueba", "otra-identidad")
+        with pytest.raises(ValueError):
+            prepare_simbad(registry, encode(snapshot([star, entry()])), revision="A",
+                           same_as={"LDN    1": second}, exclusions=excluded)
+        assert not excluded
+        assert identify(registry, SOURCE, "LDN    1") == first
 
 
 def test_mismo_oid_explicito_una_proyeccion_y_alias_entre_catalogos(tmp_path):

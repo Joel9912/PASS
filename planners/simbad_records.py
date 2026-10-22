@@ -12,6 +12,7 @@ from planners.catalog_records import prepare_record, validate_records
 FIELDS = ("id", "oid", "main_id", "otype", "ra", "dec", "coo_bibcode", "galdim_majaxis",
           "galdim_minaxis", "galdim_wavelength", "galdim_bibcode", "V")
 SOURCE = "SIMBAD-ident"
+TAXONOMY_QUERY = "SELECT otype,label,path,description,is_candidate FROM otypedef"
 TAP_QUERY = (
     "SELECT i.id,b.oid,b.main_id,b.otype,b.ra,b.dec,b.coo_bibcode,"
     "b.galdim_majaxis,b.galdim_minaxis,b.galdim_wavelength,b.galdim_bibcode,f.V "
@@ -31,6 +32,48 @@ def _designation(value):
     """Añade una forma de consulta convencional sin alterar la clave literal conservada en la procedencia."""
     match = re.fullmatch(r"(LDN|Barnard)\s+(\d+)\s*([A-Za-z]*)", value)
     return f"{match[1]} {int(match[2])}{match[3]}"
+
+
+def _taxonomy(data):
+    """Lee jerarquía oficial fijada; solo los tipos básicos explícitos se conocen sin una instantánea adicional."""
+    if data is None:
+        return {code: {"path": path, "source": "https://simbad.cds.unistra.fr/guide/otypes.htx"}
+                for code, path in (("DNe", "ISM > Cld > DNe"), ("*", "*"), ("**", "* > **"))}
+    if not isinstance(data, bytes) or not 0 < len(data) <= 256 * 1024:
+        raise ValueError("Taxonomía SIMBAD vacía o demasiado grande.")
+    content = json.loads(data)
+    json.dumps(content, allow_nan=False)
+    if not isinstance(content, dict) or set(content) != {"metadata", "data"}:
+        raise ValueError("Taxonomía TAP incompatible.")
+    metadata = content["metadata"]
+    if not isinstance(metadata, list) or any(not isinstance(field, dict) for field in metadata):
+        raise ValueError("Metadatos de taxonomía inválidos.")
+    names = [field.get("name") for field in metadata]
+    if len(names) != 5 or set(names) != {"otype", "label", "path", "description", "is_candidate"}:
+        raise ValueError("Columnas de taxonomía incompatibles.")
+    rows = content["data"]
+    if not isinstance(rows, list) or not rows or len(rows) > 1000:
+        raise ValueError("Taxonomía sin tipos o fuera del límite de preparación.")
+    result = {}
+    digest = hashlib.sha256(data).hexdigest()
+    for values in rows:
+        if not isinstance(values, list) or len(values) != len(names):
+            raise ValueError("Fila de taxonomía incompleta.")
+        row = dict(zip(names, values, strict=True))
+        if any(not isinstance(row[name], str) or not row[name].strip() or "\x00" in row[name]
+               for name in ("otype", "label", "description")):
+            raise ValueError("Tipo o jerarquía SIMBAD desconocidos.")
+        if (row["path"] is not None and (not isinstance(row["path"], str) or "\x00" in row["path"])):
+            raise ValueError("Jerarquía de tipos inválida.")
+        if (row["otype"] in result or type(row["is_candidate"]) is not int or row["is_candidate"] not in (0, 1)
+                or row["path"] and not row["is_candidate"] and row["path"].split(" > ")[-1] != row["otype"]):
+            raise ValueError("Jerarquía de tipos contradictoria.")
+        result[row["otype"]] = {"row": row, "path": row["path"], "snapshot_sha256": digest,
+                                 "query": TAXONOMY_QUERY}
+    if any(item["row"]["is_candidate"] and item["path"] and item["path"].split(" > ")[-1] not in result
+           for item in result.values()):
+        raise ValueError("Tipo candidato sin referencia de clasificación.")
+    return result
 
 
 def _snapshot(data: bytes):
@@ -83,17 +126,25 @@ def _snapshot(data: bytes):
     return metadata, result
 
 
-def prepare_simbad(registry, data: bytes, *, revision: str, same_as=None) -> dict:
+def prepare_simbad(registry, data: bytes, *, revision: str, same_as=None, taxonomy=None, exclusions=None) -> dict:
     """Convierte una instantánea local a componentes identificados; solo el mismo OID explícito une designaciones.
 
     ``same_as`` permite cruces revisados por clave literal SIMBAD hacia IDs
     PASS existentes. No infiere equivalencias con OpenNGC ni reasigna vínculos.
     La salida contiene únicamente aportaciones SIMBAD; no es una edición
     global completa ni decide la licencia de una base combinada.
+    ``taxonomy`` fija la jerarquía de tipos para excluir estrellas sin
+    confundir cúmulos con ellas; ``exclusions`` recibe evidencia solo si el
+    lote termina correctamente. Un tipo desconocido exige revisión.
     """
     if not isinstance(revision, str) or not revision.strip() or revision != revision.strip() or "\x00" in revision:
         raise ValueError("Revisión de instantánea SIMBAD requerida.")
     metadata, rows = _snapshot(data)
+    types = _taxonomy(taxonomy)
+    if exclusions is not None and not isinstance(exclusions, list):
+        raise TypeError("El destino de exclusiones debe ser una lista.")
+    if any(row["otype"] not in types or not types[row["otype"]]["path"] for row in rows):
+        raise ValueError("Tipo SIMBAD desconocido: aporta una taxonomía verificada, no se infiere por la designación.")
     same_as = {} if same_as is None else same_as
     if not isinstance(same_as, dict) or set(same_as) - {row["id"] for row in rows}:
         raise ValueError("Cruces SIMBAD ajenos a la instantánea.")
@@ -109,11 +160,17 @@ def prepare_simbad(registry, data: bytes, *, revision: str, same_as=None) -> dic
         group.append(row)
     components = {name: {"rows": [], "records": []} for name in ("openngc", "ldn")}
     digest = hashlib.sha256(data).hexdigest()
+    excluded = []
     registry.execute("SAVEPOINT prepare_simbad_snapshot")
     try:
         for oid in sorted(grouped):
             entries = sorted(grouped[oid], key=lambda row: (not row["id"].startswith("LDN"), row["id"]))
             primary = entries[0]
+            type_evidence = types[primary["otype"]]
+            if type_evidence["path"].split(" > ")[0] == "*":
+                excluded.append({"reason": "stellar_type", "rows": entries, "type_evidence": type_evidence,
+                                 "snapshot_sha256": digest, "revision": revision})
+                continue
             namespace = "ldn" if primary["id"].startswith("LDN") else "barnard"
             component = components["ldn" if namespace == "ldn" else "openngc"]
             projected = [_designation(primary["id"]), namespace, None, None, None, primary["main_id"],
@@ -144,7 +201,7 @@ def prepare_simbad(registry, data: bytes, *, revision: str, same_as=None) -> dic
                           "url": "https://simbad.cds.unistra.fr/simbad/", "license": "ODbL-1.0",
                           "attribution": "SIMBAD astronomical database, CDS, Strasbourg, France",
                           "data": {"row": row, "metadata": metadata, "snapshot_sha256": digest,
-                                   "query": TAP_QUERY, "magnitude_band": "V"}}
+                                   "query": TAP_QUERY, "magnitude_band": "V", "type_evidence": type_evidence}}
                 if record is None:
                     record = prepare_record(registry, len(component["rows"]), source, aliases=aliases,
                                             same_as=next(iter(explicit), None))
@@ -158,6 +215,8 @@ def prepare_simbad(registry, data: bytes, *, revision: str, same_as=None) -> dic
                 validate_rows(group, component["rows"])
                 validate_records(component["rows"], component["records"])
         registry.execute("RELEASE SAVEPOINT prepare_simbad_snapshot")
+        if exclusions is not None:
+            exclusions.extend(excluded)
         return components
     except Exception:
         registry.execute("ROLLBACK TO SAVEPOINT prepare_simbad_snapshot")
