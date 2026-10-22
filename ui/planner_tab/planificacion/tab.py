@@ -559,10 +559,7 @@ class PlanificacionTab(QWidget):
             self._ra.setValue(float(ra))
             self._dec.setValue(float(dec))
             self._updating_view = False
-        if not self._session_name.text().strip():
-            self._session_name.setPlaceholderText(
-                f"Sesión de {object_id} · {self._date_iso()}"
-            )
+        self._update_session_placeholder()
         self._apply_framing()
         self._refresh_curve()
         self._invalidate_plan()
@@ -570,8 +567,16 @@ class PlanificacionTab(QWidget):
 
     def _on_date_changed(self, _qdate: QDate) -> None:
         """Cambio de fecha: la curva se recalcula y el plan calculado deja de valer."""
+        self._update_session_placeholder()
         self._refresh_curve()
         self._invalidate_plan()
+
+    def _update_session_placeholder(self) -> None:
+        """Mantiene la sugerencia coherente con objetivo/fecha sin modificar el nombre escrito por el usuario."""
+        target = self._current_target()
+        self._session_name.setPlaceholderText(
+            f"Sesión de {target['object_id']} · {self._date_iso()}" if target else ""
+        )
 
     def _on_setup_changed(self, *_args) -> None:
         """Nuevo equipo: recalcula el FOV, habilita/deshabilita teselas y redibuja el encuadre."""

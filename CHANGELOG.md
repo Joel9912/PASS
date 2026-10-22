@@ -30,6 +30,7 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 - Captura Ideal reserva al menos cinco minutos dentro de ambos extremos de la noche astronómica; los márgenes válidos quedan como Posible.
 
 ### Corregido
+- La sugerencia de nombre de sesión se actualiza al cambiar la fecha, sin modificar el nombre escrito por el usuario (U-0009).
 - La carga inicial de paquetes vuelve a comprobar que cada componente siga vacío y no sustituye el catálogo instalado por otra operación mientras tanto (B-0011).
 - Tres filtros que no forman un R/G/B inequívoco, por ejemplo R/r/G, conservan sus pilas separadas sin fallar ni inventar el canal ausente (S-0032).
 - Se rechazan antes de limpiar o ejecutar las ponderaciones wfwhm/nbstars cuando una secuencia por canal o recortada pierde los datos de registro necesarios. La elección no se sustituye silenciosamente; en varios filtros se avisa antes del registro final (S-0010).

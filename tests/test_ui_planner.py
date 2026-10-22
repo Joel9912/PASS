@@ -5,7 +5,32 @@ La ``QApplication`` viene del fixture ``qt_app`` de ``conftest.py``.
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
+
+
+@pytest.mark.parametrize("manual", ["", "Nombre escrito por el usuario"])
+def test_sugerencia_sesion_refleja_fecha_actual_sin_cambiar_nombre_manual(qt_app, monkeypatch, manual):
+    """La ayuda de nombre sigue la fecha elegida, pero nunca sustituye el texto escrito por el usuario."""
+    from PyQt6.QtCore import QDate
+
+    from planners import personal_catalog
+    from ui.planner_tab.planificacion.tab import PlanificacionTab
+
+    monkeypatch.setattr(personal_catalog, "list_objects", lambda: [
+        {"object_id": "Objetivo de prueba", "catalog": "other", "kind": "catalog", "ra_hours": 6, "dec_deg": 40},
+    ])
+    tab = PlanificacionTab()
+    try:
+        tab._date.setDate(QDate(2026, 10, 20))
+        tab._session_name.setText(manual)
+        tab._date.setDate(QDate(1950, 1, 1))
+        assert "1950-01-01" in tab._session_name.placeholderText()
+        assert "Objetivo de prueba" in tab._session_name.placeholderText()
+        assert tab._session_name.text() == manual
+    finally:
+        tab.deleteLater()
 
 
 def test_ajustes_guardados_refrescan_clima_por_tipo(qt_app, monkeypatch):
