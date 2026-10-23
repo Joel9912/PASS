@@ -82,20 +82,25 @@ def transit_utc_hours(ra_hours: float, date_iso: str, longitude_deg: float = 0.0
 
 
 def local_utc_offset(
-    longitude_deg: float, utc_offset_hours: float | None = None
+    longitude_deg: float, utc_offset_hours: float | str | None = None, instant=None
 ) -> float:
     """Horas que hay que sumar a UTC para obtener la hora local del lugar.
 
-    Si la ubicación guarda su desfase horario se usa ese (hora de reloj, con
-    horario de verano incluido). Si no, se infiere de la longitud
+    Un texto selecciona zona IANA y exige ``instant`` para aplicar sus reglas.
+    Un número es un desfase fijo sin ajuste estacional. Sin ninguno se aproxima por longitud
     redondeada a la hora (`round(lon / 15)`, huso horario estándar): así
     una ubicación en el otro lado del planeta no acaba con el huso del
     sistema (que es de otro continente) y la noche queda «invertida».
 
-    Todo lo que convierta a hora local (curvas, culminación, efemérides)
-    pasa por aquí: una única fuente de verdad. Sin astropy, para que la
-    tabla de tránsitos siga siendo barata.
+    Las reglas civiles se resuelven en timezones, sin Astropy ni red; esta
+    API conserva el modo numérico para las ubicaciones existentes.
     """
+    if isinstance(utc_offset_hours, str):
+        from .timezones import local_moment
+
+        if instant is None:
+            raise ValueError("Una zona horaria necesita un instante para determinar su desfase.")
+        return local_moment(instant, longitude_deg, utc_offset_hours).utcoffset().total_seconds() / 3600
     if utc_offset_hours is not None:
         return float(utc_offset_hours)
     return round(longitude_deg / 15.0)
@@ -105,10 +110,16 @@ def transit_local_hours(
     ra_hours: float,
     date_iso: str,
     longitude_deg: float,
-    utc_offset_hours: float | None = None,
+    utc_offset_hours: float | str | None = None,
 ) -> float:
     """Hora local (decimal) de la culminación, en el huso de la ubicación."""
     utc_hours = transit_utc_hours(ra_hours, date_iso, longitude_deg)
+    if isinstance(utc_offset_hours, str):
+        from datetime import datetime, timedelta
+
+        from .timezones import local_hours
+
+        return local_hours(datetime.fromisoformat(date_iso) + timedelta(hours=utc_hours), longitude_deg, utc_offset_hours)
     return (
         utc_hours + local_utc_offset(longitude_deg, utc_offset_hours)
     ) % 24.0

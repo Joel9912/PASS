@@ -63,13 +63,21 @@ def local_capture_time(moment: datetime, site: tuple | None, locations: list[dic
                    if loc.get("latitude") is not None and loc.get("longitude") is not None
                    and abs(loc["latitude"] - site[0]) < 0.001
                    and abs(loc["longitude"] - site[1]) < 0.001]
-        offsets = {loc.get("utc_offset_hours") for loc in matches}
+        offsets = {(loc.get("timezone_id"), loc.get("utc_offset_hours")) for loc in matches}
         if len(offsets) == 1 and matches:
             location = matches[0]
             source = "Ubicación de captura FITS coincidente"
         else:
             source = "Posición FITS sin desfase inequívoco guardado"
     if location is not None:
+        if location.get("timezone_id") is not None:
+            from planners.timezones import local_moment, rules_label
+
+            try:
+                local = local_moment(moment, location.get("longitude") or 0, location["timezone_id"])
+                return local, f"{source}: {location['name']}. {location['timezone_id']}; {rules_label()}"
+            except ValueError as exc:
+                return moment.astimezone(UTC), f"{source}: {exc}; se muestra UTC, no se aplica otro desfase."
         offset = location.get("utc_offset_hours")
         approximate = False
         longitude = location.get("longitude")

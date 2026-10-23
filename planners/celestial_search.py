@@ -109,7 +109,7 @@ class SearchFilters:
     latitude: float | None = None            # latitud del usuario (para altitud/tránsito)
     longitude: float | None = None           # longitud (este = positivo) para hora local
     date_iso: str | None = None              # fecha para la hora local del tránsito
-    utc_offset_hours: float | None = None    # desfase horario de la ubicación (hora de reloj)
+    utc_offset_hours: float | str | None = None    # fijo o identificador IANA, resuelto para cada instante
 
 
 def _catalog_clause(catalogs: list[str], *, identified: bool = False) -> tuple[str, list]:
@@ -179,6 +179,14 @@ def _annotate_transit(rows: list[dict], filters: SearchFilters) -> None:
             else None
         )
         row["hours_above_30"] = hours_above_altitude(latitude, dec, 30.0)
+        if date_iso and isinstance(filters.utc_offset_hours, str):
+            from datetime import datetime, timedelta
+
+            from .analytical_transit import transit_utc_hours
+            from .timezones import clock_label
+
+            moment = datetime.fromisoformat(date_iso) + timedelta(hours=transit_utc_hours(ra, date_iso, longitude))
+            row["transit_local"] = clock_label(moment, longitude, filters.utc_offset_hours)
 
 
 def search(filters: SearchFilters, limit: int = DEFAULT_LIMIT) -> list[dict]:

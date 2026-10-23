@@ -12,6 +12,7 @@ precisión uniforme para todo el intervalo admitido ni para guiado.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from threading import Lock
 
 import numpy as np
@@ -31,6 +32,7 @@ from .analytical_transit import local_utc_offset
 from .astronomy_status import AstronomyStatus, astronomy_status
 from .ephemeris import current_model, with_model
 from .planning_dates import planning_date
+from .timezones import Clock, clock_label, local_boundary, local_hours
 
 # Offline: nada de descargar tablas IERS al importar (arranque rápido y sin red).
 iers.conf.auto_download = False
@@ -114,7 +116,8 @@ class NightCurve:
     Un punto por cada ``SAMPLE_MIN`` minutos de la ventana nocturna:
 
     - ``times_iso``: instante (ISO, UTC) de cada punto.
-    - ``hours_local``: hora local decimal (0-24) de cada punto, para el eje X.
+    - ``hours_local``: reloj civil (puede saltar o repetirse); ``axis_hours``
+      es el eje continuo utilizado para dibujar y medir duraciones.
     - ``altitudes``: altitud del objeto (grados).
     - ``moon_altitudes``: altitud de la Luna (grados; para dibujar su
       curva y ver salida/ocaso y altura máxima).
@@ -135,6 +138,43 @@ class NightCurve:
     transit_index: int
     sun_altitudes: list[float] | None = None
     accuracy: AstronomyStatus | None = None
+    clock: Clock = None
+    longitude: float = 0.0
+    elapsed_hours: list[float] | None = None
+
+    @property
+    def axis_hours(self) -> list[float]:
+        """Eje creciente en horas reales; el reloj civil solo etiqueta, nunca determina duraciones ni el orden."""
+        from .moon_distance import unwrap_hours
+
+        if not isinstance(self.clock, str):
+            return unwrap_hours(self.hours_local)
+        if self.elapsed_hours is not None:
+            return self.elapsed_hours
+        times = Time(self.times_iso)
+        return list(16 + (times - times[0]).to_value(u.hour))
+
+    def axis_label(self, hour: float) -> str:
+        """Etiqueta un punto del eje continuo, distinguiendo horas repetidas mediante su desfase UTC."""
+        from .timefmt import format_hhmm
+
+        if not isinstance(self.clock, str):
+            return format_hhmm(hour)
+        moment = Time(self.times_iso[0]) + (hour - 16) * u.hour
+        return clock_label(str(moment.iso), self.longitude, self.clock)
+
+    def capture_summary(self) -> dict:
+        """Clasifica sobre tiempo real y añade rangos civiles inequívocos sin falsear las duraciones durante DST."""
+        from .moon_distance import capture_summary_from_samples
+
+        summary = capture_summary_from_samples(
+            self.altitudes, self.moon_separations, self.moon_altitudes, self.astro_night,
+            self.moon_illumination * 100, self.axis_hours, sun_altitudes=self.sun_altitudes,
+        )
+        if isinstance(self.clock, str):
+            for entry in summary.values():
+                entry["display_ranges"] = [f"{self.axis_label(start)}–{self.axis_label(end)}" for start, end in entry["ranges"]]
+        return summary
 
     @property
     def transit_time(self) -> str:
@@ -164,7 +204,7 @@ def _night_times(
     date_iso: str,
     longitude_deg: float,
     sample_min: int = SAMPLE_MIN,
-    utc_offset_hours: float | None = None,
+    utc_offset_hours: Clock = None,
 ) -> Time:
     """Malla temporal de la noche de ``date_iso`` para ``longitude_deg``.
 
@@ -173,6 +213,16 @@ def _night_times(
     desfase local lo pone :func:`local_utc_offset`.
     """
     date_iso = planning_date(date_iso).isoformat()
+    if isinstance(utc_offset_hours, str):
+        evening = datetime.fromisoformat(date_iso).replace(hour=16)
+        morning = (evening + timedelta(days=1)).replace(hour=8)
+        start = local_boundary(evening, utc_offset_hours)
+        end = local_boundary(morning, utc_offset_hours)
+        minutes = round(float((Time(end) - Time(start)).to_value(u.min)), 9)
+        if sample_min <= 0:
+            raise ValueError("El paso temporal debe ser positivo.")
+        steps = np.arange(0, minutes, sample_min)
+        return Time(start) + np.append(steps, minutes) * u.min
     start = Time(date_iso) + (
         16.0 - local_utc_offset(longitude_deg, utc_offset_hours)
     ) * u.hour
@@ -181,7 +231,7 @@ def _night_times(
 
 
 def _local_hours(
-    times: Time, longitude_deg: float, utc_offset_hours: float | None = None
+    times: Time, longitude_deg: float, utc_offset_hours: Clock = None
 ) -> list[float]:
     """Hora local decimal de cada ``Time`` (UTC fraccionario + desfase).
 
@@ -190,6 +240,8 @@ def _local_hours(
     perfil), mientras que ``times.mjd`` devuelve el array entero de una
     vez. El resultado es bit a bit el mismo.
     """
+    if isinstance(utc_offset_hours, str):
+        return [local_hours(str(value), longitude_deg, utc_offset_hours) for value in times.iso]
     offset = local_utc_offset(longitude_deg, utc_offset_hours)
     mjd = np.asarray(times.mjd)
     return [float(value) for value in ((mjd % 1.0) * 24.0 + offset) % 24.0]
@@ -248,16 +300,18 @@ def _moon_sun_series(times: Time, location: EarthLocation):
     if every == 1:
         return _moon_sun_arrays(times, location)
     idx = np.arange(0, len(times), every)
+    if idx[-1] != len(times) - 1:
+        idx = np.append(idx, len(times) - 1)
     caz, calt, csun = _moon_sun_arrays(times[idx], location)
     lat, az = np.radians(calt), np.radians(caz)
     x = np.cos(lat) * np.cos(az)
     y = np.cos(lat) * np.sin(az)
     z = np.sin(lat)
-    grid = np.arange(len(times))
+    grid = (times - times[0]).to_value(u.min)
     return (
-        np.degrees(np.arctan2(np.interp(grid, idx, y), np.interp(grid, idx, x))),
-        np.degrees(np.arcsin(np.interp(grid, idx, z))),
-        np.interp(grid, idx, csun),
+        np.degrees(np.arctan2(np.interp(grid, grid[idx], y), np.interp(grid, grid[idx], x))),
+        np.degrees(np.arcsin(np.interp(grid, grid[idx], z))),
+        np.interp(grid, grid[idx], csun),
     )
 
 
@@ -278,7 +332,7 @@ def night_curve(
     latitude: float,
     longitude: float,
     date_iso: str,
-    utc_offset_hours: float | None = None,
+    utc_offset_hours: Clock = None,
 ) -> NightCurve:
     """Curva completa de la noche: altitud, luna y noche astronómica.
 
@@ -286,9 +340,9 @@ def night_curve(
     ventanas de captura (Ideal/Posible): cada instante trae altitud,
     separación lunar y si estamos dentro de la noche astronómica.
 
-    ``utc_offset_hours`` (desfase de la ubicación, ver
-    :func:`local_utc_offset`) solo afecta al eje horario; la física se
-    calcula en UTC.
+    ``utc_offset_hours`` acepta desfase fijo, zona IANA o aproximación heredada.
+    Determina los límites de la noche local y su presentación; la física se
+    calcula en UTC, con eje continuo aunque el reloj cambie.
 
     Tres optimizaciones, sin tocar la física (el resultado es el mismo
     salvo el error de muestreo de :func:`_moon_sun_series`, de 0,009°):
@@ -335,6 +389,9 @@ def night_curve(
         transit_index=int(np.argmax(alts)),
         sun_altitudes=[float(a) for a in sun_alt],
         accuracy=astronomy_status(times),
+        clock=utc_offset_hours,
+        longitude=longitude,
+        elapsed_hours=list(16 + (times - times[0]).to_value(u.hour)) if isinstance(utc_offset_hours, str) else None,
     )
 
 
@@ -366,7 +423,7 @@ def night_info(
     longitude: float,
     date_iso: str,
     sample_min: int = SAMPLE_MIN,
-    utc_offset_hours: float | None = None,
+    utc_offset_hours: Clock = None,
 ) -> NightInfo:
     """Horas de noche astronómica y fase lunar para ``date_iso``.
 
@@ -486,7 +543,7 @@ def transit_info(
     latitude: float,
     longitude: float,
     date_iso: str,
-    utc_offset_hours: float | None = None,
+    utc_offset_hours: Clock = None,
 ) -> TransitInfo:
     """Tránsito de un objeto y su mínima separación con la luna esa noche.
 

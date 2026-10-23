@@ -111,9 +111,9 @@ DIRECTIONS: tuple[str, ...] = ("N", "NE", "E", "SE", "S", "SO", "O", "NO")
 class Location:
     """Ubicación geográfica desde donde se observa, con su sitio.
 
-    ``utc_offset_hours`` es el desfase de la hora de reloj frente a UTC
-    (p. ej. España en verano = +2). Si es ``None`` se usa la longitud como
-    hora solar local, que es una aproximación.
+    ``timezone_id`` selecciona reglas IANA según fecha; alternativamente
+    ``utc_offset_hours`` fija un desfase sin ajuste estacional. Ambos ausentes
+    conservan la aproximación heredada por longitud, nunca una zona legal inferida.
 
     El bloque de sitio describe el horizonte por direcciones, siempre con
     las 8 claves de ``DIRECTIONS``: ``obstacles`` guarda a cuántos grados
@@ -145,6 +145,7 @@ class Location:
     seeing_arcsec: float | None = None  # FWHM en ″ (None = sin dato)
     consider_lp: bool = True
     lp_map: str | None = None
+    timezone_id: str | None = None
 
 
 @dataclass

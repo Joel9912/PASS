@@ -18,6 +18,7 @@ _MIGRATIONS: dict[str, tuple[str, ...]] = {
     "locations": (
         # Desfase horario para pasar efemérides de UTC a hora de reloj.
         "utc_offset_hours REAL",
+        "timezone_id TEXT",
         # Bloque de sitio de la pestaña Equipo (JSON con las 8 direcciones).
         "obstacles TEXT",
         "lp TEXT",

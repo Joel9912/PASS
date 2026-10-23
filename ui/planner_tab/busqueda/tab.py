@@ -135,7 +135,7 @@ class BusquedaTab(QWidget):
         self._rows: list[dict] = []
         self._latitude: float | None = None
         self._longitude: float | None = None
-        self._utc_offset_hours: float | None = None
+        self._utc_offset_hours: float | str | None = None
         # Claves de lo ya calculado: refresh() no repite lo que no cambió.
         self._clave_ephemeris: tuple | None = None
         self._clave_curva: tuple | None = None
@@ -344,7 +344,7 @@ class BusquedaTab(QWidget):
 
     # -- API pública ---------------------------------------------------------
     def set_location(
-        self, latitude: float, longitude: float, utc_offset_hours: float | None
+        self, latitude: float, longitude: float, utc_offset_hours: float | str | None
     ) -> None:
         """Recibe la ubicación de la barra propia (compartida) y recalcula."""
         self._latitude = latitude
@@ -375,7 +375,17 @@ class BusquedaTab(QWidget):
             self._ephemeris.show_invalid_date(str(exc))
             self._clave_ephemeris = self._clave_curva = self._clave_clima = None
             return
-        self._run_search()
+        try:
+            self._run_search()
+        except ValueError as exc:
+            self._rows = []
+            self._table.setRowCount(0)
+            self._add_button.setEnabled(False)
+            self._count.setText("Cálculo no disponible")
+            self._curve.clear(str(exc))
+            self._ephemeris.show_unavailable(str(exc))
+            self._clave_ephemeris = self._clave_curva = self._clave_clima = None
+            return
         self._refresh_ephemeris()
         self._refresh_selected_curve()
         self._refresh_weather()

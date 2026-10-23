@@ -3,16 +3,14 @@
 Layout **sin `QSplitter` y con un solo scroll, nada fijo** (pedido del
 usuario): dentro de la zona con scroll va `[sección «Ubicaciones
 guardados» sin rótulo, con el ancho que le deja la ficha
-(`_ancho_lista`: la ficha manda para caber en 2 filas) | sección
+(`_ancho_lista`: la ficha determina el mínimo necesario) | sección
 «Ubicación»]` y, debajo, el ``SitioPanel`` (rosácea + esquemático +
 mapa de CL) a todo el ancho: sin cabecera fija, las gráficas tienen
 toda la altura que sobra en vez de quedar cortadas.
 
-La sección «Ubicación» es **una sola** (pedido del usuario, al estilo de
-la cabecera de Equipo): su título con «Guardar ubicación» y dos filas de
-campos en el orden que fijó él — Nombre · Altitud · Latitud · Longitud /
-Bortle · SQM · Seeing · ☑ Huso automático · Desfase — con rótulos
-cortos, para que la ficha quepa en 2 filas junto a la lista.
+La sección «Ubicación» mantiene un solo marco con identidad/coordenadas,
+cielo y horario en filas separadas. El horario permite zona IANA según fecha
+o desfase fijo; el modo aproximado heredado se identifica sin inferir una zona.
 
 Regla UX global (§9): **nada se persiste hasta «Guardar ubicación»**:
 «Nueva» deja la ficha en blanco en memoria y no se inserta fila hasta el
@@ -24,7 +22,6 @@ from __future__ import annotations
 from PyQt6.QtCore import QEvent, Qt, pyqtSignal
 from PyQt6.QtGui import QResizeEvent
 from PyQt6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QDoubleSpinBox,
     QFrame,
@@ -43,6 +40,7 @@ from equipment import localizations, manager
 from equipment.images import list_images
 from equipment.models import Location
 from planners.analytical_transit import local_utc_offset
+from planners.timezones import rules_label, zone_names
 
 from .componentes import ListaGuardados, sin_botones
 from .sitio import SitioPanel
@@ -77,10 +75,7 @@ class UbicacionesTab(QWidget):
         # ficha y el sitio viven dentro de la misma zona con scroll, así
         # las gráficas tienen toda la altura que sobra en vez de quedar
         # cortadas bajo una cabecera fija. La ficha se construye
-        # primero: el ancho de la lista depende de su mínimo
-        # (`_ancho_lista`, para que «Ubicación» quepa en 2 filas), y sus
-        # dos filas de campos son contractuales (las comprueba el test
-        # de regresión).
+        # primero: el ancho de la lista depende del mínimo de la ficha.
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         contenido = QWidget()
@@ -115,11 +110,11 @@ class UbicacionesTab(QWidget):
         """Ancho de la sección de la lista: lo que queda tras el mínimo de la ficha.
 
         La ficha manda (el usuario pidió que la lista se ajuste para
-        que «Ubicación» quepa en 2 filas): hueco real del scroll —el
+        que «Ubicación» no se recorte): hueco real del scroll —el
         **viewport**, que ya descuenta márgenes, marco y barra vertical;
         contar solo el ancho de la pestaña dejaría la fila sin esos
         ~22 px y saldría barra horizontal incluso en la ventana de
-        1536— menos el ancho mínimo que piden las dos filas, con suelo
+        1536— menos el ancho mínimo que piden sus campos, con suelo
         `_ANCHO_LISTA_MIN` (más estrecho deja de ser útil) y techo
         `_ANCHO_LISTA_MAX` (el mismo que la sección de Equipos). Si el
         hueco no llega ni al suelo, manda el suelo: la fila se queda
@@ -162,7 +157,7 @@ class UbicacionesTab(QWidget):
         Réplica de la de Equipos, con el mismo rótulo quitado:
         «Ubicaciones guardados» a `PanelTitle` (13 pt) robaba dos
         líneas y la pestaña ya se llama «Ubicaciones». El ancho lo da
-        `_ancho_lista` —la ficha manda, para que quepa en 2 filas— y la
+        `_ancho_lista` —la ficha determina el ancho necesario— y la
         lista va con stretch **sin tope de alto**
         (`ListaGuardados.sizeHint()` es pequeño a propósito: su
         sizeHint natural de 192 px hincharía la fila). Los botones van
@@ -194,19 +189,7 @@ class UbicacionesTab(QWidget):
         return marco
 
     def _seccion_ubicacion(self) -> QFrame:
-        """Sección única «Ubicación»: su título con «Guardar» y las dos filas de campos.
-
-        Funde la antigua barra + los paneles Geografía|Cielo (pedido del
-        usuario, al estilo de la cabecera de Equipo). El orden de los
-        campos es contractual: fila 1 Nombre · Altitud · Latitud ·
-        Longitud; fila 2 Bortle · SQM · Seeing · ☑ Huso automático ·
-        Desfase. Las filas van **sueltas** (no en una rejilla de
-        columnas compartidas): con la rejilla la casilla y «Longitud»
-        acababan en la misma columna y la ficha crecía; y con los
-        rótulos largos la fila 2 pedía 202 px más —con los dos juntos la
-        ficha no cabía en 2 filas junto a la lista (lo midió la sonda
-        previa, en píxeles reales de la plataforma).
-        """
+        """Marco único con Guardar e identidad, cielo y horario separados para mantener legibles sus controles."""
         marco = QFrame()
         marco.setObjectName("GroupFrame")
         lay = QVBoxLayout(marco)
@@ -255,8 +238,7 @@ class UbicacionesTab(QWidget):
         fila1.addWidget(self._longitud, 1)
         lay.addLayout(fila1)
 
-        # Fila 2: cielo y huso. Rótulos cortos («SQM», «Seeing»,
-        # «Huso automático»): el detalle que no cabe vive en tooltips.
+        # Cielo separado del horario para mantener legibles sus controles.
         fila2 = QHBoxLayout()
         fila2.setSpacing(12)
         self._bortle = QComboBox()
@@ -296,32 +278,41 @@ class UbicacionesTab(QWidget):
         sin_botones(self._seeing)
         fila2.addWidget(QLabel("Seeing"))
         fila2.addWidget(self._seeing, 1)
-        self._auto = QCheckBox("Huso automático")
-        self._auto.setChecked(True)
-        self._auto.setToolTip(
-            "Marcado, el Desfase es la hora solar local: la regla de 15 "
-            "sobre la longitud lo calcula y queda fijo. Desmárcalo para "
-            "indicarlo a mano."
-        )
-        fila2.addWidget(self._auto)
-        fila2.addWidget(QLabel("Desfase"))
+        lay.addLayout(fila2)
+        horario = QHBoxLayout()
+        horario.addWidget(QLabel("Horario"))
+        self._clock_mode = QComboBox()
+        self._clock_mode.addItem("Desfase fijo", "fixed")
+        self._clock_mode.addItem("Zona según fecha", "zone")
+        self._clock_mode.addItem("Aprox. heredada", "legacy")
+        self._clock_mode.setToolTip("Zona según fecha: recomendada. El modo fijo no ajusta verano. La aproximación heredada no es hora legal.")
+        horario.addWidget(self._clock_mode)
+        self._timezone = QComboBox()
+        self._timezone.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self._timezone.setMinimumContentsLength(16)
+        self._timezone.addItem("Elige una zona IANA…", None)
+        for key in zone_names():
+            self._timezone.addItem(key, key)
+        self._timezone.setToolTip("Zona seleccionada explícitamente, sin usar la del ordenador. " + rules_label())
+        self._timezone.setAccessibleName("Zona horaria IANA")
+        horario.addWidget(self._timezone, 1)
+        self._offset_label = QLabel("Desfase")
+        horario.addWidget(self._offset_label)
         self._huso = QDoubleSpinBox()
         self._huso.setRange(-12.0, 14.0)
-        self._huso.setDecimals(1)
+        self._huso.setDecimals(2)
+        self._huso.setSingleStep(0.25)
         self._huso.setSuffix(" h")
-        self._huso.setEnabled(False)
         self._huso.setToolTip(
-            "Con «Huso automático» muestra round(longitud/15); sin él, se "
-            "indica a mano y se guarda."
+            "Desfase fijo frente a UTC: no cambia con la fecha. En modo heredado se aproxima por longitud."
         )
         sin_botones(self._huso)
-        fila2.addWidget(self._huso, 1)
-        lay.addLayout(fila2)
+        horario.addWidget(self._huso)
+        lay.addLayout(horario)
 
-        # Conexiones de la antigua Geografía: el check bloquea el
-        # Desfase y la longitud lo recalcula (regla de 15).
-        self._auto.toggled.connect(self._al_cambiar_auto)
+        self._clock_mode.currentIndexChanged.connect(self._al_cambiar_auto)
         self._longitud.valueChanged.connect(self._refrescar_desfase)
+        self._al_cambiar_auto()
         return marco
 
     # -- lista y carga -----------------------------------------------------
@@ -371,7 +362,9 @@ class UbicacionesTab(QWidget):
                 self._latitud.setValue(0.0)
                 self._longitud.setValue(0.0)
                 self._altitud.setValue(0.0)
-                self._auto.setChecked(True)
+                self._clock_mode.setCurrentIndex(0)
+                self._huso.setValue(0)
+                self._timezone.setCurrentIndex(0)
                 self._bortle.setCurrentIndex(0)
                 self._sqm.setValue(0.0)
                 self._seeing.setValue(0.0)
@@ -383,7 +376,12 @@ class UbicacionesTab(QWidget):
                 self._longitud.setValue(float(fila.get("longitude") or 0.0))
                 self._altitud.setValue(float(fila.get("altitude") or 0.0))
                 desfase = fila.get("utc_offset_hours")
-                self._auto.setChecked(desfase is None)
+                key = fila.get("timezone_id")
+                if key is not None and self._timezone.findData(key) < 0:
+                    self._timezone.addItem(key + " (no disponible)", key)
+                self._timezone.setCurrentIndex(max(0, self._timezone.findData(key)))
+                mode = "zone" if key is not None else ("legacy" if desfase is None else "fixed")
+                self._clock_mode.setCurrentIndex(self._clock_mode.findData(mode))
                 if desfase is not None:
                     self._huso.setValue(float(desfase))
                 self._bortle.setCurrentIndex(
@@ -401,23 +399,27 @@ class UbicacionesTab(QWidget):
         finally:
             self._cargando = False
         self._refrescar_desfase()
+        self._al_cambiar_auto()
         self._refrescar_cielo()
         self._boton_eliminar.setEnabled(self._ubicacion_id is not None)
 
     def _refrescar_desfase(self) -> None:
-        """Con huso automático, el Desfase muestra ``round(longitud/15)``.
+        """Solo el modo heredado aproxima el desfase mediante ``round(longitud/15)``.
 
         La misma regla que el planificador (``local_utc_offset``): lo que
         se ve en la ficha es exactamente lo que se usará al planificar.
         """
-        if self._auto.isChecked():
+        if self._clock_mode.currentData() == "legacy":
             self._huso.setValue(local_utc_offset(self._longitud.value()))
 
-    def _al_cambiar_auto(self, marcado: bool) -> None:
-        """Huso automático activado: recalcular y bloquear; si no, editable."""
-        self._huso.setEnabled(not marcado)
-        if marcado:
-            self._refrescar_desfase()
+    def _al_cambiar_auto(self, *_args) -> None:
+        """Activa solo el control del modo elegido; zona y desfase nunca se suman."""
+        mode = self._clock_mode.currentData()
+        self._huso.setEnabled(mode == "fixed")
+        self._huso.setVisible(mode != "zone")
+        self._offset_label.setVisible(mode != "zone")
+        self._timezone.setEnabled(mode == "zone")
+        self._refrescar_desfase()
 
     def eventFilter(self, objeto, evento):
         """Antes de que Qt interprete el SQM: texto vacío o inválido → «—».
@@ -476,7 +478,8 @@ class UbicacionesTab(QWidget):
             latitude=self._latitud.value(),
             longitude=self._longitud.value(),
             altitude_m=(self._altitud.value() or None),
-            utc_offset_hours=(None if self._auto.isChecked() else self._huso.value()),
+            utc_offset_hours=(self._huso.value() if self._clock_mode.currentData() == "fixed" else None),
+            timezone_id=((self._timezone.currentData() or "") if self._clock_mode.currentData() == "zone" else None),
             obstacles=obstaculos,
             lp=fuentes,
             bortle=self._bortle.currentData(),

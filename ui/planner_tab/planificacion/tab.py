@@ -91,7 +91,7 @@ class PlanificacionTab(QWidget):
 
         self._latitude: float | None = None
         self._longitude: float | None = None
-        self._utc_offset_hours: float | None = None
+        self._utc_offset_hours: float | str | None = None
         self._fov: tuple[float, float] | None = None   # grados, del equipo
         self._targets: list[dict] = []
         self._setups: list[dict] = []
@@ -193,7 +193,7 @@ class PlanificacionTab(QWidget):
             if self._latitude is not None:
                 self._draft_location_label.setText(
                     f"Ubicación recuperada: {self._latitude:g}°, {self._longitude:g}°; "
-                    f"desfase UTC: {self._utc_offset_hours if self._utc_offset_hours is not None else 'inferido'}. "
+                    f"horario: {self._utc_offset_hours if self._utc_offset_hours is not None else 'aprox. longitud'}. "
                     "Para cambiarla, elige una ubicación en Búsqueda."
                 )
             self._session_name.setText(data["name"])
@@ -426,7 +426,7 @@ class PlanificacionTab(QWidget):
     # ------------------------------------------------------------------ #
     @refresh_without_starting_draft
     def set_location(
-        self, latitude: float, longitude: float, utc_offset_hours: float | None
+        self, latitude: float, longitude: float, utc_offset_hours: float | str | None
     ) -> None:
         """Recibe la ubicación de la barra compartida: refresca curva e invalida plan."""
         self._latitude = latitude
@@ -746,8 +746,7 @@ class PlanificacionTab(QWidget):
             ideal = item.get("windows", {}).get("ideal") or {}
             ideal_text = (
                 " · ".join(
-                    format_hour_range(start, end)
-                    for start, end in ideal.get("ranges", [])
+                    ideal.get("display_ranges") or [format_hour_range(start, end) for start, end in ideal.get("ranges", [])]
                 )
                 or "sin ventana"
             )

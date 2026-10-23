@@ -106,7 +106,6 @@ def test_ubicaciones_seccion_unica_y_vista_previa_mapa(qt_app, tmp_path):
     from PyQt6.QtCore import QPoint
     from PyQt6.QtGui import QImage
     from PyQt6.QtWidgets import (
-        QCheckBox,
         QComboBox,
         QDoubleSpinBox,
         QLabel,
@@ -124,7 +123,7 @@ def test_ubicaciones_seccion_unica_y_vista_previa_mapa(qt_app, tmp_path):
     # Un solo marco: título + fila 1 + fila 2.
     assert tab._ficha.objectName() == "GroupFrame"
     lay = tab._ficha.layout()
-    assert lay.count() == 3, "la ficha debe ser título y dos filas de campos"
+    assert lay.count() == 4, "la ficha separa identidad, cielo y horario para no apretar sus controles"
     cabecera = lay.itemAt(0).layout()
     assert cabecera.itemAt(0).widget().text() == "Ubicación"
     botones = [
@@ -161,22 +160,18 @@ def test_ubicaciones_seccion_unica_y_vista_previa_mapa(qt_app, tmp_path):
         "QDoubleSpinBox",
         "QLabel",
         "QDoubleSpinBox",
-        "QCheckBox",
-        "QLabel",
-        "QDoubleSpinBox",
     ]
     assert [w.text() for w in widgets2 if isinstance(w, QLabel)] == [
         "Bortle",
         "SQM",
         "Seeing",
-        "Desfase",
     ]
     assert isinstance(tab._bortle, QComboBox)
     assert isinstance(tab._sqm, QDoubleSpinBox)
     assert isinstance(tab._seeing, QDoubleSpinBox)
-    assert isinstance(tab._auto, QCheckBox)
-    assert tab._auto.text() == "Huso automático"
-    assert tab._auto.isChecked()
+    assert tab._clock_mode.currentData() == "fixed"
+    assert tab._huso.isEnabled()
+    assert not tab._timezone.isEnabled()
 
     # Los rótulos de las dos cajas antiguas ya no existen.
     textos = [r.text() for r in tab.findChildren(QLabel)]
@@ -393,7 +388,8 @@ def test_ubicacion_altitud_desfase_y_sqm(qt_app, memory_db):
     tab._bortle.setCurrentIndex(5)
     tab._seeing.setValue(2.5)
 
-    # Huso automático: el Desfase indica round(-84,282 / 15) = -6 y fijo.
+    # El modo heredado sigue explícito: no se convierte en una zona inferida.
+    tab._clock_mode.setCurrentIndex(tab._clock_mode.findData("legacy"))
     assert tab._huso.value() == -6.0
     assert not tab._huso.isEnabled()
 
@@ -413,11 +409,11 @@ def test_ubicacion_altitud_desfase_y_sqm(qt_app, memory_db):
     assert not tab._huso.isEnabled()
 
     # Sin el check, el desfase se indica a mano y se persiste.
-    tab._auto.setChecked(False)
+    tab._clock_mode.setCurrentIndex(tab._clock_mode.findData("fixed"))
     assert tab._huso.isEnabled()
     tab._huso.setValue(-5.0)
     tab._guardar()
-    assert tab._auto.isChecked() is False
+    assert tab._clock_mode.currentData() == "fixed"
     assert tab._huso.value() == -5.0
 
     # SQM: con valor, «-» al salir del campo → «—» (0), no el valor viejo.

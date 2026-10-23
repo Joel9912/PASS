@@ -90,8 +90,8 @@ def create(location: Location) -> int:
     conn = get_connection()
     cur = conn.execute(
         "INSERT INTO locations (name, latitude, longitude, altitude,"
-        " utc_offset_hours, obstacles, lp, bortle, sqm, seeing_arcsec, consider_lp)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " utc_offset_hours, obstacles, lp, bortle, sqm, seeing_arcsec, consider_lp, timezone_id)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             location.name,
             location.latitude,
@@ -104,6 +104,7 @@ def create(location: Location) -> int:
             location.sqm,
             location.seeing_arcsec,
             int(location.consider_lp),
+            location.timezone_id,
         ),
     )
     conn.commit()
@@ -129,7 +130,7 @@ def update(location: Location) -> None:
     conn.execute(
         "UPDATE locations SET name = ?, latitude = ?, longitude = ?, altitude = ?,"
         " utc_offset_hours = ?, obstacles = ?, lp = ?, bortle = ?, sqm = ?,"
-        " seeing_arcsec = ?, consider_lp = ? WHERE id = ?",
+        " seeing_arcsec = ?, consider_lp = ?, timezone_id = ? WHERE id = ?",
         (
             location.name,
             location.latitude,
@@ -142,6 +143,7 @@ def update(location: Location) -> None:
             location.sqm,
             location.seeing_arcsec,
             int(location.consider_lp),
+            location.timezone_id,
             location.id,
         ),
     )

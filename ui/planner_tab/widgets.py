@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import math
 import sqlite3
-from datetime import datetime
 
 import pyqtgraph as pg
 from PyQt6.QtCore import (
@@ -45,7 +44,6 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from planners.analytical_transit import local_utc_offset
 from planners.moon_distance import (
     WINDOW_IDEAL,
     WINDOW_POSSIBLE,
@@ -106,20 +104,18 @@ def fmt_hhmm(hour_decimal: float) -> str:
 def iso_to_local_hours(
     iso_utc: str | None,
     longitude: float,
-    utc_offset_hours: float | None = None,
+    utc_offset_hours: float | str | None = None,
 ) -> float | None:
     """Instante ISO en UTC a horas decimales locales (``None`` si falta).
 
-    El paso a hora local lo hace :func:`local_utc_offset`: si la ubicación
-    tiene desfase guardado se usa (hora de reloj); si no, se infiere el
-    huso de la longitud (``round(lon/15)``).
+    Acepta zona IANA según instante, desfase fijo o aproximación heredada
+    por longitud; nunca consulta el huso del ordenador.
     """
     if not iso_utc:
         return None
-    moment = datetime.fromisoformat(iso_utc)
-    utc_hours = moment.hour + moment.minute / 60.0 + moment.second / 3600.0
-    offset = local_utc_offset(longitude, utc_offset_hours)
-    return (utc_hours + offset) % 24.0
+    from planners.timezones import local_hours
+
+    return local_hours(iso_utc, longitude, utc_offset_hours)
 
 
 def format_duration(hours: float) -> str:
@@ -154,9 +150,7 @@ def _window_text(summary: dict[str, dict], key: str, prefix: str) -> str:
     ranges = entry.get("ranges") or []
     if not ranges:
         return f"{prefix}: sin ventana"
-    text = " y ".join(
-        format_hour_range(start, end) for start, end in ranges
-    )
+    text = " y ".join(entry.get("display_ranges") or [format_hour_range(start, end) for start, end in ranges])
     return f"{prefix}: {text} ({format_duration(entry.get('hours', 0.0))})"
 
 
@@ -240,7 +234,7 @@ def _type_label(type_code: str | None) -> str:
 
 #: Husos horarios ofrecidos en el selector (frente a UTC, horas).
 UTC_OFFSETS: tuple[float, ...] = tuple(
-    step * 0.5 for step in range(-24, 29)   # -12.0 … +14.0 en pasos de 0.5
+    step * 0.25 for step in range(-48, 57)
 )
 
 
@@ -310,9 +304,8 @@ class LocationBar(QFrame):
     de las condiciones meteorológicas), compactado en tres filas para caber
     en la columna izquierda; el resto de subpestañas lo consumen por señal.
 
-    El desfase puede quedar en «Auto» (se infiere del huso estándar de la
-    longitud de la ubicación) o fijado a una hora de reloj concreta (override
-    para husos políticos que no coinciden con la longitud).
+    Transmite zona IANA o desfase fijo. La aproximación heredada por longitud
+    queda explícitamente rotulada y no se presenta como zona legal.
     """
 
     location_changed = pyqtSignal(float, float, object)  # lat, lon, offset|None
@@ -388,15 +381,18 @@ class LocationBar(QFrame):
         self._offset = QComboBox()
         # «Auto» (None) se infiere de la longitud de la ubicación en
         # local_utc_offset (round(lon/15)); nunca la hora del sistema.
-        self._offset.addItem("Auto", None)
+        self._offset.addItem("Aprox. longitud", None)
         for value in UTC_OFFSETS:
-            self._offset.addItem(f"{value:+.1f} h", value)
+            self._offset.addItem(f"{value:+g} h", value)
+        from planners.timezones import zone_names
+
+        for key in zone_names():
+            self._offset.addItem(key, key)
         # 170 px: «Solar (longitud)» + desplegable pedían 158; margen de sobra.
         self._offset.setFixedWidth(170)
         self._offset.setToolTip(
-            "Desfase horario de la ubicación.\n"
-            "«Auto» lo infiere de la longitud (huso estándar);\n"
-            "o fija una hora de reloj concreta (p. ej. España +1/+2)."
+            "Zona IANA: ajusta según fecha, incluido verano, sin red.\n"
+            "Número: desfase fijo manual. Aprox. longitud: heredada, no hora legal."
         )
         self._offset.currentIndexChanged.connect(self._emit)
         offset_row.addWidget(self._offset)
@@ -421,12 +417,11 @@ class LocationBar(QFrame):
         """Longitud visible, en grados (-180 … 180)."""
         return self._longitude.value()
 
-    def utc_offset_hours(self) -> float | None:
+    def utc_offset_hours(self) -> float | str | None:
         """Desfase horario a usar en los cálculos.
 
-        «Auto» → ``None``, para que la ubicación infiera su huso de la
-        longitud (``round(lon/15)``); un valor fijo → ese desfase de reloj
-        (override para husos políticos como España o la India).
+        Texto: identificador IANA; número: fijo; None: aproximación heredada.
+        Se transmite la zona, no el desfase de hoy, para calcular cada fecha.
         """
         return self._offset.currentData()
 
@@ -510,8 +505,11 @@ class LocationBar(QFrame):
             self._loading = True
             self._latitude.setValue(float(location.get("latitude") or 0.0))
             self._longitude.setValue(float(location.get("longitude") or 0.0))
-            offset = location.get("utc_offset_hours")
+            offset = location.get("timezone_id") if location.get("timezone_id") is not None else location.get("utc_offset_hours")
             at = self._offset.findData(offset)
+            if at < 0:
+                self._offset.addItem(str(offset), offset)
+                at = self._offset.count() - 1
             self._offset.setCurrentIndex(max(at, 0))
             self._loading = False
         self._emit()
@@ -958,6 +956,7 @@ class DayNightBar(QWidget):
         }
         #: (inicio, fin) en horas locales desenvueltas; None → día completo.
         self._range: tuple[float, float] | None = None
+        self._formatter = None
 
     def set_marks(
         self,
@@ -965,6 +964,7 @@ class DayNightBar(QWidget):
         dusk: float | None,
         dawn: float | None,
         sunrise: float | None,
+        formatter=None,
     ) -> None:
         """Guarda los 4 hitos (hora local) y recalcula el rango visible.
 
@@ -973,6 +973,7 @@ class DayNightBar(QWidget):
         barra pinta el día completo, de 00 h a 24 h.
         """
         self._marks = {"sunset": sunset, "dusk": dusk, "dawn": dawn, "sunrise": sunrise}
+        self._formatter = formatter
         # Eje dinámico: de 1 h antes de la puesta a 1 h después de la salida.
         if sunset is not None and sunrise is not None:
             start = sunset - BAR_RANGE_MARGIN_HOURS
@@ -1001,7 +1002,7 @@ class DayNightBar(QWidget):
         px_per_hour = width / max(end - start, 1e-9)
         step = TICK_STEPS_HOURS[-1]
         for candidate in TICK_STEPS_HOURS:
-            if candidate * px_per_hour >= TICK_LABEL_WIDTH:
+            if candidate * px_per_hour >= (110 if self._formatter else TICK_LABEL_WIDTH):
                 step = candidate
                 break
 
@@ -1010,7 +1011,7 @@ class DayNightBar(QWidget):
         for hour in range(math.ceil(start), math.floor(end) + 1):
             if hour % step:
                 continue
-            label = fmt_hhmm(hour % 24)
+            label = self._formatter(hour) if self._formatter else fmt_hhmm(hour % 24)
             if label in seen:
                 continue
             seen.add(label)
@@ -1077,7 +1078,7 @@ class DayNightBar(QWidget):
 
         for x in range(int(rect.width())):
             hour = start + (x + 0.5) / width * span
-            kind = self._kind(hour % 24.0)
+            kind = self._kind(hour if self._formatter else hour % 24.0)
             color = {
                 "day": COLOR_DAY,
                 "twilight": COLOR_TWILIGHT,
@@ -1100,11 +1101,12 @@ class DayNightBar(QWidget):
             x = rect.left() + (hour - start) / span * rect.width()
             painter.drawLine(QPointF(x, rect.bottom()), QPointF(x, rect.bottom() + 2))
             # La etiqueta no se sale del widget en los extremos del rango.
-            left = min(max(x - 16.0, 0.0), max(self.width() - 32.0, 0.0))
+            label_width = 110 if self._formatter else 32
+            left = min(max(x - label_width / 2, 0.0), max(self.width() - label_width, 0.0))
             painter.drawText(
-                QRectF(left, rect.bottom() + 3, 32, 13),
+                QRectF(left, rect.bottom() + 3, label_width, 13),
                 Qt.AlignmentFlag.AlignCenter,
-                fmt_hhmm(hour % 24),
+                self._formatter(hour) if self._formatter else fmt_hhmm(hour % 24),
             )
 
         # Hitos de la noche: si caen fuera del rango, no se pintan
@@ -1240,7 +1242,7 @@ class EphemerisPanel(QFrame):
         # Estado actual (para poder refrescar tras mover la ubicación)
         self._latitude = 0.0
         self._longitude = 0.0
-        self._utc_offset_hours: float | None = None
+        self._utc_offset_hours: float | str | None = None
 
     # -- API ----------------------------------------------------------------
     def set_date(self, date_iso: str) -> None:
@@ -1256,7 +1258,7 @@ class EphemerisPanel(QFrame):
         latitude: float,
         longitude: float,
         date_iso: str,
-        utc_offset_hours: float | None = None,
+        utc_offset_hours: float | str | None = None,
     ) -> None:
         """Recalcula todo el panel para ``date_iso`` y la ubicación dada.
 
@@ -1295,20 +1297,37 @@ class EphemerisPanel(QFrame):
             """ISO UTC → horas locales con la ubicación y el desfase vigentes."""
             return iso_to_local_hours(iso, longitude, utc_offset_hours)
 
-        self._bar.set_marks(
-            _local(info.sunset),
-            _local(info.astronomical_dusk),
-            _local(info.astronomical_dawn),
-            _local(info.sunrise),
-        )
+        def _label(iso: str | None) -> str:
+            """Distingue horas civiles repetidas con su desfase, sin alterar los instantes UTC de las efemérides."""
+            from planners.timezones import clock_label
 
-        sunset = _local(info.sunset)
-        sunrise = _local(info.sunrise)
+            if iso and isinstance(utc_offset_hours, str):
+                return clock_label(iso, longitude, utc_offset_hours)
+            return _local_label(_local(iso))
+
+        if isinstance(utc_offset_hours, str):
+            from datetime import datetime, timedelta
+
+            from planners.timezones import clock_label, local_boundary, utc_moment
+
+            start = local_boundary(datetime.fromisoformat(date_iso).replace(hour=16), utc_offset_hours)
+
+            def _axis(iso):
+                """Sitúa hitos por tiempo real transcurrido, sin saltos del reloj civil."""
+                return 16 + (utc_moment(iso) - start).total_seconds() / 3600 if iso else None
+
+            self._bar.set_marks(
+                *map(_axis, (info.sunset, info.astronomical_dusk, info.astronomical_dawn, info.sunrise)),
+                formatter=lambda hour: clock_label(start + timedelta(hours=hour - 16), longitude, utc_offset_hours),
+            )
+        else:
+            self._bar.set_marks(_local(info.sunset), _local(info.astronomical_dusk), _local(info.astronomical_dawn), _local(info.sunrise))
+
         # Como el original: puesta → salida en naranja.
         self._sunset_label.setText(
             "Puesta de Sol: "
-            f'<span style="color:#f59e0b">{_local_label(sunset)} – '
-            f"{_local_label(sunrise)}</span>"
+            f'<span style="color:#f59e0b">{_label(info.sunset)} – '
+            f"{_label(info.sunrise)}</span>"
         )
 
         dusk = _local(info.astronomical_dusk)
@@ -1319,8 +1338,8 @@ class EphemerisPanel(QFrame):
             # Y la noche astronómica en azul.
             self._night_label.setText(
                 "Noche astronómica: "
-                f'<span style="color:#60a5fa">{_local_label(dusk)} – '
-                f"{_local_label(dawn)}</span>"
+                f'<span style="color:#60a5fa">{_label(info.astronomical_dusk)} – '
+                f"{_label(info.astronomical_dawn)}</span>"
             )
 
     def show_invalid_date(self, message: str) -> None:
@@ -1525,10 +1544,10 @@ class TransitCurve(QWidget):
         )
 
     # -- Formato del eje ----------------------------------------------------
-    @staticmethod
-    def _tick_strings(values, scale, spacing) -> list[str]:
+    def _tick_strings(self, values, scale, spacing) -> list[str]:
         """Etiquetas del eje inferior en ``HH:MM`` (horas desenvueltas)."""
-        return [fmt_hhmm(value) for value in values]
+        curve = getattr(self, "_clock_curve", None)
+        return [curve.axis_label(value) if curve is not None else fmt_hhmm(value) for value in values]
 
     # -- API ----------------------------------------------------------------
     def clear(self, message: str = CURVE_EMPTY_SUBTITLE) -> None:
@@ -1543,6 +1562,8 @@ class TransitCurve(QWidget):
         30° fijaba el eje vertical alrededor de ese valor.
         """
         self._title.setText(CURVE_TITLE)
+        self._clock_curve = None
+        self._plot.getPlotItem().getAxis("bottom").picture = None
         self._subtitle.setText(message)
         # La línea de ventanas se reserva con texto en blanco; NO se oculta
         # (ocultarla cambiaba el mínimo del panel al llegar los datos y
@@ -1591,24 +1612,24 @@ class TransitCurve(QWidget):
         illumination_pct = curve.moon_illumination * 100.0
         min_dist = min_moon_distance(illumination_pct)
 
-        hours = unwrap_hours(curve.hours_local)
-        summary = capture_summary_from_samples(
-            curve.altitudes,
-            curve.moon_separations,
-            curve.moon_altitudes,
-            curve.astro_night,
-            illumination_pct,
-            hours,
-            sun_altitudes=getattr(curve, "sun_altitudes", None),
+        self._clock_curve = curve if isinstance(getattr(curve, "clock", None), str) else None
+        axis = self._plot.getPlotItem().getAxis("bottom")
+        axis.picture = None
+        axis.update()
+        hours = curve.axis_hours if self._clock_curve is not None else unwrap_hours(curve.hours_local)
+        summary = curve.capture_summary() if self._clock_curve is not None else capture_summary_from_samples(
+            curve.altitudes, curve.moon_separations, curve.moon_altitudes, curve.astro_night,
+            illumination_pct, hours, sun_altitudes=getattr(curve, "sun_altitudes", None),
         )
 
         # --- Cabecera (título fijo; el subtítulo resume el tránsito)
         transit = curve.hours_local[curve.transit_index]
+        transit_label = curve.axis_label(hours[curve.transit_index]) if self._clock_curve is not None else fmt_hhmm(transit)
         peak = curve.altitudes[curve.transit_index]
         worst_sep = min(curve.moon_separations)
         self._subtitle.setText(
             f"Tránsito: {target_label} · Máx {peak:.1f}° · "
-            f"Culm. {fmt_hhmm(transit)} · Luna {illumination_pct:.0f} % · "
+            f"Culm. {transit_label} · Luna {illumination_pct:.0f} % · "
             f"Separación {worst_sep:.0f}° · Mínimo {min_dist:.0f}°"
         )
         # Rangos de captura: Ideal y Posible (no ideal) con horas y duración.

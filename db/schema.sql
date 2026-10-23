@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS locations (
     -- Desfase horario frente a UTC (horas). NULL = usar la longitud como
     -- hora solar local (aproximación) hasta que el usuario lo indique.
     utc_offset_hours REAL,
+    timezone_id TEXT,
     -- Bloque de sitio: JSON con SIEMPRE las 8 direcciones (N, NE, E, SE, S,
     -- SO, O, NO). obstacles = {dir: grados 0/15/30/45/60}.
     obstacles   TEXT,

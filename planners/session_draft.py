@@ -44,7 +44,12 @@ def validate(data: dict) -> dict:
     location = data["location"]
     if not isinstance(location, list) or len(location) != 3:
         raise DraftError("Ubicación inválida.")
-    for value, low, high in zip(location, (-90, -180, -24), (90, 180, 24), strict=True):
+    for index, (value, low, high) in enumerate(zip(location, (-90, -180, -24), (90, 180, 24), strict=True)):
+        if index == 2 and isinstance(value, str):
+            from .timezones import zone
+
+            zone(value)
+            continue
         if value is not None:
             _number(value, low, high)
     if (location[0] is None) != (location[1] is None):

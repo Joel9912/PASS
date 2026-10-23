@@ -44,6 +44,12 @@ def _precio_peso(price_eur: float | None, weight_kg: float | None = None) -> Non
 def validar_ubicacion(location: Location) -> None:
     """Rangos geográficos, bloque de sitio y Bortle obligatorio (1-9)."""
     _nombre(location.name, "Ubicación")
+    if location.timezone_id is not None:
+        from planners.timezones import zone
+
+        zone(location.timezone_id)
+        if location.utc_offset_hours is not None:
+            raise ValueError("Elige zona horaria o desfase fijo, no ambos.")
     if not -90 <= location.latitude <= 90:
         raise ValueError("Latitud fuera de rango: debe estar entre -90 y 90.")
     if not -180 <= location.longitude <= 180:

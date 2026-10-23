@@ -189,7 +189,7 @@ def best_dates(
     date_range_days: int = DEFAULT_RANGE_DAYS,
     top_n: int = DEFAULT_TOP_N,
     weights: CaptureWeights | None = None,
-    utc_offset_hours: float | None = None,
+    utc_offset_hours: float | str | None = None,
 ) -> list[dict]:
     """Mejores noches para captar ``target_ra_hours``/``target_dec_deg``.
 
@@ -296,18 +296,20 @@ def best_dates(
             target_ra_hours, target_dec_deg, latitude, longitude, item["date"],
             utc_offset_hours,
         )
-        item["windows"] = capture_summary_from_samples(
-            curve.altitudes,
-            curve.moon_separations,
-            curve.moon_altitudes,
-            curve.astro_night,
-            item["_illumination_pct"],
-            curve.hours_local,
-            sun_altitudes=getattr(curve, "sun_altitudes", None),
-        )
-        item["transit_local"] = format_hhmm(
-            local_utc_offset(longitude, utc_offset_hours) + item["transit_utc_hours"]
-        )
+        if isinstance(utc_offset_hours, str):
+            from .timezones import clock_label
+
+            item["windows"] = curve.capture_summary()
+            moment = datetime.fromisoformat(item["date"]) + timedelta(hours=item["transit_utc_hours"])
+            item["transit_local"] = clock_label(moment, longitude, utc_offset_hours)
+        else:
+            item["windows"] = capture_summary_from_samples(
+                curve.altitudes, curve.moon_separations, curve.moon_altitudes, curve.astro_night,
+                item["_illumination_pct"], curve.hours_local, sun_altitudes=getattr(curve, "sun_altitudes", None),
+            )
+            item["transit_local"] = format_hhmm(
+                local_utc_offset(longitude, utc_offset_hours) + item["transit_utc_hours"]
+            )
         item.pop("_illumination_pct", None)
         item.pop("_min_dist", None)
 
