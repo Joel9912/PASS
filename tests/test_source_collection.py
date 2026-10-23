@@ -353,3 +353,111 @@ def test_coleccion_no_se_degrada_a_base_mezclada_ni_descarga_antes_de_rechazar(c
         update_packages(path, old["packages"], ["openngc"], reader=reader)
     update_packages(path, old["packages"], ["openngc"], reader=reader, only_missing=True)
     assert not calls and editions.active_id(personal) == before
+
+
+def test_lecturas_repetidas_no_recorren_identidades_ya_verificadas_pero_revalidan_bytes(collection, monkeypatch):
+    """Una prueba semántica válida se reutiliza por contenido, sin sustituir la comprobación de los archivos actuales."""
+    from collections import OrderedDict
+
+    from db import source_collection
+
+    personal, path, manifest, reader, _calls, _sources = collection
+    data_packages.install(path, manifest, reader=reader)
+    monkeypatch.setattr(source_collection, "_SOURCE_PROOFS", OrderedDict(), raising=False)
+    monkeypatch.setattr(source_collection, "_COLLECTION_PROOFS", OrderedDict(), raising=False)
+    checks, digests = [], []
+    original_check, original_digest = source_collection._check_crosses, editions._digest
+
+    def checked(*args):
+        """Cuenta recorridos semánticos completos sin alterar su resultado."""
+        checks.append(True)
+        return original_check(*args)
+
+    def hashed(file):
+        """Cuenta huellas efectivas, no fechas de modificación usadas como sustituto."""
+        digests.append(file)
+        return original_digest(file)
+
+    monkeypatch.setattr(source_collection, "_check_crosses", checked)
+    monkeypatch.setattr(editions, "_digest", hashed)
+    for _ in range(2):
+        with editions.catalog_snapshot(personal) as snapshot:
+            assert snapshot.execute("SELECT COUNT(*) FROM catalog").fetchone()[0] == 1
+    assert len(checks) == 1
+    assert len(digests) == 2 * (1 + len(manifest["packages"]))
+
+
+def test_cache_de_validacion_no_admite_cambiar_el_cruce_con_los_mismos_archivos(collection):
+    """La prueba del conjunto incluye sus cruces, no solo el SHA de las fuentes."""
+    personal, path, manifest, reader, _calls, _sources = collection
+    data_packages.install(path, manifest, reader=reader)
+    before = editions.active_id(personal)
+    manifest["edition"] = "private-invalid-cross"
+    manifest["cross_identifications"] = []
+    with pytest.raises(ValueError, match="cruce revisado"):
+        data_packages.install(path, manifest, reader=reader)
+    assert editions.active_id(personal) == before
+
+
+def test_cache_no_oculta_fuente_alterada_con_mismo_tamano_y_mtime(collection):
+    """Conservar el tamaño y restaurar mtime no convierte bytes alterados en una fuente verificada."""
+    import os
+
+    personal, path, manifest, reader, _calls, _sources = collection
+    data_packages.install(path, manifest, reader=reader)
+    with editions.catalog_snapshot(personal):
+        pass
+    record = editions._record(personal, editions.active_id(personal))
+    with closing(sqlite3.connect(path.parent / record["relative_path"])) as index:
+        relative = index.execute("SELECT relative_path FROM source_components LIMIT 1").fetchone()[0]
+    file = path.parent / relative
+    stat = file.stat()
+    with file.open("r+b") as stream:
+        stream.seek(-1, 2)
+        value = stream.read(1)
+        stream.seek(-1, 2)
+        stream.write(bytes([value[0] ^ 1]))
+    os.utime(file, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+    assert file.stat().st_size == stat.st_size and file.stat().st_mtime_ns == stat.st_mtime_ns
+    assert not editions.status(personal)["available"]
+
+
+def test_pruebas_de_validacion_en_memoria_tienen_limite_y_no_guardan_datos():
+    """El registro de contenido validado no crece sin límite ni retiene payloads o conexiones."""
+    from collections import OrderedDict
+
+    from db.source_collection import _known_proof, _remember_proof
+
+    cache = OrderedDict()
+    for index in range(10):
+        _remember_proof(cache, (str(index),), 3)
+    assert list(cache) == [("7",), ("8",), ("9",)]
+    assert not _known_proof(cache, ("0",)) and _known_proof(cache, ("7",))
+    assert list(cache)[-1] == ("7",) and set(cache.values()) == {True}
+
+
+def test_cambiar_prioridad_elige_ficha_entera_sin_rellenar_huecos_de_otra_fuente(collection):
+    """Una caché de validez no congela la prioridad ni convierte una magnitud ausente en la de otro proveedor."""
+    personal, path, manifest, reader, _calls, _sources = collection
+    data_packages.install(path, manifest, reader=reader)
+    manifest["packages"]["source0"]["priority"], manifest["packages"]["source2"]["priority"] = 2, 0
+    manifest["edition"] = "private-other-priority"
+    data_packages.install(path, manifest, reader=reader)
+    with editions.catalog_snapshot(personal) as catalog:
+        obj = lookup(catalog, "M31", "messier")
+        assert obj["ra_hours"] == 1.1 and obj["magnitude"] is None
+
+
+def test_busqueda_de_tabla_no_calcula_efemerides_por_cada_objeto(collection, monkeypatch):
+    """La tabla conserva tránsito analítico; el cálculo detallado no se introduce accidentalmente en el filtrado."""
+    from planners import ephemeris
+
+    _personal, path, manifest, reader, _calls, _sources = collection
+    data_packages.install(path, manifest, reader=reader)
+
+    def forbidden():
+        """Detecta selección de modelo por fila en lugar del cálculo analítico de la búsqueda."""
+        pytest.fail("La búsqueda no debe calcular efemérides por cada fila")
+
+    monkeypatch.setattr(ephemeris, "selected_model", forbidden)
+    assert len(celestial_search.search(celestial_search.SearchFilters(latitude=40, date_iso="2026-10-23"))) == 1

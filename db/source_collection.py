@@ -6,8 +6,10 @@ import io
 import json
 import os
 import sqlite3
+from collections import OrderedDict
 from contextlib import closing
 from pathlib import Path
+from threading import RLock
 from uuid import uuid4
 
 from . import catalog_editions as editions
@@ -15,6 +17,27 @@ from .catalog_records import insert_records, validate_continuity
 from .data_resources import prepare_resource, selected_resources
 
 SOURCE_FOLDER = "catalog-sources"
+_SOURCE_PROOFS = OrderedDict()
+_COLLECTION_PROOFS = OrderedDict()
+_PROOF_LOCK = RLock()
+
+
+def _known_proof(cache, key):
+    """Reutiliza únicamente una comprobación semántica previa; el llamante ya debe haber verificado los bytes actuales."""
+    with _PROOF_LOCK:
+        if key not in cache:
+            return False
+        cache.move_to_end(key)
+        return True
+
+
+def _remember_proof(cache, key, limit):
+    """Acota pruebas de contenido en memoria sin almacenar datos, rutas abiertas o conexiones SQLite."""
+    with _PROOF_LOCK:
+        cache[key] = True
+        cache.move_to_end(key)
+        while len(cache) > limit:
+            cache.popitem(last=False)
 
 
 def validate_payload(content, item):
@@ -146,6 +169,7 @@ def open_collection(root, index_path, manifest):
     try:
         conn.execute("PRAGMA temp_store=MEMORY")
         attached = []
+        source_proofs = []
         for number, (name, item) in enumerate(sorted(manifest["packages"].items(), key=lambda pair: pair[1]["priority"])):
             component = components[name]
             if component["package_sha256"] != item["sha256"]:
@@ -156,21 +180,32 @@ def open_collection(root, index_path, manifest):
                 raise ValueError("Fuente ausente o alterada.")
             alias = f"source_{number}"
             conn.execute(f"ATTACH DATABASE ? AS {alias}", (path.as_uri() + "?mode=ro",))
-            if conn.execute(f"PRAGMA {alias}.quick_check").fetchone()[0] != "ok":
-                raise ValueError("Fuente SQLite inválida.")
-            foreign = conn.execute(
-                f"SELECT 1 FROM {alias}.source_records WHERE source!=? OR json_extract(payload,'$.revision')!=? "
-                "OR COALESCE(json_extract(payload,'$.license'),?)!=? LIMIT 1",
-                (item["source_id"], item["revision"], item["license"], item["license"]),
-            ).fetchone()
-            if foreign or conn.execute(f"PRAGMA {alias}.foreign_key_check").fetchone():
-                raise ValueError("Fuente mezclada o relaciones locales inválidas.")
+            proof = (component["sha256"], item["source_id"], item["revision"], item["license"])
+            if not _known_proof(_SOURCE_PROOFS, proof):
+                if conn.execute(f"PRAGMA {alias}.quick_check").fetchone()[0] != "ok":
+                    raise ValueError("Fuente SQLite inválida.")
+                foreign = conn.execute(
+                    f"SELECT 1 FROM {alias}.source_records WHERE source!=? OR json_extract(payload,'$.revision')!=? "
+                    "OR COALESCE(json_extract(payload,'$.license'),?)!=? LIMIT 1",
+                    (item["source_id"], item["revision"], item["license"], item["license"]),
+                ).fetchone()
+                if foreign or conn.execute(f"PRAGMA {alias}.foreign_key_check").fetchone():
+                    raise ValueError("Fuente mezclada o relaciones locales inválidas.")
+                _remember_proof(_SOURCE_PROOFS, proof, 32)
+            source_proofs.append((name, item["priority"], proof))
             attached.append(alias)
         candidates = [f"SELECT *,{number} AS origin,row_id+{number * 1000000000} AS global_id FROM {alias}.objects"
                       for number, alias in enumerate(attached)]
         conn.execute("CREATE TEMP VIEW _candidates AS " + " UNION ALL ".join(candidates))
-        conn.execute("CREATE TEMP TABLE _chosen AS SELECT * FROM (SELECT *,ROW_NUMBER() OVER "
-                     "(PARTITION BY pass_id ORDER BY origin) AS preference FROM _candidates) WHERE preference=1")
+        choices = []
+        for number, alias in enumerate(attached):
+            query = f"SELECT o.*,{number} AS origin,o.row_id+{number * 1000000000} AS global_id FROM {alias}.objects o"
+            if number:
+                query += " WHERE " + " AND ".join(
+                    f"NOT EXISTS(SELECT 1 FROM {previous}.objects p WHERE p.pass_id=o.pass_id)" for previous in attached[:number]
+                )
+            choices.append(query)
+        conn.execute("CREATE TEMP TABLE _chosen AS " + " UNION ALL ".join(choices))
         conn.execute("CREATE UNIQUE INDEX chosen_identity ON _chosen(pass_id)")
         conn.execute("CREATE INDEX chosen_projection ON _chosen(origin,row_kind,row_id)")
         conn.execute("CREATE INDEX chosen_global_id ON _chosen(global_id,row_kind)")
@@ -183,7 +218,10 @@ def open_collection(root, index_path, manifest):
         for table in ("source_records", "designations", "object_relations"):
             separator = " UNION ALL " if table == "source_records" else " UNION "
             conn.execute(f"CREATE TEMP VIEW {table} AS " + separator.join(f"SELECT * FROM {alias}.{table}" for alias in attached))
-        _check_crosses(conn, manifest["cross_identifications"])
+        proof = (tuple(source_proofs), json.dumps(manifest["cross_identifications"], sort_keys=True, ensure_ascii=False))
+        if not _known_proof(_COLLECTION_PROOFS, proof):
+            _check_crosses(conn, manifest["cross_identifications"])
+            _remember_proof(_COLLECTION_PROOFS, proof, 8)
         conn.execute("PRAGMA query_only=ON")
         conn.execute("PRAGMA trusted_schema=OFF")
         return conn

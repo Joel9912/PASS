@@ -35,6 +35,7 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 - Captura Ideal reserva al menos cinco minutos dentro de ambos extremos de la noche astronómica; los márgenes válidos quedan como Posible.
 
 ### Corregido
+- Las búsquedas de colecciones reutilizan comprobaciones semánticas ya superadas por el mismo contenido, en vez de recorrer todas las identidades y relaciones en cada lectura. Siguen verificando los bytes actuales, las condiciones y los cruces, sin ocultar corrupción ni conservar conexiones entre hilos (B-0015).
 - El filtro de cúmulos incluye los tipos genéricos de SIMBAD, sin asignarles subtipos no conocidos (P-0018).
 - Las tablas conservan cada dimensión angular disponible y muestran `—` en el eje ausente, en lugar de repetir o perder una medida (U-0011).
 - Los fallos de recursos astronómicos se distinguen de una fecha fuera de rango: retiran resultados anteriores y no dejan el Planificador bloqueado ni cambian de modelo silenciosamente (U-0010).
