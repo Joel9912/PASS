@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **122 hallazgos**: 🔴 18 graves · 🟠 74 medios · 🟡 21 bajos · 9 decisiones (3 pendientes).
-Estado: ✅ 105 corregidos · 🟡 2 contenidos · ⏳ 5 pendientes · 🔎 1 sin reproducir.
+Estado: ✅ 106 corregidos · 🟡 2 contenidos · ⏳ 4 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -64,7 +64,7 @@ Estado: ✅ 105 corregidos · 🟡 2 contenidos · ⏳ 5 pendientes · 🔎 1 si
 | **B-0012** | La validación directa de recursos acepta formatos desconocidos si sus bytes se pueden leer como texto UTF-8. | ✅ `73d7329` |
 | **B-0013** | La preparación SIMBAD admite estrellas como objetos de espacio profundo por llevar una designación LDN/Barnard. | ✅ `30d9cd9` |
 | **B-0014** | Una edición con dos kernels planetarios puede activarse aunque los cálculos rechacen después esa selección ambigua. | ✅ `a42088d` |
-| **B-0015** | Cada lectura de una colección repite las comprobaciones semánticas completas de fuentes idénticas y ralentiza búsquedas y cálculos. | ⏳ |
+| **B-0015** | Cada lectura de una colección repite las comprobaciones semánticas completas de fuentes idénticas y ralentiza búsquedas y cálculos. | ✅ `cc444a2` |
 | **S-0008** | Mezcla de RAW y FITS en una misma sesión no se rechaza pese al contrato declarado. | ✅ `8210353` (validación por secuencia) |
 | **S-0009** | Una carpeta creada por una calibración fallida bloquea el reintento: `exists()` cuenta como «ya calibrada». Sigue vigente tras **S-0002**. | ✅ `1f91334` |
 | **S-0011** | `_hilo` se libera al recibir el resultado y no al emitir `finished`. | ✅ `7bf6c24` |

@@ -461,3 +461,49 @@ def test_busqueda_de_tabla_no_calcula_efemerides_por_cada_objeto(collection, mon
 
     monkeypatch.setattr(ephemeris, "selected_model", forbidden)
     assert len(celestial_search.search(celestial_search.SearchFilters(latitude=40, date_iso="2026-10-23"))) == 1
+
+
+def test_receta_cientifica_se_instala_con_fuentes_y_no_hace_fallback_si_se_pierde(collection, tmp_path, monkeypatch):
+    """Recorrido sintético de receta a selección: falta de kernel es error, no builtin con otro nombre."""
+    from planners import ephemeris
+    from scripts import preparar_efemerides as preparation
+    from tests.spk_factory import synthetic_spk
+
+    kernel, rules = tmp_path / "synthetic.bsp", tmp_path / "synthetic-rules.txt"
+    kernel.write_bytes(synthetic_spk())
+    rules.write_bytes(b"Reglas sinteticas para verificar el contrato, no condiciones oficiales.")
+    monkeypatch.setattr(preparation, "EXPECTED_KERNEL_SHA256", hashlib.sha256(kernel.read_bytes()).hexdigest())
+    monkeypatch.setattr(preparation, "EXPECTED_RULES_SHA256", hashlib.sha256(rules.read_bytes()).hexdigest())
+    personal, path, manifest, source_reader, _calls, _sources = collection
+    output = tmp_path / "ephemeris"
+    resources = preparation.prepare(kernel, rules, output, release_tag="v0.2-alpha")
+    manifest["resources"].update(resources)
+
+    def reader(url, limit):
+        """Combina adjuntos locales de prueba sin transportar archivos a la red."""
+        file = output / url.rsplit("/", 1)[1]
+        if file.is_file():
+            data = file.read_bytes()
+            assert len(data) <= limit
+            return data
+        return source_reader(url, limit)
+
+    data_packages.install(path, manifest, reader=reader)
+    model = ephemeris.selected_model()
+    assert model.path.is_file() and model.label == preparation.KERNEL_VERSION
+    assert model.sha256 == resources["ephemeris"]["sha256"]
+    assert preparation.NOTICE in data_packages.notices(personal)
+    model.path.unlink()
+    with pytest.raises(ValueError):
+        ephemeris.selected_model()
+
+
+def test_edicion_global_no_se_confunde_con_tag_de_release(collection, tmp_path):
+    """PASS.26.10 identifica el conjunto; v0.2-alpha solo declara el destino futuro de sus adjuntos."""
+    _personal, _path, manifest, _reader, _calls, sources = collection
+    with identity_registry(tmp_path / "registry.sqlite") as registry:
+        export_source_collection("PASS.26.10", tmp_path / "retarget", sources, registry,
+                                 crosses=manifest["cross_identifications"], release_tag="v0.2-alpha")
+    exported = json.loads((tmp_path / "retarget/data-manifest.json").read_bytes())
+    assert exported["edition"] == "PASS.26.10"
+    assert all("/download/v0.2-alpha/" in item["url"] for item in exported["packages"].values())

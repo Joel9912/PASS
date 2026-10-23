@@ -89,7 +89,7 @@ def export_identified(version, output, components, registry):
         json.dumps({"format": 1, "packages": packages}, indent=2), encoding="utf-8")
 
 
-def export_source_collection(version, output, sources, registry, *, crosses=(), resources=None):
+def export_source_collection(version, output, sources, registry, *, crosses=(), resources=None, release_tag=None):
     """Exporta fuentes independientes con condiciones explícitas; no mezcla sus fichas ni concede derechos jurídicos.
 
     Cada entrada tiene ``metadata`` del componente y ``groups`` de proyecciones
@@ -101,6 +101,9 @@ def export_source_collection(version, output, sources, registry, *, crosses=(), 
 
     if not isinstance(version, str) or not re.fullmatch(r"[A-Za-z0-9._-]+", version):
         raise ValueError("Versión no válida.")
+    release_tag = version if release_tag is None else release_tag
+    if not isinstance(release_tag, str) or not re.fullmatch(r"[A-Za-z0-9._-]+", release_tag):
+        raise ValueError("Destino de release no válido.")
     output = Path(output)
     if output.exists() or not isinstance(sources, dict) or not sources:
         raise ValueError("Se requieren fuentes explícitas y un destino nuevo.")
@@ -128,7 +131,7 @@ def export_source_collection(version, output, sources, registry, *, crosses=(), 
             raise ValueError("Fuente demasiado grande para el instalador.")
         filename = f"source-{name}-{version}.json.gz"
         item.update(payload_format=3, size=len(data), sha256=hashlib.sha256(data).hexdigest(),
-                    url=f"https://github.com/Joel9912/PASS/releases/download/{version}/{filename}")
+                    url=f"https://github.com/Joel9912/PASS/releases/download/{release_tag}/{filename}")
         packages[name], artifacts[filename] = item, data
     validate_crosses(by_id, {key for key, count in counts.items() if count > 1}, list(crosses))
     if not targets <= by_id.keys():
