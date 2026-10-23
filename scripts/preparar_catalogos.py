@@ -89,6 +89,60 @@ def export_identified(version, output, components, registry):
         json.dumps({"format": 1, "packages": packages}, indent=2), encoding="utf-8")
 
 
+def export_source_collection(version, output, sources, registry, *, crosses=(), resources=None):
+    """Exporta fuentes independientes con condiciones explícitas; no mezcla sus fichas ni concede derechos jurídicos.
+
+    Cada entrada tiene ``metadata`` del componente y ``groups`` de proyecciones
+    identificadas. Las prioridades y cruces se aportan expresamente; los datos
+    originales se mantienen dentro del archivo de su única fuente.
+    """
+    from db.source_collection import validate_crosses, validate_payload
+    from planners.data_packages import parse_manifest
+
+    if not isinstance(version, str) or not re.fullmatch(r"[A-Za-z0-9._-]+", version):
+        raise ValueError("Versión no válida.")
+    output = Path(output)
+    if output.exists() or not isinstance(sources, dict) or not sources:
+        raise ValueError("Se requieren fuentes explícitas y un destino nuevo.")
+    packages, artifacts, by_id, counts, targets = {}, {}, {}, {}, set()
+    for name, source in sources.items():
+        if not isinstance(source, dict) or set(source) != {"metadata", "groups"}:
+            raise ValueError("Preparación por fuente incompatible.")
+        item = dict(source["metadata"])
+        content = {"format": 3, "source_id": item.get("source_id"), "groups": source["groups"]}
+        validate_payload(content, item)
+        for component in source["groups"].values():
+            for record in component["records"]:
+                pass_id = record["pass_id"]
+                counts[pass_id] = counts.get(pass_id, 0) + 1
+                targets.update(relation["target"] for relation in record["relations"])
+                for original in record["sources"]:
+                    key = original["source"], original["key"]
+                    known = registry.execute("SELECT pass_id FROM source_records WHERE source=? AND source_key=?", key).fetchone()
+                    if known is None or known[0] != pass_id:
+                        raise ValueError("Identidad de fuente ajena al registro del preparador.")
+                    by_id.setdefault(pass_id, set()).add(key)
+        payload = json.dumps(content, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode("utf-8")
+        data = gzip.compress(payload, mtime=0)
+        if max(len(data), len(payload)) > catalog_packages.MAX_PACKAGE:
+            raise ValueError("Fuente demasiado grande para el instalador.")
+        filename = f"source-{name}-{version}.json.gz"
+        item.update(payload_format=3, size=len(data), sha256=hashlib.sha256(data).hexdigest(),
+                    url=f"https://github.com/Joel9912/PASS/releases/download/{version}/{filename}")
+        packages[name], artifacts[filename] = item, data
+    validate_crosses(by_id, {key for key, count in counts.items() if count > 1}, list(crosses))
+    if not targets <= by_id.keys():
+        raise ValueError("Relaciones con identidades ausentes.")
+    manifest = {"format": 3, "edition": version, "reader": {"min": 1, "max": 1},
+                "packages": packages, "resources": resources or {}, "cross_identifications": list(crosses)}
+    encoded = json.dumps(manifest, ensure_ascii=False, allow_nan=False).encode("utf-8")
+    parse_manifest(encoded)
+    output.mkdir(parents=True)
+    for name, data in artifacts.items():
+        (output / name).write_bytes(data)
+    (output / "data-manifest.json").write_bytes(encoded)
+
+
 def prepare(version, output):
     """Descarga en un sandbox y genera paquetes sin reutilizar datos del usuario."""
     if not re.fullmatch(r"[A-Za-z0-9._-]+", version):

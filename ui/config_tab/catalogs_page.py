@@ -117,6 +117,8 @@ class CatalogsPage(QWidget):
     def refresh(self):
         """No confunde catálogos heredados sin metadatos con una versión vigente."""
         versions = catalog_packages.installed(connection.get_connection())
+        groups = tuple(versions)
+        self._table.setRowCount(len(groups))
         health = status(connection.get_connection())
         try:
             edition = data_packages.describe(connection.get_connection())
@@ -129,16 +131,18 @@ class CatalogsPage(QWidget):
                 text += " · opcionales no instalados: " + ", ".join(edition["absent_optional"])
             self._edition_label.setText(text)
         self._pending = []
-        for row, group in enumerate(catalog_packages.GROUPS):
+        for row, group in enumerate(groups):
             version = versions[group]
             text = version["version"] if version else "Sin identificar"
             state = "Vigencia no comprobada"
-            if self._packages:
+            if self._packages and group in self._packages:
                 item = self._packages[group]
                 current = health["available"] and version and version.get("sha256") == item["sha256"]
                 state = "Actualizado" if current else "Paquete disponible"
                 if not current:
                     self._pending.append(group)
+            elif self._packages:
+                state = "No incluido en la edición consultada"
             if not health["available"]:
                 state = "Edición no disponible"
             date = version["date"] if version else "—"
@@ -170,6 +174,11 @@ class CatalogsPage(QWidget):
         self._restore.setEnabled(not self._busy and health["previous"])
         if health["prepared"] and self._status.text().startswith("Comprueba si"):
             self._status.setText("Hay archivos preparados sin activar; no se adoptarán ni borrarán automáticamente.")
+        self._table.setFixedHeight(
+            self._table.horizontalHeader().sizeHint().height()
+            + sum(self._table.rowHeight(row) for row in range(self._table.rowCount()))
+            + 2 * self._table.frameWidth() + 4
+        )
 
     def _submit(self, operation, *args):
         """Encola una sola operación y devuelve su resultado mediante señal Qt."""
@@ -287,7 +296,7 @@ class CatalogsPage(QWidget):
             self._status.setToolTip("")
             self.catalogs_changed.emit()
         elif isinstance(result, dict):
-            self._global_manifest = result if result.get("format") == 2 else None
+            self._global_manifest = result if result.get("format") in (2, 3) else None
             self._packages = result["packages"] if self._global_manifest else result
             self._status.setText("Comprobación completada.")
             self._status.setToolTip("")

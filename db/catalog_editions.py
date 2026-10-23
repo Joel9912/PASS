@@ -89,13 +89,20 @@ def _open(root: Path, record: dict) -> sqlite3.Connection:
     """Verifica tamaño/huella y abre readonly; una edición corrupta nunca se sustituye silenciosamente."""
     conn = None
     try:
-        if record["schema_version"] not in (1, 2):
+        if record["schema_version"] not in (1, 2, 3):
             raise CatalogUnavailableError("Formato de edición no compatible; se conserva sin convertir.")
         if record.get("resource_manifest") is not None:
             verify_binding(root, json.loads(record["resource_manifest"]), json.loads(record["versions"]))
         path = _path(root, record)
         if not path.is_file() or path.stat().st_size != record["size_bytes"] or _digest(path) != record["sha256"]:
             raise CatalogUnavailableError("La edición falta o su integridad no coincide con el registro.")
+        if record["schema_version"] == 3:
+            from .source_collection import open_collection
+
+            binding = json.loads(record["resource_manifest"])
+            if binding["manifest"]["format"] != 3:
+                raise ValueError("El índice por fuentes requiere un manifiesto de colección.")
+            return open_collection(root, path, binding["manifest"])
         conn = sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA query_only=ON")
@@ -292,6 +299,8 @@ def install_edition(db_path: Path, replacements: dict, versions: dict, groups, *
         root = _root(personal)
         personal.execute("BEGIN")
         before = active_id(personal)
+        if before and _record(personal, before)["schema_version"] == 3:
+            raise ValueError("Hay una colección por fuentes activa; actualiza el conjunto, no construyas una base mezclada.")
         if require_expected and before != expected_active:
             raise ValueError("La edición cambió mientras se preparaban los recursos; no se activa sobre otra selección.")
         if before and _record(personal, before)["resource_manifest"] and resource_manifest is None:
@@ -337,7 +346,7 @@ def install_edition(db_path: Path, replacements: dict, versions: dict, groups, *
 
 def _activate(personal: sqlite3.Connection, record: dict, versions: dict) -> None:
     """Confirma selección/versiones y vínculos aditivos; nunca restaura una copia vieja de la base personal."""
-    if record["schema_version"] == 2:
+    if record["schema_version"] in (2, 3):
         with closing(_open(_root(personal), record)) as catalog:
             link_personal_references(personal, catalog)
     personal.execute("INSERT OR REPLACE INTO settings VALUES (?,?)", (ACTIVE_KEY, record["edition_id"]))

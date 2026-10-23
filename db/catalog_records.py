@@ -12,7 +12,8 @@ TABLES = {
 
 def has_records(catalog) -> bool:
     """Comprueba las tablas de metadatos de una edición ya fijada por el llamante."""
-    tables = {row[0] for row in catalog.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    tables = {row[0] for row in catalog.execute("SELECT name FROM sqlite_master WHERE type IN ('table','view') "
+                                               "UNION SELECT name FROM sqlite_temp_master WHERE type IN ('table','view')")}
     return set(TABLES) <= tables
 
 

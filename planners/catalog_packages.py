@@ -85,6 +85,13 @@ def parse_manifest(data):
 
 def installed(conn):
     """Lee versiones confirmadas, sin atribuir una versión a catálogos antiguos."""
+    from db.catalog_editions import _record, active_id
+
+    current = active_id(conn)
+    if current:
+        record = _record(conn, current)
+        if record["schema_version"] == 3:
+            return json.loads(record["versions"])
     result = {}
     for group in GROUPS:
         row = conn.execute("SELECT value FROM settings WHERE key=?",
@@ -156,6 +163,16 @@ def update_packages(db_path, packages, groups, *, reader=None, only_missing=Fals
     Conserva tablas legacy y ediciones anteriores; solo selección/versiones
     se confirman en pass.db. Los archivos se validan antes de activarlos.
     """
+    from db.catalog_editions import _record, active_id
+
+    path = Path(db_path).absolute()
+    if path.is_file():
+        with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)) as personal:
+            current = active_id(personal)
+            if current and _record(personal, current)["schema_version"] == 3:
+                if only_missing:
+                    return
+                raise ValueError("Hay una colección por fuentes activa; no se admite actualizarla con paquetes mezclados.")
     prepared = {}
     records = {}
     reader = reader or _read

@@ -790,15 +790,15 @@ def _sky_connection() -> "object":
     conn.executescript(
         "CREATE TABLE stars (name TEXT, magnitude REAL, ra_hours REAL,"
         " dec_deg REAL, color TEXT, constellation TEXT);"
-        "CREATE TABLE catalog (object_id TEXT, catalog TEXT, messier_num INTEGER,"
+        "CREATE TABLE catalog (id INTEGER PRIMARY KEY, object_id TEXT, catalog TEXT, messier_num INTEGER,"
         " ngc_num INTEGER, name TEXT, type TEXT, magnitude REAL, ra_hours REAL,"
         " dec_deg REAL, size_major_arcmin REAL, size_minor_arcmin REAL,"
         " constellation TEXT);"
         "INSERT INTO stars VALUES ('Alfa', 1.5, 5.0, 20.0, 'A', 'Ori');"
         "INSERT INTO stars VALUES ('Beta', NULL, 6.0, -10.0, 'K', 'Ori');"
-        "INSERT INTO catalog VALUES ('M42', 'messier', 42, 42, 'Nebulosa',"
+        "INSERT INTO catalog VALUES (NULL, 'M42', 'messier', 42, 42, 'Nebulosa',"
         " 'gas', 4.0, 5.5, -5.0, 85.0, 60.0, 'Ori');"
-        "INSERT INTO catalog VALUES ('SIN RA', 'ngc', NULL, 999, NULL,"
+        "INSERT INTO catalog VALUES (NULL, 'SIN RA', 'ngc', NULL, 999, NULL,"
         " 'other', NULL, NULL, NULL, NULL, NULL, 'Ori');"
     )
     return conn

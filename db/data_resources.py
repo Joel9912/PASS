@@ -21,8 +21,12 @@ def _text(value):
 
 def validate_manifest(manifest: dict) -> None:
     """Valida compatibilidad, dependencias y contrato de archivos; no prueba cobertura, precisión ni derechos."""
-    if (not isinstance(manifest, dict) or set(manifest) != {"format", "edition", "reader", "packages", "resources"}
-            or type(manifest["format"]) is not int or manifest["format"] != 2):
+    fields = {"format", "edition", "reader", "packages", "resources"}
+    separated = isinstance(manifest, dict) and manifest.get("format") == 3
+    if separated:
+        fields.add("cross_identifications")
+    if (not isinstance(manifest, dict) or set(manifest) != fields
+            or type(manifest["format"]) is not int or manifest["format"] not in (2, 3)):
         raise ValueError("Manifiesto global no compatible.")
     _text(manifest["edition"])
     bounds = manifest["reader"]
@@ -31,10 +35,25 @@ def validate_manifest(manifest: dict) -> None:
             or not 1 <= bounds["min"] <= READER_PROTOCOL <= bounds["max"]):
         raise ValueError("Esta edición requiere otro protocolo lector de PASS.")
     packages, resources = manifest["packages"], manifest["resources"]
-    if not isinstance(packages, dict) or set(packages) != GROUPS or not isinstance(resources, dict):
+    if (not isinstance(packages, dict) or not isinstance(resources, dict)
+            or (not separated and set(packages) != GROUPS) or separated and not 1 <= len(packages) <= 8):
         raise ValueError("Componentes de edición incompletos.")
-    if set(resources) & GROUPS or len(resources) > 4096:
+    if set(resources) & set(packages) or len(resources) > 4096:
         raise ValueError("Identificadores de recursos repetidos o demasiados componentes.")
+    if separated:
+        if not isinstance(manifest["cross_identifications"], list):
+            raise ValueError("Lista de cruces revisados inválida.")
+        source_ids, priorities = set(), set()
+        for item in packages.values():
+            if not isinstance(item, dict):
+                raise TypeError("Fuente inválida.")
+            _text(item.get("source_id"))
+            if (item["source_id"] in source_ids or type(item.get("priority")) is not int
+                    or not 0 <= item["priority"] < 8 or item["priority"] in priorities
+                    or not isinstance(item.get("date"), str)):
+                raise ValueError("Fuente o prioridad repetidas/inválidas.")
+            source_ids.add(item["source_id"])
+            priorities.add(item["priority"])
     components = {**packages, **resources}
     for name, item in components.items():
         if not isinstance(name, str) or re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", name) is None or not isinstance(item, dict):
@@ -45,7 +64,7 @@ def validate_manifest(manifest: dict) -> None:
                 or not isinstance(item.get("sha256"), str) or re.fullmatch(r"[a-f0-9]{64}", item["sha256"]) is None):
             raise ValueError("Tamaño o huella de componente inválidos.")
         if name in packages:
-            if type(item.get("payload_format")) is not int or item["payload_format"] != 2:
+            if type(item.get("payload_format")) is not int or item["payload_format"] != (3 if separated else 2):
                 raise ValueError("La edición global requiere catálogos con procedencia explícita.")
         elif item.get("format") not in ("utf8-v1", "json-v1", "spk-planets-v1") or type(item.get("optional")) is not bool:
             raise ValueError("Formato de recurso no compatible; no se reinterpretan archivos desconocidos.")
@@ -89,7 +108,7 @@ def selected_resources(manifest: dict, optional=()) -> list[str]:
     selected = optional | {name for name, item in resources.items() if not item["optional"]}
     if sum(resources[name]["format"] == "spk-planets-v1" for name in selected) > 1:
         raise ValueError("Selecciona solo un modelo planetario para mantener cálculos coherentes.")
-    available = selected | GROUPS
+    available = selected | set(manifest["packages"])
     if any(set(resources[name]["requires"]) - available for name in selected):
         raise ValueError("Faltan dependencias en la selección opcional; selecciona explícitamente el conjunto requerido.")
     return sorted(selected)

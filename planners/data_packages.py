@@ -16,7 +16,8 @@ def parse_manifest(data) -> dict:
         raise ValueError("Manifiesto global demasiado grande.")
     manifest = json.loads(data)
     validate_manifest(manifest)
-    catalog_packages.parse_manifest(json.dumps({"format": 1, "packages": manifest["packages"]}))
+    if manifest["format"] == 2:
+        catalog_packages.parse_manifest(json.dumps({"format": 1, "packages": manifest["packages"]}))
     return manifest
 
 
@@ -28,9 +29,19 @@ def install(db_path, manifest: dict, *, reader=None, optional=None, expected_emp
     admite adjuntos PASS autorizados; la UI debe pedir consentimiento.
     """
     parse_manifest(json.dumps(manifest))
+    if manifest["format"] == 3:
+        from db.source_collection import install as install_sources
+
+        install_sources(db_path, manifest, reader=reader or catalog_packages._read, optional=optional,
+                        expected_empty=expected_empty)
+        return
     uri = Path(db_path).absolute().as_uri() + "?mode=rw"
     with closing(sqlite3.connect(uri, uri=True)) as personal:
         before = catalog_editions.active_id(personal)
+        if before and catalog_editions._record(personal, before)["schema_version"] == 3:
+            if expected_empty:
+                return
+            raise ValueError("Hay una colección por fuentes activa; no se admite degradarla a una base mezclada.")
         versions = catalog_packages.installed(personal)
         with catalog_editions.data_snapshot(personal) as (catalog, _resources, binding):
             if expected_empty and (before is not None or any(catalog.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone()

@@ -14,7 +14,7 @@ from db.connection import get_connection
 from planners.celestial_search import designation_key
 
 _STAR_SQL = "SELECT ra_hours, dec_deg, magnitude, color FROM stars ORDER BY magnitude"
-_OBJECT_SQL = ("SELECT object_id, catalog, ra_hours, dec_deg, magnitude, rowid FROM catalog"
+_OBJECT_SQL = ("SELECT object_id, catalog, ra_hours, dec_deg, magnitude, id FROM catalog"
                " WHERE ra_hours IS NOT NULL AND dec_deg IS NOT NULL")
 
 
@@ -75,13 +75,13 @@ def _objects(rows, claims=(), identities=()) -> dict:
 
 def _target_claims(catalog, *, identified: bool) -> tuple[list, list]:
     """Conserva candidaturas incluso sin posición, para que no parezcan inequívocas solo por no poder pintarlas."""
-    claims = list(catalog.execute("SELECT object_id,catalog,rowid FROM catalog"))
+    claims = list(catalog.execute("SELECT object_id,catalog,id FROM catalog"))
     identities = []
     if identified and has_records(catalog):
         identities = list(catalog.execute("SELECT pass_id,row_id FROM objects WHERE row_kind='catalog'"))
         claims.extend(catalog.execute(
-            "SELECT d.designation,d.namespace,c.rowid FROM designations d JOIN objects o ON o.pass_id=d.pass_id "
-            "JOIN catalog c ON o.row_kind='catalog' AND o.row_id=c.rowid"
+            "SELECT d.designation,d.namespace,o.row_id FROM designations d JOIN objects o ON o.pass_id=d.pass_id "
+            "WHERE o.row_kind='catalog'"
         ))
     return claims, identities
 

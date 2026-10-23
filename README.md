@@ -37,6 +37,7 @@ pip install -r requirements.txt
 - **SirIL solo es necesario para la pestaña Apilador.** El resto del programa (Planificador, Equipo, etc.) funciona sin él.
 - Las actualizaciones preparan el catálogo en `data/catalog-editions/`; los datos personales permanecen en `data/pass.db` y las tablas antiguas se conservan. **Configuración → Catálogos → Recuperar edición anterior** cambia solo el catálogo, no tus notas o sesiones posteriores. Si una edición falta o falla su integridad, no se activa otra automáticamente. No borres los archivos de ediciones mientras estén en uso.
 - Las ediciones globales también conservan sus recursos en `data/edition-resources/`. Recuperar selecciona conjuntamente catálogo y recursos anteriores, sin restaurar tus datos personales. Los opcionales nuevos no se instalan por defecto; los paquetes científicos definitivos todavía no están publicados.
+- Las colecciones por fuente guardan los catálogos en `data/catalog-sources/` y un índice en `data/catalog-editions/`. La búsqueda y la carta los consultan conjuntamente sin persistir fichas mezcladas; cada fuente conserva sus condiciones y procedencia.
 
 ## Ejecución
 
@@ -79,3 +80,5 @@ Planning Stacking Suite/
 ## Licencia
 
 [GPL-3.0](LICENSE) — se permite usar, modificar, distribuir y **vender copias**. Quien distribuya una versión derivada debe cumplir las condiciones de la GPL, incluido facilitar el código fuente correspondiente y conservar las libertades de sus destinatarios; no puede convertir esa versión distribuida en software privativo.
+
+Los datos de terceros conservan sus propias licencias y atribuciones, consultables en **Configuración → Catálogos → Fuentes y licencias**. La GPL del código no relicencia esos datos ni tus notas, equipos o sesiones.
