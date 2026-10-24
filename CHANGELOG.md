@@ -37,6 +37,7 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 - Captura Ideal reserva al menos cinco minutos dentro de ambos extremos de la noche astronómica; los márgenes válidos quedan como Posible.
 
 ### Corregido
+- Efemérides recupera las puestas tempranas y salidas solares posteriores a las 08:00 que quedaban fuera de su malla técnica; la barra vuelve a encuadrar la noche. El desfase UTC se indica una sola vez junto a la información lunar —ambos si hay cambio horario— y el selector de Huso aprovecha el ancho disponible (P-0019, U-0012).
 - Las búsquedas de colecciones reutilizan comprobaciones semánticas ya superadas por el mismo contenido, en vez de recorrer todas las identidades y relaciones en cada lectura. Siguen verificando los bytes actuales, las condiciones y los cruces, sin ocultar corrupción ni conservar conexiones entre hilos (B-0015).
 - El filtro de cúmulos incluye los tipos genéricos de SIMBAD, sin asignarles subtipos no conocidos (P-0018).
 - Las tablas conservan cada dimensión angular disponible y muestran `—` en el eje ausente, en lugar de repetir o perder una medida (U-0011).

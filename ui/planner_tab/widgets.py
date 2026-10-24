@@ -389,14 +389,16 @@ class LocationBar(QFrame):
         for key in zone_names():
             self._offset.addItem(key, key)
         # 170 px: «Solar (longitud)» + desplegable pedían 158; margen de sobra.
-        self._offset.setFixedWidth(170)
+        self._offset.setMinimumWidth(170)
+        self._offset.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self._offset.setMinimumContentsLength(14)
+        self._offset.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._offset.setToolTip(
             "Zona IANA: ajusta según fecha, incluido verano, sin red.\n"
             "Número: desfase fijo manual. Aprox. longitud: heredada, no hora legal."
         )
         self._offset.currentIndexChanged.connect(self._emit)
-        offset_row.addWidget(self._offset)
-        offset_row.addStretch(1)
+        offset_row.addWidget(self._offset, 1)
         layout.addLayout(offset_row)
 
         # Estado inicial: ubicación guardada si la hay; si no, a la espera
@@ -1002,7 +1004,7 @@ class DayNightBar(QWidget):
         px_per_hour = width / max(end - start, 1e-9)
         step = TICK_STEPS_HOURS[-1]
         for candidate in TICK_STEPS_HOURS:
-            if candidate * px_per_hour >= (110 if self._formatter else TICK_LABEL_WIDTH):
+            if candidate * px_per_hour >= TICK_LABEL_WIDTH:
                 step = candidate
                 break
 
@@ -1060,7 +1062,8 @@ class DayNightBar(QWidget):
         """Pinta un píxel por hora del rango, las marcas de hora y los 4 hitos.
 
         Un hito fuera del rango no se pinta; la salida del día siguiente
-        se desenvuelve +24 h para poder situarla dentro.
+        se desenvuelve +24 h para poder situarla dentro. Los colores se rellenan
+        por tramos continuos para evitar costuras de antialias con DPI fraccional.
         """
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -1076,17 +1079,15 @@ class DayNightBar(QWidget):
         span = end - start
         width = max(rect.width(), 1)
 
-        for x in range(int(rect.width())):
+        colors = {"day": COLOR_DAY, "twilight": COLOR_TWILIGHT, "night": COLOR_NIGHT_BAR, "unknown": PALETTE["surface"]}
+        run_start, previous = 0, None
+        for x in range(int(rect.width()) + 1):
             hour = start + (x + 0.5) / width * span
-            kind = self._kind(hour if self._formatter else hour % 24.0)
-            color = {
-                "day": COLOR_DAY,
-                "twilight": COLOR_TWILIGHT,
-                "night": COLOR_NIGHT_BAR,
-                "unknown": PALETTE["surface"],
-            }[kind]
-            painter.setBrush(QColor(color))
-            painter.drawRect(QRectF(rect.left() + x, rect.top(), 1, rect.height()))
+            kind = self._kind(hour if self._formatter else hour % 24.0) if x < int(rect.width()) else None
+            if previous is not None and kind != previous:
+                painter.fillRect(QRectF(rect.left() + run_start, rect.top(), x - run_start, rect.height()), QColor(colors[previous]))
+                run_start = x
+            previous = kind
 
         painter.setPen(QPen(QColor(PALETTE["border"]), 1))
         painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -1101,7 +1102,7 @@ class DayNightBar(QWidget):
             x = rect.left() + (hour - start) / span * rect.width()
             painter.drawLine(QPointF(x, rect.bottom()), QPointF(x, rect.bottom() + 2))
             # La etiqueta no se sale del widget en los extremos del rango.
-            label_width = 110 if self._formatter else 32
+            label_width = TICK_LABEL_WIDTH
             left = min(max(x - label_width / 2, 0.0), max(self.width() - label_width, 0.0))
             painter.drawText(
                 QRectF(left, rect.bottom() + 3, label_width, 13),
@@ -1204,7 +1205,11 @@ class EphemerisPanel(QFrame):
         self._illum_label.setObjectName("HintLabel")
         moon_text.addWidget(self._illum_label)
         moon_row.addLayout(moon_text, 1)
-        moon_row.addStretch(1)
+        self._clock_label = QLabel("")
+        self._clock_label.setObjectName("HintLabel")
+        self._clock_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self._clock_label.setAccessibleName("Desfase UTC de esta noche")
+        moon_row.addWidget(self._clock_label)
         # Reparto del aire del cuadro: 1:3:3 entre la Luna, «Puesta de Sol»
         # y «Noche astronómica» (la Luna su par de píxeles de siempre y el
         # resto a los dos rótulos de abajo, que es lo que pidió el usuario).
@@ -1293,16 +1298,30 @@ class EphemerisPanel(QFrame):
             f"{illumination * 100:.0f} % iluminada · Edad {info.moon_age_days:.1f} d"
         )
 
+        from planners.timezones import clock_label, rules_label
+
+        moments = [value for value in (info.sunset, info.astronomical_dusk, info.astronomical_dawn, info.sunrise) if value]
+        if not moments:
+            moments = [date_iso + "T12:00:00"]
+        if isinstance(utc_offset_hours, str):
+            offsets = list(dict.fromkeys(clock_label(value, longitude, utc_offset_hours).split(" ", 1)[1] for value in moments))
+        else:
+            from planners.timezones import local_moment
+
+            offset = local_moment(moments[0], longitude, utc_offset_hours).strftime("%z")
+            offsets = [f"UTC{offset[:3]}:{offset[3:5]}"]
+        self._clock_label.setText(("≈ " if utc_offset_hours is None else "") + "\n→ ".join(offsets))
+        self._clock_label.setToolTip(
+            (str(utc_offset_hours) + "; " + rules_label()) if isinstance(utc_offset_hours, str)
+            else ("Aproximación heredada por longitud, no zona legal." if utc_offset_hours is None else "Desfase fijo manual, sin ajuste estacional.")
+        )
+
         def _local(iso: str | None) -> float | None:
             """ISO UTC → horas locales con la ubicación y el desfase vigentes."""
             return iso_to_local_hours(iso, longitude, utc_offset_hours)
 
         def _label(iso: str | None) -> str:
-            """Distingue horas civiles repetidas con su desfase, sin alterar los instantes UTC de las efemérides."""
-            from planners.timezones import clock_label
-
-            if iso and isinstance(utc_offset_hours, str):
-                return clock_label(iso, longitude, utc_offset_hours)
+            """Reloj corto: el desfase se indica una sola vez junto a la información lunar."""
             return _local_label(_local(iso))
 
         if isinstance(utc_offset_hours, str):
@@ -1318,7 +1337,7 @@ class EphemerisPanel(QFrame):
 
             self._bar.set_marks(
                 *map(_axis, (info.sunset, info.astronomical_dusk, info.astronomical_dawn, info.sunrise)),
-                formatter=lambda hour: clock_label(start + timedelta(hours=hour - 16), longitude, utc_offset_hours),
+                formatter=lambda hour: clock_label(start + timedelta(hours=hour - 16), longitude, utc_offset_hours).split(" ", 1)[0],
             )
         else:
             self._bar.set_marks(_local(info.sunset), _local(info.astronomical_dusk), _local(info.astronomical_dawn), _local(info.sunrise))
@@ -1355,6 +1374,7 @@ class EphemerisPanel(QFrame):
         self._moon_icon.hide()
         self._phase_label.setText(title)
         self._illum_label.setText("Sin cálculo")
+        self._clock_label.clear()
         self._bar.set_marks(None, None, None, None)
         self._sunset_label.setText("Puesta de Sol: —")
         self._night_label.setText(detail)

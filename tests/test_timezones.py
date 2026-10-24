@@ -272,3 +272,101 @@ def test_zona_no_disponible_retira_tabla_sin_acusar_fecha_invalida(qt_app, monke
         assert "Europe/NoExiste" in tab._ephemeris._date.toolTip()
     finally:
         tab.close()
+
+
+@pytest.mark.parametrize("clock", ["Europe/Madrid", 1.])
+def test_salida_solar_invernal_no_se_pierde_al_terminar_malla_a_las_ocho(clock):
+    """Reproduce la captura del usuario: salida posterior a 08:00 no implica ausencia de amanecer."""
+    info = transit.night_info(40.020, 1.280, "2026-01-15", utc_offset_hours=clock)
+    assert info.sunset is not None and info.sunrise is not None
+    assert local_moment(info.sunrise, 1.280, clock).date().isoformat() == "2026-01-16"
+    assert local_hours(info.sunrise, 1.280, clock) > 8
+    assert info.sunset < info.astronomical_dusk < info.astronomical_dawn < info.sunrise
+
+
+def test_puesta_solar_anterior_a_las_dieciseis_no_depende_del_inicio_de_malla():
+    """Invierno de Berlín: puesta antes de 16:00 y salida después de 08:00 deben tener ambos extremos."""
+    info = transit.night_info(52.52, 13.405, "2026-12-15", utc_offset_hours="Europe/Berlin")
+    assert info.sunset is not None and info.sunrise is not None
+    assert local_hours(info.sunset, 13.405, "Europe/Berlin") < 16
+    assert local_hours(info.sunrise, 13.405, "Europe/Berlin") > 8
+
+
+def test_panel_no_vuelve_al_dia_completo_en_la_captura_reportada(qt_app):
+    """La barra debe encuadrar la puesta y salida siguientes, no caer a 00–24 por faltar un extremo."""
+    from ui.planner_tab.widgets import EphemerisPanel
+
+    panel = EphemerisPanel()
+    try:
+        panel.refresh(40.020, 1.280, "2026-01-15", "Europe/Madrid")
+        start, end = panel._bar.hour_range()
+        assert 16 < start < 18 and 32 < end < 35
+        assert panel._bar._kind(26) == "night"
+        assert "--:--" not in panel._sunset_label.text()
+    finally:
+        panel.close()
+
+
+@pytest.mark.parametrize(("day", "expected"), [("2026-01-15", "UTC+01:00"), ("2026-10-24", "UTC+02:00\n→ UTC+01:00")])
+def test_panel_muestra_huso_una_vez_y_no_lo_repite_en_horas(qt_app, day, expected):
+    """Zona junto a información lunar; reloj corto en rangos y eje, incluso si la noche cambia de desfase."""
+    from PyQt6.QtWidgets import QLabel
+
+    from ui.planner_tab.widgets import EphemerisPanel
+
+    panel = EphemerisPanel()
+    try:
+        panel.refresh(40.020, 1.280, day, "Europe/Madrid")
+        labels = [label.text() for label in panel.findChildren(QLabel) if "UTC" in label.text()]
+        assert labels == [expected]
+        assert "UTC" not in panel._sunset_label.text() + panel._night_label.text()
+        assert all("UTC" not in panel._bar._formatter(tick) for tick in panel._bar.tick_hours(450))
+        panel.show_invalid_date("Fecha inválida de prueba")
+        assert all("UTC" not in label.text() for label in panel.findChildren(QLabel))
+    finally:
+        panel.close()
+
+
+def test_selector_huso_aprovecha_el_ancho_disponible(qt_app):
+    """No limita a 170 px nombres IANA largos cuando el panel dispone de espacio."""
+    from ui.planner_tab.widgets import LocationBar
+
+    bar = LocationBar()
+    try:
+        bar.resize(500, 160)
+        bar.show()
+        qt_app.processEvents()
+        assert bar._offset.width() > 300
+    finally:
+        bar.close()
+
+
+def test_cruce_solar_interpola_el_intervalo_real_no_el_paso_nominal():
+    """Una pareja parcial de dos minutos no se interpola como si durase el paso nominal de cinco."""
+    from astropy.time import Time
+
+    times = Time(["2026-01-15 08:00:00", "2026-01-15 08:02:00"])
+    result = transit._crossing_iso(times, np.array([1., -1.]), 0., True, 5)
+    assert result == "2026-01-15 08:01:00.000"
+
+
+def test_barra_no_forma_rayas_al_pintar_con_escala_125(qt_app):
+    """Tramos de color continuos, sin costuras al rasterizar cada píxel lógico con DPI fraccional."""
+    from PyQt6.QtCore import QPoint
+    from PyQt6.QtGui import QColor, QImage, QPainter
+
+    from ui.planner_tab.widgets import DayNightBar
+
+    bar = DayNightBar()
+    try:
+        bar.resize(420, 44)
+        bar.set_marks(18., 19., 29., 30., formatter=lambda hour: str(hour))
+        image = QImage(525, 55, QImage.Format.Format_ARGB32)
+        image.fill(QColor("black"))
+        painter = QPainter(image)
+        painter.scale(1.25, 1.25)
+        bar.render(painter, QPoint())
+        painter.end()
+        assert len({image.pixelColor(x, 15).rgba() for x in range(6, 30)}) == 1
+    finally:
+        bar.close()

@@ -407,14 +407,49 @@ def _crossing_iso(
     ``descending=True`` busca el primer cruce hacia abajo (puesta de sol);
     ``descending=False`` el primero hacia arriba (salida de sol). Devuelve
     ``None`` si la curva no cruza (p. ej. sol de medianoche o día polar).
+    El paso nominal se conserva en la firma; la duración real de cada pareja
+    manda para no extrapolar al completar intervalos parciales.
     """
     for index in range(len(values) - 1):
         start, end = float(values[index]), float(values[index + 1])
         hit = start >= threshold > end if descending else start < threshold <= end
         if hit:
             fraction = (threshold - start) / (end - start)
-            return str(times[index] + fraction * sample_min * u.min)
+            return str((times[index] + fraction * (times[index + 1] - times[index])).iso)
     return None
+
+
+def _solar_events(times, sun_altitudes, location, date_iso, longitude, clock, sample_min):
+    """Busca puesta y salida emparejadas sin confundir el límite técnico 16–08 con la ausencia de un evento solar.
+
+    Si faltan extremos, completa solo el tramo exterior entre mediodías civiles;
+    no amplía las horas capturables, cambia el modelo ni inventa eventos polares.
+    """
+    sunset = _crossing_iso(times, sun_altitudes, SUN_HORIZON_DEG, True, sample_min)
+    sunrise = _crossing_iso(times, sun_altitudes, SUN_HORIZON_DEG, False, sample_min)
+    if sunset is not None and sunrise is not None and sunset < sunrise:
+        return sunset, sunrise
+    noon = datetime.fromisoformat(date_iso).replace(hour=12)
+    if isinstance(clock, str):
+        start = Time(local_boundary(noon, clock))
+        end = Time(local_boundary(noon + timedelta(days=1), clock))
+    else:
+        start = Time(noon) - local_utc_offset(longitude, clock) * u.hour
+        end = start + 24 * u.hour
+    minutes = round(float((end - start).to_value(u.min)), 9)
+    wide = start + np.append(np.arange(0, minutes, sample_min), minutes) * u.min
+    extra = wide[(wide < times[0]) | (wide > times[-1])]
+    extra_alt = _sun_position(extra, location).transform_to(AltAz(obstime=extra, location=location)).alt.to_value(u.deg)
+    joined = Time(np.concatenate((times.jd, extra.jd)), format="jd", scale="utc")
+    altitudes = np.concatenate((sun_altitudes, extra_alt))
+    order = np.argsort(joined.jd)
+    joined, altitudes = joined[order], altitudes[order]
+    sunset = _crossing_iso(joined, altitudes, SUN_HORIZON_DEG, True, sample_min)
+    if sunset is not None:
+        following = joined >= Time(sunset)
+        joined, altitudes = joined[following], altitudes[following]
+    sunrise = _crossing_iso(joined, altitudes, SUN_HORIZON_DEG, False, sample_min)
+    return sunset, sunrise
 
 
 @with_model
@@ -479,12 +514,7 @@ def night_info(
         illumination = _lunar_illumination(times, location)
 
     sun_alt_values = sun_alt.to_value(u.deg)
-    sunset = _crossing_iso(
-        times, sun_alt_values, SUN_HORIZON_DEG, descending=True, sample_min=sample_min
-    )
-    sunrise = _crossing_iso(
-        times, sun_alt_values, SUN_HORIZON_DEG, descending=False, sample_min=sample_min
-    )
+    sunset, sunrise = _solar_events(times, sun_alt_values, location, date_iso, longitude, utc_offset_hours, sample_min)
 
     # Edad de la luna respecto a una luna nueva de referencia (sin astropy:
     # basta el período sinódico para saber si crece o mengua).
