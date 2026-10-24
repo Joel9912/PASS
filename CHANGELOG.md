@@ -118,6 +118,7 @@ Cambios desde `v0.1-alpha`. Esta versión **aún no tiene tag ni se ha publicado
 - Actualizadas la documentación de carpetas y la información de versión mostrada por la aplicación.
 
 ### Pendiente
+- Planificación conserva su flujo y ranking provisionales: todavía no construye un plan multinoches que complete objetivos de integración por filtros dentro de las fechas, horarios y obstrucciones del usuario. Ese rediseño, incluidas las decisiones de fecha y encuadre, queda para v0.3-alpha (U-0007, U-0008).
 - Clear Outside y Meteoblue siguen sin consultar servicios reales: las tarjetas muestran «Sin datos» aunque haya claves guardadas.
 - Resumen, Planetario y Planificador de Equipo siguen en construcción.
 

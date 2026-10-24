@@ -24,7 +24,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 
 ## Resumen
 
-**122 hallazgos**: 🔴 18 graves · 🟠 74 medios · 🟡 21 bajos · 9 decisiones (2 pendientes).
+**122 hallazgos**: 🔴 18 graves · 🟠 74 medios · 🟡 21 bajos · 9 decisiones (2 aplazadas).
 Estado: ✅ 106 corregidos · 🟡 2 contenidos · ⏳ 4 pendientes · 🔎 1 sin reproducir.
 
 ---
@@ -169,6 +169,6 @@ Cuestiones que requieren decidir el comportamiento; las resueltas indican su acu
 | **E-0013** | ✅ Total guardado y previsualización diferenciados; Guardar/Descartar/Cancelar con guardados separados de piezas y equipo. Descartar recupera lo persistido; Cancelar mantiene ediciones. Aplicado en `f5d02d7`. |
 | **S-0010** | ✅ Sin datos de registro, wfwhm/nbstars se rechazan antes de limpiar o ejecutar, sin cambiar la ponderación elegida. Aplicado en `111bcea`. |
 | **P-0011** | ✅ Zona IANA según fecha o desfase fijo manual, excluyentes y offline. Ubicaciones existentes conservadas, aproximación por longitud explícita; curvas y ventanas usan tiempo real durante cambios horarios. |
-| **U-0007** | Al planificar no está decidido si se selecciona la noche sugerida o la fecha guardada por el usuario. |
-| **U-0008** | No está definida la precedencia del FOV entre la región del objetivo y el encuadre del equipo. |
+| **U-0007** | ⏳ Selección de fecha: aplazada al rediseño multinoches de Planificación, v0.3-alpha; no bloquea v0.2-alpha ni está corregida. |
+| **U-0008** | ⏳ Precedencia del FOV de región/equipo: aplazada al rediseño de Planificación, v0.3-alpha; sin imponer ahora una precedencia ni bloquear v0.2-alpha. |
 | **C-0004** | ✅ Ruta elegida de SirIL primero; PATH solo sin configuración. Ruta inválida avisa sin fallback, también al abrir la GUI. Aplicado en `e07a987`. |
