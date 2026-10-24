@@ -56,7 +56,7 @@ Estado: ✅ 106 corregidos · 🟡 2 contenidos · ⏳ 4 pendientes · 🔎 1 si
 
 | ID | Bug | Estado |
 |---|---|---|
-| **B-0004** | Objetos nuevos del Catálogo Personal no aparecían tras guardarlos (reportado por el usuario). | 🔎 sin reproducir |
+| **B-0004** | Objetos nuevos del Catálogo Personal no aparecían tras guardarlos (reportado por el usuario). | 🔎 Sin reproducir; el usuario confirma objetos nuevos y notas conservados tras reiniciar (23/10). Sin fix atribuido. |
 | **B-0005** | El arranque bloquea la ventana hasta 120 s si la red está lenta (`ensure_catalog` antes de pintar). | ✅ `9c86381` |
 | **B-0006** | La conexión SQLite del hilo principal no debe pasar a hilos Qt; hoy se cumple por diseño. | ✅ `0a04cee`, `e533f61` (invariante verificada; no un nuevo fallo) |
 | **B-0010** | Un paquete con tamaño y SHA correctos puede instalar magnitudes de texto y familias ajenas al catálogo; la validación no comprueba todos los tipos antes de sustituir datos. | ✅ `a4cfedc` |
