@@ -4,7 +4,7 @@
 
 > La base del programa es la planificación (sesiones y equipo). El planetario y el apilador son añadidos que lo completan.
 
-**Estado: `v0.2-alpha` en preparación, todavía sin publicar.** Es software libre en desarrollo activo. La base de Equipo, Planificador y Apilador está implementada, pero eso no significa que todas sus funciones previstas estén terminadas. Los paquetes de datos definitivos y su cobertura/licencias siguen en preparación.
+**Estado: `v0.2-alpha` en preparación, todavía sin publicar.** Es software libre en desarrollo activo. La base de Equipo, Planificador y Apilador está implementada, pero eso no significa que todas sus funciones previstas estén terminadas. Los paquetes de datos offline ya están preparados y verificados localmente, con fuentes y condiciones identificadas; aún no están publicados.
 
 ## Pestañas
 
@@ -34,6 +34,7 @@ pip install -r requirements.txt
 ## Primer arranque
 
 - **El arranque no espera descargas.** Los paquetes incluidos en la distribución se importan en segundo plano si faltan catálogos. En **Configuración → Catálogos** puedes consultar versiones, comprobar paquetes publicados por PASS y autorizar su actualización. Si no hay paquete incluido ni una release con los adjuntos publicados, la búsqueda permanece sin esos datos; los catálogos existentes se conservan.
+- En una distribución con datos, `catalogs/` debe quedar junto a `main.py`, con su manifiesto, adjuntos y avisos originales. Los paquetes no contienen tu base personal ni fotografías. El archivo de fuentes con datos no incluye Python ni sus dependencias instaladas: sigue siendo necesario instalar `requirements.txt`.
 - **SirIL solo es necesario para la pestaña Apilador.** El resto del programa (Planificador, Equipo, etc.) funciona sin él.
 - Las actualizaciones preparan el catálogo en `data/catalog-editions/`; los datos personales permanecen en `data/pass.db` y las tablas antiguas se conservan. **Configuración → Catálogos → Recuperar edición anterior** cambia solo el catálogo, no tus notas o sesiones posteriores. Si una edición falta o falla su integridad, no se activa otra automáticamente. No borres los archivos de ediciones mientras estén en uso.
 - Las ediciones globales también conservan sus recursos en `data/edition-resources/`. Recuperar selecciona conjuntamente catálogo y recursos anteriores, sin restaurar tus datos personales. Los opcionales nuevos no se instalan por defecto; los paquetes científicos definitivos todavía no están publicados.
