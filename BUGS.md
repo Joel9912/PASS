@@ -108,14 +108,14 @@ Estado: ✅ 108 corregidos · 🟡 2 contenidos · ⏳ 4 pendientes · 🔎 1 si
 | **P-0016** | Guardar de nuevo una sesión idéntica inserta otra fila sin aviso; falta concretar la identidad que debe impedir duplicados. | ⏳ aplazado a v0.3-alpha; no bloquea v0.2-alpha |
 | **P-0017** | Los cálculos offline pueden fallar por caducidad de predicciones IERS locales, incluso en fechas admitidas. | ✅ `e533f61` |
 | **P-0018** | El filtro de cúmulos excluye las fichas SIMBAD de tipo genérico `Cl*`. | ✅ `f98d83a` |
-| **P-0019** | La búsqueda de eventos solares se limita a 16:00–08:00 y pierde puestas tempranas o salidas invernales posteriores, aunque los eventos existan. | ✅ Búsqueda solar complementaria al mismo modelo; sin ampliar captura. |
+| **P-0019** | La búsqueda de eventos solares se limita a 16:00–08:00 y pierde puestas tempranas o salidas invernales posteriores, aunque los eventos existan. | ✅ `ef1a47f`; usuario valida el resultado (24/10). |
 | **U-0002** | Arrastrar la vista no actualiza el encuadre visible antes de guardar. | ✅ `885ba55` |
 | **U-0003** | Quitar el último target deja el plan y el planetario obsoletos. | ✅ `885ba55` |
 | **U-0004** | Si la región no está en el cielo, el target anterior queda resaltado. | ✅ `885ba55` |
 | **U-0005** | Añadir un duplicado recarga la lista y puede cambiar la selección. | ✅ `885ba55` |
 | **U-0010** | La interfaz confunde recursos astronómicos inválidos con fechas no admitidas; errores de lectura pueden propagarse o dejar cálculos anteriores visibles. | ✅ `4815acd` |
 | **U-0011** | Las tablas repiten el eje mayor cuando falta el menor y ocultan el menor cuando solo se conoce este, mostrando tamaños no acreditados. | ✅ `f98d83a` |
-| **U-0012** | Efemérides repite el UTC en rangos/eje y puede mostrar la barra diurna al faltar una salida solar; el selector de Huso desaprovecha ancho y corta nombres. | ✅ Indicador único, rangos/eje compactos, barra nocturna y selector expansible. |
+| **U-0012** | Efemérides repite el UTC en rangos/eje y puede mostrar la barra diurna al faltar una salida solar; el selector de Huso desaprovecha ancho y corta nombres. | ✅ `ef1a47f`; usuario valida tamaños, barra e indicador (24/10). |
 | **C-0001** | Se admiten umbrales de sub/sobremuestreo contradictorios entre sí. | ✅ `a7f5ead` |
 | **C-0002** | Configuración guarda varias claves sin atomicidad: un fallo a mitad deja ajustes a medias. | ✅ `a7f5ead` |
 | **C-0003** | Editar la ruta de SirIL deja el ✓ de «encontrado» obsoleto hasta reabrir. | ✅ `600200c` |
