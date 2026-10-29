@@ -13,7 +13,7 @@ La rama de desarrollo incluye avances posteriores a esa release; consulta **Sin 
 | Pestaña | Qué hace | Estado |
 |---|---|---|
 | **Resumen** | Portada con sesiones guardadas, actividad y cielo ilustrado según ubicación; muestra explícita del diseño de progreso | Primera etapa; archivos de planes y progreso real multinoches aún pendientes |
-| **Planetario** | Carta de catálogos reutilizada de Planificación, búsqueda y navegación con fecha/ubicación independientes | Exploración inicial; sin motor 3D ni imágenes DSS2 |
+| **Planetario** | Carta de catálogos con controles superpuestos, búsqueda, encuadre manual y envío de regiones al Catálogo Personal del Planificador | Exploración inicial; sin motor 3D ni imágenes DSS2; integración multinoches pendiente |
 | **Equipo** | Setups y localizaciones del equipo con datos fríos y adjuntos visuales | ✅ |
 | **Planificador de Equipo** | Comparativas de equipo por características comparables y presupuesto | 🔶 placeholder |
 | **Planificador** ⭐ | Búsqueda, tránsito/luna/noche, catálogo personal y sesiones planificadas | Base implementada; rediseño previsto para v0.3-alpha |
