@@ -6,6 +6,7 @@ fase actual (o la salta si ya está hecha) y «Hacer todo» que encadena todo el
 recorrido. Cada fase corre en un ``QThread`` (``worker.SirilWorker``): la
 ventana nunca se congela y «Cancelar» mata la corrida de SirIL en curso.
 """
+import re
 from collections.abc import Callable
 from concurrent.futures import CancelledError, ThreadPoolExecutor
 from pathlib import Path
@@ -90,6 +91,53 @@ from .worker import CANCELADO, SirilWorker, arrancar_en_hilo
 #: Nombres de los cinco pasos; el orden ES el flujo del asistente.
 PASOS = ("Sesiones", "Calibrar", "Auditar", "Apilar", "Final")
 _FOV_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="session-fov")
+
+
+def _log_visible(message: str) -> str:
+    """Oculta solo ruido conocido de la terminal; el historial técnico ya está persistido.
+
+    Los diagnósticos y formatos desconocidos se conservan por precaución.
+    El guion llega como bloque independiente, no como líneas de salida de SirIL.
+    """
+    if message.startswith("Guion SirIL ("):
+        return ""
+    visible = []
+    for line in message.splitlines():
+        text = line.strip()
+        if not text:
+            continue
+        if re.search(r"\b(error\w*|fail\w*|warn\w*|aviso\w*|cancel\w*|fatal|exception|traceback|cannot|unable|invalid)\b|could not|not found|[⚠✗⏹]", text, re.IGNORECASE):
+            visible.append(line)
+            continue
+        body = text.removeprefix("log: ")
+        if text == "T" or re.fullmatch(r"\d+: running command .+", text):
+            continue
+        if text.startswith("Origen → enlace:"):
+            continue
+        if body.startswith((
+            "Reading configuration file ", "Welcome to siril ", "Supported file types:",
+            "Setting CWD (Current Working Directory)", "Parallel processing enabled:",
+            "Running command:", "Link: processing ",
+            "Writing sequence file ", "Reading sequence file ", "Sequence found:",
+            "bitpix for the sequence is set as ", "Memory per image:",
+            "Preprocessing: with the current memory and thread limits,",
+            "Normalisation value auto evaluated:", "Preparing python virtual environment:",
+            "Checking the python module is up-to-date",
+        )) or body in (
+            "Color management active.", "JPEG ICC profiles supported.",
+            "OK! This script is compatible with this version of Siril.",
+            "Preprocessing...", "Preprocessing: processing...",
+            "Python module is up-to-date", "closing pipes",
+        ):
+            continue
+        if re.fullmatch(r"(?:Reading|Saving) FITS: file .+, \d+ layer\(s\), \d+x\d+ pixels, \d+ bits", body):
+            continue
+        if re.fullmatch(r"progress: (?:Converting files|Preprocessing\. Processing image .+|Sequence processing succeeded\.|), \d+(?:[.,]\d+)?%", text):
+            continue
+        if re.fullmatch(r"progress: \d+(?:[.,]\d+)?%", text):
+            continue
+        visible.append(line)
+    return "\n".join(visible)
 
 
 class _EstadoCompacto(QLabel):
@@ -1572,8 +1620,9 @@ class StackerPage(QWidget):
         self._preserved_checkpoints = {}
 
     def _log(self, linea: str) -> None:
-        """Añade una línea al log visible (se llama también desde el hilo)."""
-        self._terminal.appendPlainText(linea)
+        """Muestra avance y diagnósticos sin duplicar el detalle técnico guardado en disco."""
+        if visible := _log_visible(linea):
+            self._terminal.appendPlainText(visible)
 
     def _decir(self, texto: str) -> None:
         """Actualiza la línea de estado bajo la navegación."""
