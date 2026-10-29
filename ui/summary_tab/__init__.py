@@ -4,6 +4,7 @@ import sqlite3
 from datetime import UTC, datetime
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QBoxLayout,
     QComboBox,
@@ -40,11 +41,11 @@ from .widgets import IdleIllustration, ProgressDial, SkyScene
 
 LOCATION_KEY = "summary_location_id"
 SECTIONS = (
-    ("planetary_tab", "Planetario", "Explora el cielo", "◇"),
-    ("equipment_tab", "Equipo", "Tu equipo y tus lugares", "⌁"),
-    ("planner_equip_tab", "Planificador de Equipo", "Comparativa en construcción", "⚖"),
-    ("planner_tab", "Planificador", "Da forma a tus próximas noches", "◷"),
-    ("stacker_tab", "Apilador", "Continúa con tus capturas", "▱"),
+    ("planetary_tab", "Planetario"),
+    ("equipment_tab", "Equipo"),
+    ("planner_equip_tab", "Planificador de Equipo"),
+    ("planner_tab", "Planificador"),
+    ("stacker_tab", "Apilador"),
 )
 
 
@@ -88,6 +89,7 @@ class SummaryPage(QWidget):
         self._sky_error = ""
         self._preference_error = ""
         self._cards = {}
+        self._section_icons = {}
         self._reading_error = ""
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -97,12 +99,11 @@ class SummaryPage(QWidget):
         body = QWidget()
         self._body = body
         layout = QVBoxLayout(body)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.setSpacing(16)
+        layout.setContentsMargins(20, 12, 20, 12)
+        layout.setSpacing(10)
         header = QHBoxLayout()
         headings = QVBoxLayout()
-        headings.addWidget(_label("Tu espacio de observación", size=24))
-        headings.addWidget(_label("Una mirada a tus sesiones, tu cielo y lo que viene después.", muted=True))
+        headings.addWidget(_label("Resumen", size=22))
         header.addLayout(headings, 1)
         self._demo = QPushButton("Vista de ejemplo")
         self._demo.setCheckable(True)
@@ -110,10 +111,6 @@ class SummaryPage(QWidget):
         self._demo.toggled.connect(self._render_session)
         header.addWidget(self._demo)
         layout.addLayout(header)
-        self._demo_notice = _label("VISTA DE EJEMPLO · Datos ficticios, sin conexión con tus capturas.", muted=True)
-        self._demo_notice.setStyleSheet("color: #fbbf24; background: transparent;")
-        self._demo_notice.hide()
-        layout.addWidget(self._demo_notice)
         self._top = QBoxLayout(QBoxLayout.Direction.LeftToRight)
         self._top.setSpacing(16)
         self._session_card = self._build_session()
@@ -121,25 +118,26 @@ class SummaryPage(QWidget):
         self._top.addWidget(self._session_card, 1)
         self._top.addWidget(self._sky_card, 1)
         layout.addLayout(self._top, 1)
-        layout.addWidget(_label("Tu actividad, a un paso", size=16))
         self._activity_grid = QGridLayout()
         self._activity_grid.setSpacing(12)
-        for key, title, subtitle, glyph in SECTIONS:
+        for key, title in SECTIONS:
             card = _card()
             card.setMinimumWidth(150)
             card_layout = QVBoxLayout(card)
-            card_layout.setContentsMargins(16, 12, 16, 12)
-            card_layout.addWidget(_label(f"{glyph}  {title}", size=14))
-            card_layout.addWidget(_label(subtitle, muted=True))
+            card_layout.setContentsMargins(12, 10, 12, 10)
+            heading = QHBoxLayout()
+            icon = QLabel()
+            icon.setFixedSize(28, 28)
+            self._section_icons[key] = icon
+            heading.addWidget(icon)
+            heading.addWidget(_label(title), 1)
+            card_layout.addLayout(heading)
             button = QPushButton("Sin pendientes")
             button.setAccessibleName(f"Actividad de {title}")
             button.clicked.connect(lambda _checked=False, section=key: self._show_activity(section))
             card_layout.addWidget(button)
             self._cards[key] = (card, button)
         layout.addLayout(self._activity_grid)
-        self._limit_note = _label("Primera etapa · Las sesiones actuales aún no tienen archivos de plan multinoches. "
-                                  "No se deduce integración ni se vincula Apilador por el nombre del objeto.", muted=True)
-        layout.addWidget(self._limit_note)
         scroll.setWidget(body)
         root.addWidget(scroll)
         self._context = SkyContext(self)
@@ -153,6 +151,12 @@ class SummaryPage(QWidget):
         self.reload_locations()
         self.refresh()
         self._arrange()
+
+    def set_section_icons(self, icons: dict[str, QIcon]):
+        """Recibe los mismos iconos de navegación, evitando otra colección de símbolos o recursos."""
+        for key, label in self._section_icons.items():
+            if key in icons:
+                label.setPixmap(icons[key].pixmap(28, 28))
 
     def _build_session(self):
         """Organiza una sesión protagonista con selector, datos secundarios y progreso no ficticio por defecto."""
@@ -168,10 +172,8 @@ class SummaryPage(QWidget):
         self._sessions.setAccessibleName("Sesión que se consulta en Resumen")
         self._sessions.currentIndexChanged.connect(self._session_changed)
         box.addWidget(self._sessions)
-        self._object = _label("Sin sesión actual", size=27)
+        self._object = _label("Sin sesión actual", size=23)
         box.addWidget(self._object)
-        self._session_note = _label(muted=True)
-        box.addWidget(self._session_note)
         self._idle = IdleIllustration()
         box.addWidget(self._idle)
         center = QHBoxLayout()
@@ -179,7 +181,7 @@ class SummaryPage(QWidget):
         self._dial.setMaximumSize(180, 180)
         center.addWidget(self._dial)
         facts = QVBoxLayout()
-        self._hours = _label(size=23)
+        self._hours = _label(size=21)
         self._pending = _label(muted=True)
         self._extra = _label(muted=True)
         facts.addWidget(self._hours)
@@ -229,12 +231,11 @@ class SummaryPage(QWidget):
         self._location.setAccessibleName("Ubicación guardada para la ilustración de Resumen")
         self._location.currentIndexChanged.connect(self._location_selected)
         box.addWidget(self._location)
-        self._sky_title = _label("Un cielo para tu próxima captura", size=18)
-        box.addWidget(self._sky_title)
         self._scene = SkyScene()
         self._scene.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         box.addWidget(self._scene, 1)
-        self._sky_note = _label("Elige una ubicación guardada para representar su luz solar.", muted=True)
+        self._sky_note = _label(muted=True)
+        self._sky_note.hide()
         box.addWidget(self._sky_note)
         self._location_action = QPushButton("Gestionar ubicaciones")
         self._location_action.clicked.connect(lambda: self.navigate_requested.emit("equipment_tab", "locations"))
@@ -288,20 +289,19 @@ class SummaryPage(QWidget):
             self._scene.set_state(None, animate=False)
         self._sky_location_id = fingerprint
         if not row:
-            self._sky_title.setText("Un cielo para tu próxima captura")
             self._sky_note.setText(self._preference_error + "Elige una ubicación guardada. No se ha supuesto ninguna posición.")
+            self._sky_note.setVisible(bool(self._preference_error))
             return
         self._sky_note.setText(self._preference_error + "Leyendo luz solar y fase lunar local…")
+        self._sky_note.setVisible(bool(self._preference_error))
         self._context.request(row)
 
     def _sky_ready(self, state, error):
         """Publica contexto actual o ausencia explícita, nunca una escena calculada con otro sitio."""
         self._sky_state, self._sky_error = state, error
         self._scene.set_state(state)
-        self._sky_title.setText(state.title if state else "Cielo no disponible")
-        self._sky_note.setText(self._preference_error + (
-            "Paisaje ilustrado · posiciones decorativas · sin información meteorológica" if state else
-            f"No se pudo calcular el contexto: {error}"))
+        self._sky_note.setText(self._preference_error + (f"Cielo no disponible: {error}" if error else ""))
+        self._sky_note.setVisible(bool(self._sky_note.text()))
 
     def reload_context(self):
         """Invalida una lectura de otra edición al cambiar catálogos, sin reusar un modelo antiguo como vigente."""
@@ -348,7 +348,7 @@ class SummaryPage(QWidget):
     def _render_session(self, *_args):
         """Distingue datos legacy sin integración de la maqueta explícita que permite revisar el diseño completo."""
         demo = self._demo.isChecked()
-        self._demo_notice.setVisible(demo)
+        self._demo.setText("Ejemplo · datos ficticios" if demo else "Vista de ejemplo")
         self._sessions.setVisible(bool(self._overview.sessions) and not demo)
         row = next((item for item in self._overview.sessions if item["id"] == self._sessions.currentData()), None)
         self._dial.setVisible(demo)
@@ -364,14 +364,13 @@ class SummaryPage(QWidget):
         if demo:
             progress = IntegrationProgress(8, 4, 2)
             self._object.setText("M31 · Andrómeda")
-            self._session_note.setText("Plan de ejemplo · varias noches · ningún archivo real asociado")
             self._dial.set_progress(progress)
             self._hours.setText("6 h de 8 h")
             self._pending.setText("2 h pendientes de auditoría")
-            self._extra.setText("4 h seleccionadas · ejemplo ilustrativo")
-            self._night_label.setText("Esta noche · M31 · 2 h de 3 h previstas · ejemplo")
+            self._extra.setText("4 h seleccionadas")
+            self._night_label.setText("Esta noche · 2 h de 3 h")
             self._night_bar.setValue(67)
-            self._plan_label.setText("Plan completo · 3 objetos de ejemplo · agregación por definir")
+            self._plan_label.setText("Plan · 3 objetos")
             self._equipment.setText("Equipo · Configuración de ejemplo")
             self._site.setText("Ubicación de captura · Sitio de ejemplo")
             self._continue.setText("Continuar trabajo")
@@ -381,16 +380,13 @@ class SummaryPage(QWidget):
             today = sessions_on_day(self._overview, datetime.now(UTC).astimezone().date())
             title = "Sesiones no disponibles" if self._reading_error else "Varias sesiones para hoy" if len(today) > 1 else "Sin sesión actual"
             self._object.setText(row["object_id"] if row else title)
-            note = ("Elige cuál consultar; las sesiones actuales no guardan intervalos horarios." if len(today) > 1 else
-                    "Tu próximo proyecto puede empezar con una buena noche.")
-            self._session_note.setText(row["target_name"] if row else note)
+            self._object.setToolTip(row["target_name"] if row else "")
             self._hours.setText("Integración no vinculada" if row else "")
-            self._pending.setText(self._reading_error or (
-                "Sesión guardada sin objetivo multinoches ni vínculo de capturas. No se inventa un porcentaje." if row else
-                "Consulta tus sesiones guardadas o prepara una nueva captura."))
+            self._pending.setText(self._reading_error)
             self._equipment.setText(f"Equipo · {row.get('setup_name') or '—'}" if row else "")
             self._site.setText(f"Ubicación de captura · {row.get('location_name') or '—'}" if row else "")
             self._continue.setText("Continuar trabajo" if row else "Planificar captura")
+        self._pending.setVisible(bool(self._pending.text()))
 
     def _continue_work(self):
         """Navega al flujo actual sin elegir un objetivo por nombre ni sobreescribir borradores."""

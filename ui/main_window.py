@@ -384,6 +384,7 @@ class MainWindow(QMainWindow):
         equipment = self._paginas.get("equipment_tab")
         planner = self._paginas.get("planner_tab")
         if isinstance(summary, SummaryPage):
+            summary.set_section_icons({key: _glyph_icon(glyph) for key, glyph in TAB_GLYPHS.items()})
             summary.navigate_requested.connect(self._navigate_home)
             if isinstance(equipment, EquipmentPage):
                 equipment.locations_changed.connect(summary.reload_locations)
@@ -392,11 +393,25 @@ class MainWindow(QMainWindow):
                 planner.planificacion.session_saved.connect(lambda _id: summary.refresh())
                 planner.sesiones.sessions_changed.connect(summary.refresh)
         if isinstance(planetary, PlanetaryPage):
+            planetary.framing_saved.connect(self._receive_planetary_framing)
             if isinstance(equipment, EquipmentPage):
                 equipment.locations_changed.connect(planetary.reload_locations)
             if isinstance(summary, SummaryPage):
                 summary.location_changed.connect(planetary.set_initial_location)
                 planetary.set_initial_location(summary.location_id)
+
+    def _receive_planetary_framing(self, object_id: str, catalog: str) -> None:
+        """Ofrece la región enviada para seleccionarla después, sin recargar el objetivo o borrador abierto."""
+        planner = self._paginas.get("planner_tab")
+        if not isinstance(planner, PlannerPage):
+            return
+        planner.catalogo.blockSignals(True)
+        try:
+            planner.catalogo.refresh()
+        finally:
+            planner.catalogo.blockSignals(False)
+        planner.planificacion.include_personal_target(object_id, catalog)
+        self._navigate_home("planner_tab", "catalogue")
 
     def _navigate_home(self, section: str, destination: str) -> None:
         """Respeta las guardias de salida existentes y navega sin cargar objetivos o ejecutar SirIL."""
@@ -409,7 +424,7 @@ class MainWindow(QMainWindow):
             return
         if isinstance(page, PlannerPage):
             tabs = page.findChild(QTabWidget)
-            tabs.setCurrentIndex(2 if destination == "planning" else 3)
+            tabs.setCurrentIndex(1 if destination == "catalogue" else 2 if destination == "planning" else 3)
             if destination.startswith("saved:"):
                 page.sesiones.select_session(int(destination.split(":", 1)[1]))
         elif isinstance(page, EquipmentPage) and destination == "locations":

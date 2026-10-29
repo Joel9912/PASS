@@ -508,6 +508,26 @@ class PlanificacionTab(QWidget):
                 self._target.setCurrentIndex(index)
                 return
 
+    def include_personal_target(self, object_id: str, catalog: str) -> None:
+        """Ofrece un encuadre recién enviado sin recargar ni sustituir el centro y el borrador del editor."""
+        if any(row["object_id"] == object_id and row["catalog"] == catalog for row in self._targets):
+            return
+        row = next((item for item in personal_catalog.list_objects()
+                    if item["object_id"] == object_id and item["catalog"] == catalog), None)
+        if row is None:
+            return
+        self._target.blockSignals(True)
+        try:
+            current = self._target.currentIndex() if self._targets else -1
+            if not self._targets:
+                self._target.clear()
+            self._targets.append(row)
+            label = str(row["object_id"]) + (" · región" if row.get("kind") == "region" else "")
+            self._target.addItem(label, row)
+            self._target.setCurrentIndex(current)
+        finally:
+            self._target.blockSignals(False)
+
     # ------------------------------------------------------------------ #
     #                        E S T A D O   I N T E R N O                  #
     # ------------------------------------------------------------------ #

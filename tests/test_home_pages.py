@@ -78,7 +78,7 @@ def test_summary_ejemplo_no_crea_planes_ni_asocia_capturas(qt_app, memory_db, no
     before = list(memory_db.iterdump())
     try:
         page._demo.setChecked(True)
-        assert "FICTICIOS" in page._demo_notice.text().upper()
+        assert "FICTICIOS" in page._demo.text().upper()
         assert page._hours.text() == "6 h de 8 h"
         assert page._dial.progress.pending_hours == 2
         assert not page._continue.isEnabled()
@@ -103,7 +103,7 @@ def test_summary_sesion_legacy_no_inventa_integracion(qt_app, memory_db, no_sky)
         assert page._object.text() == "M31"
         assert "no vinculada" in page._hours.text()
         assert not page._dial.isVisible()
-        assert page._session_note.text() == "Mi sesión"
+        assert page._object.toolTip() == "Mi sesión"
     finally:
         page.close()
 
@@ -336,6 +336,169 @@ def test_portada_estrecha_con_fuente_grande_no_impone_desplazamiento_horizontal(
     finally:
         page.close()
         qt_app.setFont(previous)
+
+
+def test_resumen_completo_sin_bajar_en_escritorio_125(qt_app, memory_db, no_sky):
+    """La sesión de ejemplo y todos los accesos caben a la vez en el área útil de escritorio."""
+    from PyQt6.QtGui import QFont
+    from PyQt6.QtWidgets import QScrollArea
+
+    from ui.summary_tab import SummaryPage
+
+    previous = qt_app.font()
+    font = QFont(previous)
+    font.setPointSize(16)
+    qt_app.setFont(font)
+    page = SummaryPage()
+    try:
+        page._demo.setChecked(True)
+        page.resize(1280, 730)
+        page.show()
+        for _ in range(3):
+            qt_app.processEvents()
+        scroll = page.findChild(QScrollArea)
+        assert scroll.verticalScrollBar().maximum() == 0
+        assert scroll.horizontalScrollBar().maximum() == 0
+        for card, button in page._cards.values():
+            assert card.isVisible() and button.isVisible()
+            assert scroll.viewport().rect().contains(button.mapTo(scroll.viewport(), button.rect().bottomRight()))
+    finally:
+        page.close()
+        qt_app.setFont(previous)
+
+
+def test_planetario_ocupa_toda_la_pagina_con_controles_superpuestos(qt_app, no_sky):
+    """Mostrar opciones no reduce el cielo ni desplaza la cámara; los errores conservan una señal visible."""
+    from ui.planetary_tab import PlanetaryPage
+
+    page = PlanetaryPage()
+    try:
+        page.resize(1280, 730)
+        page.show()
+        qt_app.processEvents()
+        assert page.sky.geometry() == page.rect()
+        view = page.sky.view
+        page._options.click()
+        qt_app.processEvents()
+        assert page._panel.isVisible()
+        assert page.sky.geometry() == page.rect()
+        assert page.sky.view == view
+        assert page.rect().contains(page._panel.geometry())
+        page._options.click()
+        assert not page._panel.isVisible()
+        assert page.childAt(700, 400) is page.sky
+        page._context_ready(None, "modelo no disponible")
+        assert "aviso" in page._details.text()
+        assert "modelo no disponible" in page._details.toolTip()
+    finally:
+        page.close()
+
+
+def test_encuadre_manual_sigue_el_centro_y_se_envia_sin_perder_campos(qt_app, memory_db, no_sky):
+    """Solo la confirmación persiste; centro, FOV y teselas no se confunden con el zoom de exploración."""
+    from planners import personal_catalog
+    from ui.planetary_tab import PlanetaryPage
+
+    page = PlanetaryPage()
+    try:
+        before = list(memory_db.iterdump())
+        page._frame_enabled.setChecked(True)
+        page._frame_width.setValue(2.4)
+        page._frame_height.setValue(1.6)
+        page._tiles_x.setValue(3)
+        page._tiles_y.setValue(2)
+        page.sky.set_center(5.25, -12)
+        assert page.sky.framing == (78.75, -12, 2.4, 1.6, 3, 2)
+        assert list(memory_db.iterdump()) == before
+        page.save_framing("Mi encuadre")
+        row = personal_catalog.list_objects()[0]
+        assert row["kind"] == "region"
+        assert (row["ra_hours"], row["dec_deg"]) == (5.25, -12)
+        assert row["fov_major_arcmin"] == pytest.approx(144)
+        assert row["fov_minor_arcmin"] == pytest.approx(96)
+        assert (row["tiles_x"], row["tiles_y"]) == (3, 2)
+        saved = personal_catalog.list_objects()
+        with pytest.raises(ValueError):
+            page.save_framing("Mi encuadre")
+        assert personal_catalog.list_objects() == saved
+    finally:
+        page.close()
+
+
+def test_enviar_centro_sin_fov_no_guarda_el_zoom_como_encuadre(qt_app, memory_db, no_sky):
+    """Sin rectángulo habilitado se guarda solo una coordenada, nunca el campo visible como sensor."""
+    from planners import personal_catalog
+    from ui.planetary_tab import PlanetaryPage
+
+    page = PlanetaryPage()
+    try:
+        page.sky.set_center(12, 30)
+        page.sky.set_fov_deg(40)
+        page.save_framing("Centro libre")
+        row = personal_catalog.list_objects()[0]
+        assert (row["ra_hours"], row["dec_deg"]) == (12, 30)
+        assert row["fov_major_arcmin"] is None
+        assert row["fov_minor_arcmin"] is None
+        assert row["tiles_x"] is None
+    finally:
+        page.close()
+
+
+def test_cancelar_envio_no_crea_objeto_ni_modifica_planes(qt_app, memory_db, no_sky):
+    """Abrir el diálogo no autoriza persistencia y Cancelar conserva la base completa."""
+    from PyQt6.QtCore import QTimer
+
+    from ui.planetary_tab import PlanetaryPage
+
+    page = PlanetaryPage()
+    before = list(memory_db.iterdump())
+    try:
+        QTimer.singleShot(0, lambda: qt_app.activeModalWidget().reject())
+        page._send_framing()
+        assert list(memory_db.iterdump()) == before
+    finally:
+        page.close()
+
+
+def test_enviar_desde_planetario_conserva_editor_y_borrador(qt_app, memory_db, no_sky):
+    """Añadir a la lista ofrece el nuevo destino sin recargar el target y perder su centro editado."""
+    from ui.main_window import MainWindow
+
+    window = MainWindow()
+    try:
+        planner = window._paginas["planner_tab"]
+        editor = planner.planificacion
+        editor._planetario.set_center(3.75, 22)
+        editor._session_name.setText("Trabajo previo")
+        before = editor._draft_snapshot()
+        draft_before = list(memory_db.execute("SELECT * FROM work_drafts"))
+        page = window._paginas["planetary_tab"]
+        page.sky.set_center(7, -20)
+        page.save_framing("Destino nuevo")
+        assert editor._draft_snapshot() == before
+        assert list(memory_db.execute("SELECT * FROM work_drafts")) == draft_before
+        assert any(row["object_id"] == "Destino nuevo" for row in editor._targets)
+        assert window.content.currentWidget() is planner
+        editor.select_target("Destino nuevo", "region")
+        assert editor._current_target()["object_id"] == "Destino nuevo"
+        assert editor._ra.value() == 7
+        assert editor._dec.value() == -20
+    finally:
+        window.close()
+
+
+def test_iconos_del_resumen_son_los_de_navegacion(qt_app, no_sky):
+    """Todos los accesos comparten icono real, no solo la balanza del Planificador de Equipo."""
+    from ui.main_window import TAB_GLYPHS, MainWindow, _glyph_icon
+
+    window = MainWindow()
+    try:
+        summary = window._paginas["summary_tab"]
+        for key, label in summary._section_icons.items():
+            assert not label.pixmap().isNull()
+            assert label.pixmap().toImage() == _glyph_icon(TAB_GLYPHS[key]).pixmap(28, 28).toImage()
+    finally:
+        window.close()
 
 
 @pytest.mark.parametrize("value", ["2026-03-29T02:30", "2026-10-25T02:30"])
