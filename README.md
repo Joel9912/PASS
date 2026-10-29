@@ -4,7 +4,7 @@
 
 > La base del programa es la planificación (sesiones y equipo). El planetario y el apilador son añadidos que lo completan.
 
-**Estado: `v0.2-alpha` en preparación, todavía sin publicar.** Es software libre en desarrollo activo. La base de Equipo, Planificador y Apilador está implementada, pero eso no significa que todas sus funciones previstas estén terminadas. Los paquetes de datos offline ya están preparados y verificados localmente, con fuentes y condiciones identificadas; aún no están publicados.
+**Versión publicada: [v0.2-alpha](https://github.com/Joel9912/PASS/releases/tag/v0.2-alpha), pre-release experimental.** Es software libre en desarrollo activo. La base de Equipo, Planificador y Apilador está implementada, pero no todas sus funciones previstas están terminadas. La release incluye fuentes con datos offline PASS.26.10 y sus componentes, con procedencias, condiciones y licencias identificadas. No es un instalador ni incluye un ejecutable autónomo.
 
 ## Pestañas
 
@@ -37,7 +37,7 @@ pip install -r requirements.txt
 - En una distribución con datos, `catalogs/` debe quedar junto a `main.py`, con su manifiesto, adjuntos y avisos originales. Los paquetes no contienen tu base personal ni fotografías. El archivo de fuentes con datos no incluye Python ni sus dependencias instaladas: sigue siendo necesario instalar `requirements.txt`.
 - **SirIL solo es necesario para la pestaña Apilador.** El resto del programa (Planificador, Equipo, etc.) funciona sin él.
 - Las actualizaciones preparan el catálogo en `data/catalog-editions/`; los datos personales permanecen en `data/pass.db` y las tablas antiguas se conservan. **Configuración → Catálogos → Recuperar edición anterior** cambia solo el catálogo, no tus notas o sesiones posteriores. Si una edición falta o falla su integridad, no se activa otra automáticamente. No borres los archivos de ediciones mientras estén en uso.
-- Las ediciones globales también conservan sus recursos en `data/edition-resources/`. Recuperar selecciona conjuntamente catálogo y recursos anteriores, sin restaurar tus datos personales. Los opcionales nuevos no se instalan por defecto; los paquetes científicos definitivos todavía no están publicados.
+- Las ediciones globales también conservan sus recursos en `data/edition-resources/`. Recuperar selecciona conjuntamente catálogo y recursos anteriores, sin restaurar tus datos personales. Los opcionales nuevos no se instalan por defecto; PASS.26.10 está disponible como ZIP y componentes individuales en la release.
 - Las colecciones por fuente guardan los catálogos en `data/catalog-sources/` y un índice en `data/catalog-editions/`. La búsqueda y la carta los consultan conjuntamente sin persistir fichas mezcladas; cada fuente conserva sus condiciones y procedencia.
 
 ## Ejecución
@@ -47,7 +47,7 @@ python main.py
 ```
 
 ## Registros locales
-Los registros locales están en `data/logs/pass.log` (acciones y errores generales) y `data/logs/apilador.log` (Apilador y salida completa de SirIL). Se crean automáticamente y se continúa el historial al reabrir; no se borran automáticamente. Pueden contener rutas y datos de tu equipo: revísalos antes de compartirlos. La terminal muestra solo los mensajes recientes.
+Los registros locales están en `data/logs/pass.log` (acciones y errores generales) y `data/logs/apilador.log` (Apilador y salida completa de SirIL). Se crean automáticamente y se continúa el historial al reabrir; no se borran automáticamente. Pueden contener rutas y datos de tu equipo: revísalos antes de compartirlos. La terminal conserva mensajes recientes y oculta ruido técnico conocido, sin quitar el detalle del archivo.
 
 ## Tests
 
@@ -75,7 +75,7 @@ Planning Stacking Suite/
 
 ## Documentación
 
-- `CHANGELOG.md` — cambios entre versiones (v0.2 todavía sin publicar)
+- `CHANGELOG.md` — cambios entre versiones
 - `BUGS.md` — bugs conocidos, con su severidad y estado
 
 ## Licencia
