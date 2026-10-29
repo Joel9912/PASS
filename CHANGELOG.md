@@ -2,6 +2,13 @@
 
 Cambios relevantes para quienes usan PASS. Los detalles de implementación y cada corrección pequeña quedan en los commits. Las correcciones registradas citan su ID en [`BUGS.md`](BUGS.md), donde constan su severidad y estado. La documentación se mantiene en español.
 
+## Sin publicar — desarrollo posterior a v0.2-alpha
+
+### Añadido
+- Resumen deja de ser un placeholder: portada con sesiones guardadas, equipo/ubicación disponibles, accesos permanentes y cantidades de borradores por continuar o sesiones próximas. La ilustración original usa el Sol y fase lunar del modelo local, con ubicación guardada elegida explícitamente, detalle de hora/avisos y lectura en segundo plano; no muestra clima real ni posiciones astronómicas en el dibujo.
+- Vista de ejemplo del progreso en Resumen, claramente identificada como ficticia y sin modificar datos personales. Las sesiones antiguas todavía no tienen objetivo multinoches ni vínculo de capturas: no se inventan horas/porcentajes, no se asocian por nombres y no se ejecuta SirIL. El nuevo formato de planes y su integración real siguen pendientes.
+- Planetario reutiliza la carta existente de Planificación con búsqueda, clic, zoom y arrastre independientes. Inicia con fecha actual/ubicación de Resumen y permite explorar otro instante/sitio sin modificar el plan; mantiene su vista entre pestañas y la reinicia al volver a abrir. Carta ecuatorial J2000, sin simular horizonte, movimiento propio ni posiciones planetarias; sin nuevas imágenes, descargas o recursos externos.
+
 ## v0.2-alpha — 2026-10-29
 
 Cambios desde `v0.1-alpha`. Publicada como **pre-release experimental**: [PASS v0.2-alpha](https://github.com/Joel9912/PASS/releases/tag/v0.2-alpha), con fuentes y datos offline PASS.26.10. Requiere Python y sus dependencias; no incluye instalador ni SirIL.

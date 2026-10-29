@@ -6,12 +6,14 @@
 
 **Versión publicada: [v0.2-alpha](https://github.com/Joel9912/PASS/releases/tag/v0.2-alpha), pre-release experimental.** Es software libre en desarrollo activo. La base de Equipo, Planificador y Apilador está implementada, pero no todas sus funciones previstas están terminadas. La release incluye fuentes con datos offline PASS.26.10 y sus componentes, con procedencias, condiciones y licencias identificadas. No es un instalador ni incluye un ejecutable autónomo.
 
-## Pestañas
+La rama de desarrollo incluye avances posteriores a esa release; consulta **Sin publicar** en el changelog. Los archivos de la release permanecen fijados a su versión publicada.
+
+## Pestañas (rama de desarrollo)
 
 | Pestaña | Qué hace | Estado |
 |---|---|---|
-| **Resumen** | Progreso de captura por objeto, sesión planificada activa, estado del equipo | 🔶 placeholder |
-| **Planetario** | Planetario con imágenes DSS2: esfera de fondo + esfera de objetos (Messier, NGC, IC, LDN) | 🔶 placeholder |
+| **Resumen** | Portada con sesiones guardadas, actividad y cielo ilustrado según ubicación; muestra explícita del diseño de progreso | Primera etapa; archivos de planes y progreso real multinoches aún pendientes |
+| **Planetario** | Carta de catálogos reutilizada de Planificación, búsqueda y navegación con fecha/ubicación independientes | Exploración inicial; sin motor 3D ni imágenes DSS2 |
 | **Equipo** | Setups y localizaciones del equipo con datos fríos y adjuntos visuales | ✅ |
 | **Planificador de Equipo** | Comparativas de equipo por características comparables y presupuesto | 🔶 placeholder |
 | **Planificador** ⭐ | Búsqueda, tránsito/luna/noche, catálogo personal y sesiones planificadas | Base implementada; rediseño previsto para v0.3-alpha |

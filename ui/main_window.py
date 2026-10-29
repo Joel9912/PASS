@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
 )
 
 from .equipment_tab import EquipmentPage
+from .planetary_tab import PlanetaryPage
 from .planner_tab import (
     BusquedaTab,
     CatalogoPersonalTab,
@@ -34,6 +35,7 @@ from .planner_tab import (
 )
 from .stacker_tab import StackerPage
 from .style import PALETTE
+from .summary_tab import SummaryPage
 
 APP_NAME = "Planning & Astronomical Stacking Suite"
 APP_VERSION = "v0.2"
@@ -180,9 +182,11 @@ def _stacker_page() -> QWidget:
 
 
 #: Constructor de la página real de cada pestaña; las claves sin entrada
-#: (Resumen, Planetario…) reciben un placeholder. Así no hay
+#: (Planificador de Equipo) reciben un placeholder. Así no hay
 #: índices mágicos de ``TABS`` que descuadren al reordenar.
 _PAGE_BUILDERS: dict[str, Callable[[], QWidget]] = {
+    "summary_tab": SummaryPage,
+    "planetary_tab": PlanetaryPage,
     "planner_tab": _planner_page,
     "equipment_tab": _equipment_page,
     "stacker_tab": _stacker_page,
@@ -264,8 +268,8 @@ class _Sidebar(QWidget):
 class MainWindow(QMainWindow):
     """Ventana principal: barra lateral, páginas apiladas y pie de página.
 
-    Páginas reales: Planificador, Equipo y Apilador (``_PAGE_BUILDERS``); el resto son
-    provisionales (``_placeholder_page``) hasta que se implementen. Aquí se
+    Páginas reales: Resumen, Planetario, Planificador, Equipo y Apilador;
+    Planificador de Equipo mantiene un placeholder. Aquí se
     concentra el cableado **entre** pestañas (Equipo → Planificador), para
     que ninguna importe a otra.
     """
@@ -311,6 +315,7 @@ class MainWindow(QMainWindow):
         root.addWidget(footer)
 
         self.setCentralWidget(central)
+        self._wire_home()
         self.sidebar.nav.setCurrentRow(0)
         # Maximizar tras el primer layout: evita el bug de render a tamaño incompleto
         QTimer.singleShot(0, self.showMaximized)
@@ -366,7 +371,49 @@ class MainWindow(QMainWindow):
                 )
                 evento.ignore()
                 return
+        from .sky_context import SkyContext
+
+        for context in self.findChildren(SkyContext):
+            context.stop()
         super().closeEvent(evento)
+
+    def _wire_home(self) -> None:
+        """Conecta portada y carta independiente sin alterar el cableado de Planificación o Apilador."""
+        summary = self._paginas.get("summary_tab")
+        planetary = self._paginas.get("planetary_tab")
+        equipment = self._paginas.get("equipment_tab")
+        planner = self._paginas.get("planner_tab")
+        if isinstance(summary, SummaryPage):
+            summary.navigate_requested.connect(self._navigate_home)
+            if isinstance(equipment, EquipmentPage):
+                equipment.locations_changed.connect(summary.reload_locations)
+                equipment.setups_changed.connect(summary.refresh)
+            if isinstance(planner, PlannerPage):
+                planner.planificacion.session_saved.connect(lambda _id: summary.refresh())
+                planner.sesiones.sessions_changed.connect(summary.refresh)
+        if isinstance(planetary, PlanetaryPage):
+            if isinstance(equipment, EquipmentPage):
+                equipment.locations_changed.connect(planetary.reload_locations)
+            if isinstance(summary, SummaryPage):
+                summary.location_changed.connect(planetary.set_initial_location)
+                planetary.set_initial_location(summary.location_id)
+
+    def _navigate_home(self, section: str, destination: str) -> None:
+        """Respeta las guardias de salida existentes y navega sin cargar objetivos o ejecutar SirIL."""
+        keys = [key for key, _title in TABS]
+        if section not in keys:
+            return
+        self.sidebar.nav.setCurrentRow(keys.index(section))
+        page = self._paginas[section]
+        if self.content.currentWidget() is not page:
+            return
+        if isinstance(page, PlannerPage):
+            tabs = page.findChild(QTabWidget)
+            tabs.setCurrentIndex(2 if destination == "planning" else 3)
+            if destination.startswith("saved:"):
+                page.sesiones.select_session(int(destination.split(":", 1)[1]))
+        elif isinstance(page, EquipmentPage) and destination == "locations":
+            page._tabs.setCurrentIndex(1)
 
     def _wire_equipo(self) -> None:
         """Une la pestaña Equipo con el Planificador (paso 3, §7 del plan).
@@ -410,6 +457,10 @@ class MainWindow(QMainWindow):
 
         for visual in self.findChildren(PlanetarioVisual):
             visual.reload_catalogs()
+        for key in ("summary_tab", "planetary_tab"):
+            page = self._paginas.get(key)
+            if isinstance(page, (SummaryPage, PlanetaryPage)):
+                page.reload_context()
         planner = self._paginas.get("planner_tab")
         if isinstance(planner, PlannerPage):
             planner.busqueda.refresh()

@@ -228,6 +228,17 @@ class SesionesTab(QWidget):
         self.sessions_changed.emit()
 
     # -- Relleno -------------------------------------------------------------
+    def select_session(self, session_id: int) -> bool:
+        """Localiza por identidad guardada desde Resumen, sin editar la sesión ni el objetivo de Planificación."""
+        self.refresh()
+        for index, row in enumerate(self._rows):
+            if row["id"] == session_id:
+                self._table.selectRow(index)
+                self._table.scrollToItem(self._table.item(index, 0))
+                return True
+        self._table.clearSelection()
+        return False
+
     def _fill(self) -> None:
         """Vuelca ``self._rows`` con el color de estado y la alineación de columnas."""
         self._table.setRowCount(len(self._rows))
