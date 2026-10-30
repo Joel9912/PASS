@@ -296,6 +296,7 @@ class MultiNightDialog(QDialog):
         """Usa el mismo borrador protegido del Planificador; no abre un segundo flujo editable competidor."""
         super().__init__(owner)
         self.owner = owner
+        self._embedded = False
         self.setWindowTitle("Planificación multinoches · borrador")
         self.resize(1420, 860)
         self._restoring = True
@@ -488,6 +489,9 @@ class MultiNightDialog(QDialog):
         form.addRow("Equipo para nuevos objetivos", self.setup)
         form.addRow("Exposición", self.exposure)
         form.addRow("Notas del plan", self.notes)
+        self.new_plan_button = QPushButton("Nuevo plan…")
+        self.new_plan_button.clicked.connect(self._new_plan)
+        form.addRow(self.new_plan_button)
         self.tabs.addTab(widget, "Valores del plan")
 
     def _build_result(self):
@@ -498,7 +502,7 @@ class MultiNightDialog(QDialog):
         self.allocations_table = _table(["Fecha", "Objeto", "Tesela", "Filtro", "Desde", "Hasta", "Tomas"])
         self.balance_table = _table(["Objeto", "Tesela", "Filtro", "Objetivo h", "Asignadas h", "Faltan h"])
         self.windows_table = _table(["Fecha", "Objeto", "Tesela", "Desde", "Hasta"])
-        for table, widths in ((self.allocations_table, (95, 100, 55, 60, 170, 170)),
+        for table, widths in ((self.allocations_table, (100, 85, 55, 50, 160, 160, 55)),
                               (self.windows_table, (95, 100, 55, 170, 170)),
                               (self.balance_table, (100, 55, 60, 110, 110))):
             for index, width in enumerate(widths):
@@ -537,8 +541,8 @@ class MultiNightDialog(QDialog):
                 "exposure":self.exposure.value(), "notes":self.notes.text(), "name":self.name.text(),
                 "objectives":copy.deepcopy(self._objectives)}
 
-    def restore(self, data):
-        """Prevalida el documento y referencias antes de escribir controles, conservando ausencias como error."""
+    def validate_references(self, data):
+        """Prevalida referencias locales sin modificar el editor ni sustituir ausencias por otro elemento."""
         validate_editor(data)
         if data["location_id"] is not None and data["location_id"] not in self._locations:
             raise ValueError("La ubicación del borrador ya no existe.")
@@ -548,6 +552,10 @@ class MultiNightDialog(QDialog):
         for item in data["objectives"]:
             if (item["object_id"], item["catalog"]) not in references:
                 raise ValueError(f"El objetivo {item['object_id']} ya no está en Catálogo Personal; el borrador se conserva.")
+
+    def restore(self, data):
+        """Prevalida el documento y referencias antes de escribir controles, conservando ausencias como error."""
+        self.validate_references(data)
         self.start.setDate(QDate.fromString(data["start"], "yyyy-MM-dd"))
         self.end.setDate(QDate.fromString(data["end"], "yyyy-MM-dd"))
         self.start_slider.setValue(data["start_minute"])
@@ -611,6 +619,8 @@ class MultiNightDialog(QDialog):
 
     def _edit_objective(self, _checked=False, *, adding=False):
         """Modificar geometría no cambia el catálogo personal ni mueve el encuadre del flujo legacy."""
+        if not self.refresh_references():
+            return
         row = self.objects_table.currentRow()
         if not adding and row < 0:
             return
@@ -678,6 +688,7 @@ class MultiNightDialog(QDialog):
 
     def build_request(self):
         """Construye una petición completa solo desde elecciones explícitas y ubicaciones guardadas."""
+        self.validate_references(self.snapshot())
         location = self._locations.get(self.location.currentData())
         if location is None:
             raise ValueError("Elige una ubicación guardada.")
@@ -696,7 +707,7 @@ class MultiNightDialog(QDialog):
         self._changed()
         try:
             self._request = self.build_request()
-        except (ValueError, KeyError, TypeError) as exc:
+        except (ValueError, KeyError, TypeError, sqlite3.Error) as exc:
             self.status.setText(str(exc))
             return
         self.status.setText("Calculando franjas reales y restricciones…")
@@ -814,6 +825,26 @@ class MultiNightDialog(QDialog):
         else:
             self.status.setText(self.owner._draft.label.text())
 
+    def _new_plan(self):
+        """Empieza otro borrador solo tras consentimiento, sin editar ni retirar el maestro anterior."""
+        choice = QMessageBox.question(self, "Nuevo plan", "Hay un único borrador activo. Empezar otro reemplazará "
+                                      "la configuración de este editor; guarda el maestro si quieres conservar el plan. "
+                                      "Los archivos ya guardados no se modifican. ¿Continuar?",
+                                      QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+        if choice != QMessageBox.StandardButton.Yes:
+            return
+        self.job.stop()
+        self._restoring = True
+        try:
+            self.restore(self._defaults())
+        finally:
+            self._restoring = False
+        self.owner._multinight_file = None
+        self.sky.clear_target()
+        self.sky.clear_framing()
+        self.fov_label.setText("Selecciona un objetivo")
+        self._changed()
+
     def _save_master(self):
         """Confirma las horas pendientes antes de guardar el único maestro externo, sin vincular capturas."""
         if self._result is None or self._request is None or not self._result.allocations:
@@ -909,8 +940,67 @@ class MultiNightDialog(QDialog):
 
     def reject(self):
         """Escape respeta la misma guardia de persistencia que el botón de cierre de la ventana."""
+        if self._embedded:
+            return
         self.job.stop()
         if not self.owner._draft.flush():
             self.status.setText(self.owner._draft.label.text())
             return
         super().reject()
+
+    def refresh_references(self):
+        """Refresca opciones sin elegir sustitutos ni borrar referencias desaparecidas del borrador."""
+        try:
+            targets = personal_catalog.list_objects()
+            locations = {row["id"]:row for row in list_locations()}
+            setups = {row["id"]:row for row in list_setups()}
+        except sqlite3.Error as exc:
+            self.job.stop()
+            self._request = self._result = None
+            self.save_plan_button.setEnabled(False)
+            self._set_busy(False)
+            self.curve.clear()
+            for table in (self.allocations_table, self.balance_table, self.windows_table):
+                table.setRowCount(0)
+            self.summary.setText("Referencias no disponibles · configuración conservada")
+            self.status.setText(f"No se pudieron leer las referencias: {exc}")
+            return False
+        self._targets, self._locations, self._setups = targets, locations, setups
+        for combo, rows, placeholder in ((self.location, self._locations, "Elegir ubicación…"),
+                                          (self.setup, self._setups, "Sin equipo seleccionado")):
+            selected = combo.currentData()
+            combo.blockSignals(True)
+            try:
+                combo.clear()
+                combo.addItem(placeholder, None)
+                for key, item in rows.items():
+                    combo.addItem(item["name"], key)
+                if selected is not None and selected not in rows:
+                    combo.addItem(f"Referencia {selected} no disponible", selected)
+                combo.setCurrentIndex(combo.findData(selected))
+            finally:
+                combo.blockSignals(False)
+        self._show_hours()
+        if self._request is not None:
+            try:
+                changed = self.build_request() != self._request
+            except (ValueError, TypeError, KeyError, sqlite3.Error):
+                changed = True
+            if changed:
+                self._changed()
+                self.status.setText("Las referencias cambiaron; revisa las entradas y recalcula.")
+        return True
+
+    def showEvent(self, event):
+        """Relee referencias al volver a la pestaña; no recupera automáticamente un borrador aplazado."""
+        super().showEvent(event)
+        self.refresh_references()
+
+    def hideEvent(self, event):
+        """Al salir de la vista cancela trabajo pendiente y entregas tardías, sin borrar entradas o resultados completos."""
+        calculating = self.cancel_button.isEnabled()
+        self.job.stop()
+        self._set_busy(False)
+        if calculating:
+            self.status.setText("Cálculo cancelado al salir · borrador conservado")
+        super().hideEvent(event)

@@ -1,26 +1,9 @@
-"""Subpestaña **Planificación**: planetario, encuadre, tránsito y plan de captura.
+"""Planificación: espacio multinoches principal y formulario anterior separado para consulta y recuperación.
 
-Layout (según el mockup del usuario), dos columnas con el encuadre a la
-izquierda y la parte temporal a la derecha:
-
-```
-Target: [M31 ▼]  Fecha: [📅]  Equipo: [Setup ▼]
-┌─ Visual del Planetario ─────┐ ┌─ Curva de Tránsito ──────────────┐
-│ estrellas · target · rejilla│ │ altitud + sep. lunar + ventanas  │
-│ [rectángulo de encuadre]    │ ├─ Plan de Captura ────────────────┤
-├─ Editor de Encuadre ────────┤ │ Top 5 fechas con su ventana ★   │
-│ RA / Dec / FOV / teselas    │ ├─ Parámetros de Sesión ───────────┤
-└─────────────────────────────┘ │ Nombre · Exposición · Notas      │
-                                │        [💾 Guardar Sesión]       │
-                                └───────────────────────────────────┘
-```
-
-La ubicación (lat/long/desfase) **no** vive aquí: la aporta la barra
-compartida del Planificador vía :meth:`set_location`.
-
-El encuadre solo se activa si el equipo seleccionado tiene focal, resolución
-y tamaño de píxel; sin esos datos no se dibuja rectángulo alguno (decisión
-del usuario: nunca se inventa un FOV).
+La vista principal se construye al entrar y usa el mismo borrador protegido.
+Este controlador conserva la API de objetivo/equipo/ubicación y los controles
+legacy sin convertir sus sesiones en calendarios multinoches por inferencia.
+El nuevo cálculo y los maestros viven en módulos separados de la interfaz.
 """
 from __future__ import annotations
 
@@ -44,6 +27,7 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QSpinBox,
     QSplitter,
+    QStackedWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -74,7 +58,7 @@ PLAN_COLUMNS: tuple[str, ...] = (
 
 
 class PlanificacionTab(QWidget):
-    """Planetario + encuadre + curva + plan de captura + sesión a guardar."""
+    """Controlador del espacio multinoches principal y la recuperación del formulario anterior."""
 
     session_saved = pyqtSignal(int)          # id de la sesión creada
     # API pública prevista (A-14): sin consumidor hoy; el Planetario/
@@ -100,8 +84,21 @@ class PlanificacionTab(QWidget):
         self._updating_view = False
         self._multinight_data = None
         self._multinight_file = None
+        self._workspace = None
 
-        root = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(6)
+        self._view_selector = QComboBox()
+        self._view_selector.addItems(["Plan multinoches", "Formulario anterior · consulta / sesión legacy"])
+        self._view_selector.setAccessibleName("Vista de Planificación")
+        outer.addWidget(self._view_selector)
+        self._views = QStackedWidget()
+        self._placeholder = QLabel("Plan multinoches")
+        self._placeholder.setTextFormat(Qt.TextFormat.PlainText)
+        self._views.addWidget(self._placeholder)
+        self._legacy_panel = QWidget()
+        root = QVBoxLayout(self._legacy_panel)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(10)
 
@@ -118,11 +115,9 @@ class PlanificacionTab(QWidget):
         self.reload_targets()
         self.reload_setups()
         self._draft = DraftRecovery(
-            self, "planner", "Hay una sesión sin terminar de planificar. ¿Deseas continuar?",
+            self, "planner", "Hay una planificación sin terminar. ¿Deseas continuar?",
             self._draft_snapshot, self._restore_draft, self._block_draft,
         )
-        root.addWidget(self._draft.label)
-        root.addWidget(self._draft.button)
         self._draft_location_label = QLabel("")
         self._draft_location_label.setObjectName("HintLabel")
         self._draft_location_label.setWordWrap(True)
@@ -135,10 +130,46 @@ class PlanificacionTab(QWidget):
             (self._tiles_x, "valueChanged"), (self._tiles_y, "valueChanged"),
         ):
             getattr(control, signal).connect(self._draft.changed)
+        self._views.addWidget(self._legacy_panel)
+        outer.addWidget(self._views, 1)
+        recovery = QHBoxLayout()
+        recovery.addWidget(self._draft.label, 1)
+        recovery.addWidget(self._draft.button)
+        outer.addLayout(recovery)
+        self._view_selector.currentIndexChanged.connect(self._switch_view)
+
+    def _ensure_workspace(self):
+        """Construye la vista principal al entrar, sin duplicar lienzos/curvas al arrancar todas las pestañas."""
+        if self._workspace is not None:
+            return self._workspace
+        from .multinight import MultiNightDialog
+
+        try:
+            workspace = MultiNightDialog(self)
+        except (ValueError, KeyError, TypeError, sqlite3.Error) as exc:
+            self._placeholder.setText(f"No se pudo recuperar el espacio multinoches: {exc}. El borrador se conserva.")
+            return None
+        workspace.setParent(self._views, Qt.WindowType.Widget)
+        workspace._embedded = True
+        workspace.setEnabled(not self._draft.pending)
+        self._workspace = workspace
+        self._views.insertWidget(0, workspace)
+        self._views.removeWidget(self._placeholder)
+        self._placeholder.deleteLater()
+        self._views.setCurrentIndex(self._view_selector.currentIndex())
+        return workspace
+
+    def _switch_view(self, index):
+        """El diseño multinoches es principal; el formulario anterior no se usa como autoridad del nuevo plan."""
+        if index == 0:
+            self._ensure_workspace()
+        self._views.setCurrentIndex(index)
 
     def showEvent(self, event) -> None:
         """Ofrece continuar solo al entrar en Planificación, no al arrancar PASS."""
         super().showEvent(event)
+        if self._view_selector.currentIndex() == 0:
+            self._ensure_workspace()
         self._draft.entered()
 
     def _block_draft(self, blocked: bool) -> None:
@@ -149,6 +180,8 @@ class PlanificacionTab(QWidget):
             self._notes, self._save_button, self._plan_button, self._planetario, self._multinight_button,
         ):
             control.setEnabled(not blocked)
+        if self._workspace is not None:
+            self._workspace.setEnabled(not blocked)
         if not blocked:
             self._tiles_x.setEnabled(bool(self._fov))
             self._tiles_y.setEnabled(bool(self._fov))
@@ -176,6 +209,11 @@ class PlanificacionTab(QWidget):
     def _restore_draft(self, data: dict) -> None:
         """Prevalida referencias para no sustituir objetivo o equipo por el primero de la lista."""
         validate_draft(data)
+        if "multinight" in data:
+            workspace = self._ensure_workspace()
+            if workspace is None:
+                raise ValueError("No se pudo preparar el editor multinoches; se conserva el borrador.")
+            workspace.validate_references(data["multinight"])
         target_index = -1
         if data["target"] is not None:
             target_index = next((
@@ -232,6 +270,12 @@ class PlanificacionTab(QWidget):
         finally:
             for control in controls:
                 control.blockSignals(False)
+        if self._workspace is not None:
+            self._workspace._restoring = True
+            try:
+                self._workspace.restore(self._multinight_data or self._workspace._defaults())
+            finally:
+                self._workspace._restoring = False
 
     # ------------------------------------------------------------------ #
     #                            B A R R A                                #
@@ -271,16 +315,10 @@ class PlanificacionTab(QWidget):
         return bar
 
     def _open_multinight(self):
-        """Abre el nuevo espacio sin reemplazar todavía el flujo legacy ni el borrador protegido."""
-        from .multinight import MultiNightDialog
-
-        try:
-            dialog = MultiNightDialog(self)
-        except (ValueError, KeyError, TypeError, sqlite3.Error) as exc:
-            QMessageBox.warning(self, "Plan multinoches", f"No se pudo abrir el borrador: {exc}. Se conserva sin modificar.")
-            return
-        dialog.showMaximized()
-        dialog.exec()
+        """Vuelve a la vista multinoches incrustada, sin abrir otra autoridad ni ventana de planificación."""
+        self._ensure_workspace()
+        self._view_selector.setCurrentIndex(0)
+        self._views.setCurrentIndex(0)
 
     # ------------------------------------------------------------------ #
     #                        C O L U M N A   I Z Q                        #

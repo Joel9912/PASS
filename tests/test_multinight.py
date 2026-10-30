@@ -669,3 +669,120 @@ def test_maestro_de_otra_base_no_adopta_ids_locales_coincidentes(qt_app, memory_
     finally:
         dialog.close()
         owner.close()
+
+
+def test_multinoches_es_la_vista_principal_del_planificador(qt_app, memory_db):
+    """El diseño aprobado sustituye el editor principal; el flujo anterior queda fuera de esa superficie."""
+    from PyQt6.QtWidgets import QGroupBox
+
+    from ui.planner_tab.planificacion.multinight import MultiNightDialog
+    from ui.planner_tab.planificacion.tab import PlanificacionTab
+
+    owner = PlanificacionTab()
+    try:
+        owner.show()
+        qt_app.processEvents()
+        workspace = owner.findChild(MultiNightDialog)
+        assert workspace is not None and workspace.isVisible()
+        assert not any(group.isVisible() and group.title() == "Editor de encuadre" for group in owner.findChildren(QGroupBox))
+        assert memory_db.execute("SELECT COUNT(*) FROM work_drafts").fetchone()[0] == 0
+    finally:
+        owner.close()
+
+
+def test_vista_principal_conserva_configuracion_entre_pestanas_sin_escrituras_de_refresco(qt_app, memory_db):
+    """Volver a Planificación conserva su único editor y no crea otra revisión por el mero refresco."""
+    from db import work_drafts
+    from ui.planner_tab.planificacion.tab import PlanificacionTab
+
+    owner = PlanificacionTab()
+    try:
+        owner.show()
+        qt_app.processEvents()
+        workspace = owner._workspace
+        workspace.name.setText("Mi configuración")
+        saved = work_drafts.read("planner")
+        owner.hide()
+        owner.show()
+        qt_app.processEvents()
+        assert owner._workspace is workspace
+        assert workspace.name.text() == "Mi configuración"
+        assert work_drafts.read("planner") == saved
+    finally:
+        owner.close()
+
+
+def test_referencias_nuevas_entran_en_la_vista_principal_sin_objetivos_supuestos(qt_app, memory_db):
+    """Una región enviada después de abrir el editor aparece al volver, sin convertirla automáticamente en objetivo."""
+    from planners import personal_catalog
+    from ui.planner_tab.planificacion.tab import PlanificacionTab
+
+    owner = PlanificacionTab()
+    try:
+        owner.show()
+        qt_app.processEvents()
+        workspace = owner._workspace
+        personal_catalog.add_region("Región nueva", 3, -4)
+        owner.hide()
+        owner.show()
+        qt_app.processEvents()
+        assert any(item["object_id"] == "Región nueva" for item in workspace._targets)
+        assert not workspace._objectives
+        assert memory_db.execute("SELECT COUNT(*) FROM work_drafts").fetchone()[0] == 0
+    finally:
+        owner.close()
+
+
+@pytest.mark.parametrize("confirmed", [False, True])
+def test_nuevo_plan_pide_consentimiento_y_no_toca_el_maestro_anterior(qt_app, memory_db, tmp_path, monkeypatch, confirmed):
+    """Otro plan no reutiliza accidentalmente la ruta de guardado ni elimina el archivo previo."""
+    from PyQt6.QtWidgets import QMessageBox
+
+    owner, dialog = editor(qt_app, memory_db)
+    path = tmp_path/"maestro-anterior.json"
+    path.write_bytes(b"archivo anterior intacto")
+    choice = QMessageBox.StandardButton.Yes if confirmed else QMessageBox.StandardButton.No
+    monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: choice)
+    try:
+        dialog.name.setText("Anterior")
+        owner._multinight_file = {"path":str(path), "sha256":"0"*64}
+        before = dialog.snapshot()
+        dialog._new_plan()
+        assert path.read_bytes() == b"archivo anterior intacto"
+        if confirmed:
+            assert owner._multinight_file is None
+            assert not dialog.name.text()
+            assert not dialog._objectives
+        else:
+            assert dialog.snapshot() == before
+            assert owner._multinight_file["path"] == str(path)
+    finally:
+        dialog.close()
+        owner.close()
+
+
+def test_error_al_refrescar_referencias_no_deja_propuesta_vigente(qt_app, memory_db, monkeypatch):
+    """Fallo de lectura conserva entradas y retira el resultado, sin convertirlo en disponibilidad cero."""
+    import sqlite3
+
+    import ui.planner_tab.planificacion.multinight as module
+
+    owner, dialog = editor(qt_app, memory_db)
+    try:
+        before = dialog.snapshot()
+        dialog._result = object()
+
+        def fail():
+            """Simula base temporalmente inaccesible, sin modificarla."""
+            raise sqlite3.OperationalError("base ocupada")
+
+        with monkeypatch.context() as patch:
+            patch.setattr(module, "list_locations", fail)
+            assert not dialog.refresh_references()
+            assert dialog.snapshot() == before
+            assert dialog._result is None
+            assert "base ocupada" in dialog.status.text()
+        assert dialog.refresh_references()
+    finally:
+        dialog.close()
+        owner.close()
