@@ -25,6 +25,7 @@ from .multinight import (
 
 _MAX_BYTES = 64*1024*1024
 _INDEX_KEY = "capture_plan_index_v1"
+_SCOPE_KEY = "capture_reference_scope_v1"
 
 
 def _utc_now():
@@ -107,8 +108,10 @@ def validate_document(document):
     """Valida estructura e integridad lógica del calendario antes de leer o publicar; no certifica efemérides externas."""
     required = {"format", "version", "id", "revision", "created_at", "updated_at", "state", "objective_ids",
                 "editor", "request", "result"}
-    if not isinstance(document, dict) or set(document) != required:
+    if not isinstance(document, dict) or set(document)-{"reference_scope"} != required:
         raise ValueError("Estructura de maestro incompatible.")
+    if "reference_scope" in document:
+        _identifier(document["reference_scope"])
     if document["format"] != "pass-capture-plan" or type(document["version"]) is not int or document["version"] != 1:
         raise ValueError("Formato o versión de maestro no compatible; se conserva sin modificar.")
     if document["state"] != "created":
@@ -160,7 +163,7 @@ def validate_document(document):
     return request, result
 
 
-def make_document(editor, request, result, previous=None):
+def make_document(editor, request, result, previous=None, *, scope=None):
     """Prepara un maestro solo tras el cálculo; la UI pide confirmación antes de escribirlo."""
     if previous is not None:
         validate_document(previous)
@@ -176,9 +179,28 @@ def make_document(editor, request, result, previous=None):
                 "revision":uuid4().hex, "created_at":previous["created_at"] if previous else now, "updated_at":now,
                 "state":"created", "objective_ids":identities, "editor":editor,
                 "request":asdict(stable_request), "result":asdict(stable_result)}
+    previous_scope = previous.get("reference_scope") if previous else None
+    if previous_scope and scope and previous_scope != scope:
+        raise ValueError("Las referencias pertenecen a otra base; se requiere revinculación explícita.")
+    if scope or previous_scope:
+        document["reference_scope"] = scope or previous_scope
     document = json.loads(json.dumps(document, default=_json_value, ensure_ascii=False, allow_nan=False))
     validate_document(document)
     return document
+
+
+def reference_scope(*, create=False):
+    """Identifica la base de referencias, no la máquina ni los nombres; solo se crea al confirmar un maestro."""
+    conn = get_connection()
+    row = conn.execute("SELECT value FROM settings WHERE key=?", (_SCOPE_KEY,)).fetchone()
+    if row is None and create:
+        with conn:
+            conn.execute("INSERT OR IGNORE INTO settings(key,value) VALUES(?,?)", (_SCOPE_KEY, uuid4().hex))
+            row = conn.execute("SELECT value FROM settings WHERE key=?", (_SCOPE_KEY,)).fetchone()
+    if row is None:
+        return None
+    _identifier(row[0])
+    return row[0]
 
 
 def read_document(path):

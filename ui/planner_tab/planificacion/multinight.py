@@ -57,6 +57,7 @@ from planners.plan_document import (
     index_document,
     make_document,
     read_document,
+    reference_scope,
     write_document,
 )
 from planners.sky_state import location_clock
@@ -846,9 +847,12 @@ class MultiNightDialog(QDialog):
                 previous, digest = read_document(path)
                 if digest != reference["sha256"]:
                     raise ValueError("El maestro cambió desde su apertura. Ábrelo de nuevo antes de guardar.")
-            document = make_document(self.snapshot(), self._request, self._result, previous)
+                if not previous.get("reference_scope") or previous["reference_scope"] != reference_scope():
+                    raise ValueError("Las referencias son de otra base o de origen no verificado; requieren revinculación explícita.")
+            scope = reference_scope(create=True)
+            document = make_document(self.snapshot(), self._request, self._result, previous, scope=scope)
             digest = write_document(path, document, reference["sha256"] if reference else None)
-        except (ValueError, TypeError, OSError, KeyError) as exc:
+        except (ValueError, TypeError, OSError, KeyError, sqlite3.Error) as exc:
             self.status.setText(f"No se pudo guardar el maestro: {exc}")
             return
         self.owner._multinight_file = {"path":path, "sha256":digest}
@@ -870,7 +874,11 @@ class MultiNightDialog(QDialog):
             return
         try:
             document, digest = read_document(path)
-        except (ValueError, TypeError, OSError) as exc:
+            if not document.get("reference_scope") or document["reference_scope"] != reference_scope():
+                self.status.setText("Maestro portable legible, pero sus referencias locales requieren revinculación explícita. "
+                                    "No se adoptan objetos/equipos/ubicaciones por IDs o nombres coincidentes.")
+                return
+        except (ValueError, TypeError, OSError, sqlite3.Error) as exc:
             self.status.setText(f"No se pudo abrir el maestro: {exc}. El borrador actual se conserva.")
             return
         choice = QMessageBox.question(self, "Abrir plan", "Sustituirá la configuración de este editor. "

@@ -24,8 +24,8 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 
 ## Resumen
 
-**125 hallazgos**: 🔴 18 graves · 🟠 77 medios · 🟡 21 bajos · 9 decisiones (2 aplazadas).
-Estado: ✅ 109 corregidos · 🟡 2 contenidos · ⏳ 4 pendientes · 🔎 1 sin reproducir.
+**126 hallazgos**: 🔴 18 graves · 🟠 78 medios · 🟡 21 bajos · 9 decisiones (2 aplazadas).
+Estado: ✅ 109 corregidos · 🟡 2 contenidos · ⏳ 5 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -109,6 +109,7 @@ Estado: ✅ 109 corregidos · 🟡 2 contenidos · ⏳ 4 pendientes · 🔎 1 si
 | **P-0017** | Los cálculos offline pueden fallar por caducidad de predicciones IERS locales, incluso en fechas admitidas. | ✅ `e533f61` |
 | **P-0018** | El filtro de cúmulos excluye las fichas SIMBAD de tipo genérico `Cl*`. | ✅ `f98d83a` |
 | **P-0019** | La búsqueda de eventos solares se limita a 16:00–08:00 y pierde puestas tempranas o salidas invernales posteriores, aunque los eventos existan. | ✅ `ef1a47f`; usuario valida el resultado (24/10). |
+| **P-0020** | Abrir un maestro de otra base puede adoptar ubicaciones/equipos/objetivos locales por coincidencia de IDs numéricos, sin revinculación explícita. | ⏳ Protección de referencias en verificación. |
 | **U-0002** | Arrastrar la vista no actualiza el encuadre visible antes de guardar. | ✅ `885ba55` |
 | **U-0003** | Quitar el último target deja el plan y el planetario obsoletos. | ✅ `885ba55` |
 | **U-0004** | Si la región no está en el cielo, el target anterior queda resaltado. | ✅ `885ba55` |

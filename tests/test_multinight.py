@@ -641,3 +641,31 @@ def test_un_resto_menor_que_una_toma_no_se_redondea_hacia_arriba():
     result = distribute(request(objectives=(obj,)), (window(),))
     assert result.balances[0].assigned_s == 60
     assert result.balances[0].assigned_s < result.balances[0].requested_s
+
+
+@pytest.mark.parametrize("foreign_scope", [None, "a"*32])
+def test_maestro_de_otra_base_no_adopta_ids_locales_coincidentes(qt_app, memory_db, tmp_path, monkeypatch, foreign_scope):
+    """Mismos IDs y nombres no prueban que equipo/sitio/objetivos pertenezcan a la base de origen."""
+    from PyQt6.QtWidgets import QFileDialog, QMessageBox
+
+    from planners.plan_document import make_document, reference_scope, write_document
+
+    owner, dialog = editor(qt_app, memory_db)
+    document, config, data, result = document_fixture()
+    config["location_id"] = 1
+    document = make_document(config, data, result, scope=foreign_scope)
+    reference_scope(create=True)
+    path = tmp_path/"otra-base.pass-plan.json"
+    write_document(path, document)
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *args, **kwargs: (str(path), ""))
+    monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.Yes)
+    try:
+        dialog.name.setText("Trabajo local intacto")
+        before = dialog.snapshot()
+        dialog._open_master()
+        assert dialog.snapshot() == before
+        assert owner._multinight_file is None
+        assert "revincul" in dialog.status.text().lower()
+    finally:
+        dialog.close()
+        owner.close()
