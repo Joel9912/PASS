@@ -171,6 +171,33 @@ def list_locations() -> list[dict]:
     return filas
 
 
+def planning_location(location_id: int, *, require_obstacles: bool = False) -> dict:
+    """Lee un sitio para calcular sin convertir un perfil ausente o corrupto en un horizonte libre.
+
+    La lista visual conserva su carga defensiva; el cálculo exige las ocho
+    direcciones válidas si el usuario pide aplicar obstrucciones.
+    """
+    row = get_connection().execute("SELECT * FROM locations WHERE id=?", (location_id,)).fetchone()
+    if row is None:
+        raise ValueError("La ubicación ya no existe; elige otra explícitamente.")
+    result = dict(row)
+    if result.get("timezone_id") is not None and result.get("utc_offset_hours") is not None:
+        raise ValueError("La ubicación tiene zona horaria y desfase fijo a la vez; corrígela en Equipo.")
+    if require_obstacles:
+        try:
+            profile = json.loads(result.get("obstacles") or "null")
+        except (ValueError, TypeError) as exc:
+            raise ValueError("El horizonte de la ubicación no es legible; revísalo en Equipo.") from exc
+        if not isinstance(profile, dict) or set(profile) != set(DIRECTIONS):
+            raise ValueError("Configura las ocho direcciones del horizonte en Equipo antes de aplicarlo.")
+        if any(type(value) is not int or value not in OBSTRUCTION_ALTITUDES for value in profile.values()):
+            raise ValueError("El horizonte contiene alturas no válidas; revísalo en Equipo.")
+        result["obstacles"] = profile
+    else:
+        result["obstacles"] = _obstacles_desde(result.get("obstacles"))
+    return result
+
+
 def delete(location_id: int) -> None:
     """Elimina una localización (los setups que la usan quedan sin ella).
 

@@ -12,8 +12,21 @@ def validate(data: dict) -> dict:
         "target", "setup_id", "date", "ra", "dec", "tiles_x", "tiles_y",
         "name", "exposure", "notes", "location", "view_fov", "frame_fov",
     }
-    if set(data) != required:
+    if set(data) - {"multinight", "multinight_file"} != required:
         raise DraftError("Campos de planificación incompatibles.")
+    if "multinight" in data:
+        from .multinight import validate_editor
+
+        validate_editor(data["multinight"])
+    if "multinight_file" in data:
+        reference = data["multinight_file"]
+        if "multinight" not in data or not isinstance(reference, dict) or set(reference) != {"path", "sha256"}:
+            raise DraftError("Referencia al maestro inválida.")
+        if not isinstance(reference["path"], str) or not reference["path"]:
+            raise DraftError("Ruta del maestro inválida.")
+        digest = reference["sha256"]
+        if not isinstance(digest, str) or len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
+            raise DraftError("Huella del maestro inválida.")
     target = data["target"]
     if target is not None and (
         not isinstance(target, list) or len(target) != 2

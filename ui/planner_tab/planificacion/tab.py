@@ -25,6 +25,7 @@ del usuario: nunca se inventa un FOV).
 from __future__ import annotations
 
 import sqlite3
+from copy import deepcopy
 from datetime import date
 
 from PyQt6.QtCore import QDate, Qt, pyqtSignal
@@ -97,6 +98,8 @@ class PlanificacionTab(QWidget):
         self._setups: list[dict] = []
         self._plan: list[dict] = []
         self._updating_view = False
+        self._multinight_data = None
+        self._multinight_file = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -143,7 +146,7 @@ class PlanificacionTab(QWidget):
         for control in (
             self._target, self._date, self._setup, self._ra, self._dec,
             self._tiles_x, self._tiles_y, self._session_name, self._exposure,
-            self._notes, self._save_button, self._plan_button, self._planetario,
+            self._notes, self._save_button, self._plan_button, self._planetario, self._multinight_button,
         ):
             control.setEnabled(not blocked)
         if not blocked:
@@ -153,7 +156,7 @@ class PlanificacionTab(QWidget):
     def _draft_snapshot(self) -> dict:
         """Captura entradas y encuadre; las recomendaciones se recalculan, no se certifican."""
         target, setup = self._current_target(), self._current_setup()
-        return {
+        data = {
             "target": [str(target["object_id"]), str(target["catalog"])] if target else None,
             "setup_id": setup["id"] if setup else None,
             "date": self._date_iso(), "ra": self._ra.value(), "dec": self._dec.value(),
@@ -164,6 +167,11 @@ class PlanificacionTab(QWidget):
             "view_fov": self._planetario.view[2],
             "frame_fov": list(self._fov) if self._fov else None,
         }
+        if self._multinight_data is not None:
+            data["multinight"] = deepcopy(self._multinight_data)
+            if self._multinight_file is not None:
+                data["multinight_file"] = deepcopy(self._multinight_file)
+        return data
 
     def _restore_draft(self, data: dict) -> None:
         """Prevalida referencias para no sustituir objetivo o equipo por el primero de la lista."""
@@ -181,6 +189,8 @@ class PlanificacionTab(QWidget):
             setup_index = next((i for i, row in enumerate(self._setups) if row["id"] == data["setup_id"]), -1)
             if setup_index < 0:
                 raise ValueError("El equipo ya no existe")
+        self._multinight_data = deepcopy(data.get("multinight"))
+        self._multinight_file = deepcopy(data.get("multinight_file"))
         controls = (self._target, self._setup, self._date, self._ra, self._dec,
                     self._tiles_x, self._tiles_y, self._session_name, self._exposure, self._notes)
         for control in controls:
@@ -230,6 +240,9 @@ class PlanificacionTab(QWidget):
         """Barra superior: Target, Fecha y Equipo (los tres disparan recálculos)."""
         bar = QHBoxLayout()
         bar.setSpacing(8)
+        self._multinight_button = QPushButton("Plan multinoches…")
+        self._multinight_button.clicked.connect(self._open_multinight)
+        bar.addWidget(self._multinight_button)
 
         bar.addWidget(QLabel("Target"))
         self._target = QComboBox()
@@ -256,6 +269,18 @@ class PlanificacionTab(QWidget):
 
         bar.addStretch(1)
         return bar
+
+    def _open_multinight(self):
+        """Abre el nuevo espacio sin reemplazar todavía el flujo legacy ni el borrador protegido."""
+        from .multinight import MultiNightDialog
+
+        try:
+            dialog = MultiNightDialog(self)
+        except (ValueError, KeyError, TypeError, sqlite3.Error) as exc:
+            QMessageBox.warning(self, "Plan multinoches", f"No se pudo abrir el borrador: {exc}. Se conserva sin modificar.")
+            return
+        dialog.showMaximized()
+        dialog.exec()
 
     # ------------------------------------------------------------------ #
     #                        C O L U M N A   I Z Q                        #
@@ -827,6 +852,12 @@ class PlanificacionTab(QWidget):
         """
         if self._draft.pending:
             self._draft.offer()
+            return
+        if self._multinight_data is not None:
+            QMessageBox.information(
+                self, "Borrador multinoches", "El borrador incluye un plan multinoches. "
+                "Se conserva: guardar una sesión del flujo anterior no debe retirarlo. Usa «Plan multinoches…»."
+            )
             return
         target = self._current_target()
         if target is None:
