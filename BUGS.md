@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **129 hallazgos**: 🔴 18 graves · 🟠 81 medios · 🟡 21 bajos · 9 decisiones (2 aplazadas).
-Estado: ✅ 111 corregidos · 🟡 2 contenidos · ⏳ 6 pendientes · 🔎 1 sin reproducir.
+Estado: ✅ 113 corregidos · 🟡 2 contenidos · ⏳ 4 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -110,7 +110,7 @@ Estado: ✅ 111 corregidos · 🟡 2 contenidos · ⏳ 6 pendientes · 🔎 1 si
 | **P-0018** | El filtro de cúmulos excluye las fichas SIMBAD de tipo genérico `Cl*`. | ✅ `f98d83a` |
 | **P-0019** | La búsqueda de eventos solares se limita a 16:00–08:00 y pierde puestas tempranas o salidas invernales posteriores, aunque los eventos existan. | ✅ `ef1a47f`; usuario valida el resultado (24/10). |
 | **P-0020** | Abrir un maestro de otra base puede adoptar ubicaciones/equipos/objetivos locales por coincidencia de IDs numéricos, sin revinculación explícita. | ✅ `132dc59` |
-| **P-0021** | El autoenfoque periódico suma el descanso entre tomas en vez de absorberlo respetando su mínimo. | ⏳ Corrección en verificación. |
+| **P-0021** | El autoenfoque periódico suma el descanso entre tomas en vez de absorberlo respetando su mínimo. | ✅ `82dcb3b` |
 | **U-0002** | Arrastrar la vista no actualiza el encuadre visible antes de guardar. | ✅ `885ba55` |
 | **U-0003** | Quitar el último target deja el plan y el planetario obsoletos. | ✅ `885ba55` |
 | **U-0004** | Si la región no está en el cielo, el target anterior queda resaltado. | ✅ `885ba55` |
@@ -120,7 +120,7 @@ Estado: ✅ 111 corregidos · 🟡 2 contenidos · ⏳ 6 pendientes · 🔎 1 si
 | **U-0012** | Efemérides repite el UTC en rangos/eje y puede mostrar la barra diurna al faltar una salida solar; el selector de Huso desaprovecha ancho y corta nombres. | ✅ `ef1a47f`; usuario valida tamaños, barra e indicador (24/10). |
 | **U-0013** | Resumen requiere bajar para ver los accesos inferiores en escritorio al 125 %, especialmente en la vista de ejemplo. | ✅ `bd01c1c` |
 | **U-0014** | Planificación conserva un contenedor de diálogo y un selector al formulario anterior en lugar de una única página nativa. | ✅ `e7f7f07` |
-| **U-0015** | Una prioridad de filtros temporalmente duplicada durante la edición impide recuperar su borrador autoguardado. | ⏳ Corrección en verificación. |
+| **U-0015** | Una prioridad de filtros temporalmente duplicada durante la edición impide recuperar su borrador autoguardado. | ✅ `82dcb3b` |
 | **C-0001** | Se admiten umbrales de sub/sobremuestreo contradictorios entre sí. | ✅ `a7f5ead` |
 | **C-0002** | Configuración guarda varias claves sin atomicidad: un fallo a mitad deja ajustes a medias. | ✅ `a7f5ead` |
 | **C-0003** | Editar la ruta de SirIL deja el ✓ de «encontrado» obsoleto hasta reabrir. | ✅ `600200c` |
