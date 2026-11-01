@@ -25,7 +25,7 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 ## Resumen
 
 **127 hallazgos**: 🔴 18 graves · 🟠 79 medios · 🟡 21 bajos · 9 decisiones (2 aplazadas).
-Estado: ✅ 110 corregidos · 🟡 2 contenidos · ⏳ 5 pendientes · 🔎 1 sin reproducir.
+Estado: ✅ 111 corregidos · 🟡 2 contenidos · ⏳ 4 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -118,7 +118,7 @@ Estado: ✅ 110 corregidos · 🟡 2 contenidos · ⏳ 5 pendientes · 🔎 1 si
 | **U-0011** | Las tablas repiten el eje mayor cuando falta el menor y ocultan el menor cuando solo se conoce este, mostrando tamaños no acreditados. | ✅ `f98d83a` |
 | **U-0012** | Efemérides repite el UTC en rangos/eje y puede mostrar la barra diurna al faltar una salida solar; el selector de Huso desaprovecha ancho y corta nombres. | ✅ `ef1a47f`; usuario valida tamaños, barra e indicador (24/10). |
 | **U-0013** | Resumen requiere bajar para ver los accesos inferiores en escritorio al 125 %, especialmente en la vista de ejemplo. | ✅ `bd01c1c` |
-| **U-0014** | Planificación conserva un contenedor de diálogo y un selector al formulario anterior en lugar de una única página nativa. | ⏳ Corrección en verificación. |
+| **U-0014** | Planificación conserva un contenedor de diálogo y un selector al formulario anterior en lugar de una única página nativa. | ✅ `e7f7f07` |
 | **C-0001** | Se admiten umbrales de sub/sobremuestreo contradictorios entre sí. | ✅ `a7f5ead` |
 | **C-0002** | Configuración guarda varias claves sin atomicidad: un fallo a mitad deja ajustes a medias. | ✅ `a7f5ead` |
 | **C-0003** | Editar la ruta de SirIL deja el ✓ de «encontrado» obsoleto hasta reabrir. | ✅ `600200c` |
