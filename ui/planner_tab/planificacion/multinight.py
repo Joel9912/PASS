@@ -289,16 +289,13 @@ class ObjectiveDialog(QDialog):
         self.accept()
 
 
-class MultiNightDialog(QDialog):
-    """Editor multinoches experimental; guarda configuración como borrador, no sesiones legacy inventadas."""
+class MultiNightPage(QWidget):
+    """Página nativa de Planificación con borrador y maestro, sin ejecución modal del espacio de trabajo."""
 
     def __init__(self, owner):
         """Usa el mismo borrador protegido del Planificador; no abre un segundo flujo editable competidor."""
         super().__init__(owner)
         self.owner = owner
-        self._embedded = False
-        self.setWindowTitle("Planificación multinoches · borrador")
-        self.resize(1420, 860)
         self._restoring = True
         self._result = None
         self._request = None
@@ -937,16 +934,6 @@ class MultiNightDialog(QDialog):
             event.ignore()
             return
         super().closeEvent(event)
-
-    def reject(self):
-        """Escape respeta la misma guardia de persistencia que el botón de cierre de la ventana."""
-        if self._embedded:
-            return
-        self.job.stop()
-        if not self.owner._draft.flush():
-            self.status.setText(self.owner._draft.label.text())
-            return
-        super().reject()
 
     def refresh_references(self):
         """Refresca opciones sin elegir sustitutos ni borrar referencias desaparecidas del borrador."""

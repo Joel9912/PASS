@@ -176,14 +176,14 @@ def test_regla_lunar_no_es_configurable_y_la_altura_minima_si():
 
 def editor(qt_app, memory_db):
     """Monta el espacio de planificación con base sintética y ubicación nombrada, sin datos personales."""
-    from ui.planner_tab.planificacion.multinight import MultiNightDialog
+    from ui.planner_tab.planificacion.multinight import MultiNightPage
     from ui.planner_tab.planificacion.tab import PlanificacionTab
 
     memory_db.execute("INSERT INTO locations(name,latitude,longitude,timezone_id) VALUES('Prueba',40,1,'Europe/Madrid')")
     memory_db.execute("INSERT INTO personal_catalog(object_id,catalog,kind,ra_hours,dec_deg) VALUES('Objetivo','region','region',.712,41.27)")
     memory_db.commit()
     owner = PlanificacionTab()
-    return owner, MultiNightDialog(owner)
+    return owner, MultiNightPage(owner)
 
 
 def editor_objective():
@@ -296,8 +296,8 @@ def test_sesion_legacy_no_retira_el_borrador_multinoches(qt_app, memory_db, monk
         owner.close()
 
 
-def test_error_de_autoguardado_es_visible_y_escape_no_lo_descarta(qt_app, memory_db, monkeypatch):
-    """Un fallo de escritura conserva el documento anterior y bloquea el cierre, también por Escape."""
+def test_error_de_autoguardado_es_visible_y_cierre_no_lo_descarta(qt_app, memory_db, monkeypatch):
+    """Un fallo de escritura conserva el documento anterior y bloquea el cierre de la página."""
     import sqlite3
 
     from db import work_drafts
@@ -306,6 +306,7 @@ def test_error_de_autoguardado_es_visible_y_escape_no_lo_descarta(qt_app, memory
     try:
         dialog.name.setText("Anterior")
         before = work_drafts.read("planner")
+        owner.show()
 
         def fail(*args, **kwargs):
             """Simula disco lleno sin modificar SQLite."""
@@ -316,7 +317,7 @@ def test_error_de_autoguardado_es_visible_y_escape_no_lo_descarta(qt_app, memory
             dialog.name.setText("Último")
             assert "disco lleno" in dialog.status.text()
             dialog.show()
-            dialog.reject()
+            dialog.close()
             assert dialog.isVisible()
             assert work_drafts.read("planner") == before
     finally:
@@ -675,17 +676,38 @@ def test_multinoches_es_la_vista_principal_del_planificador(qt_app, memory_db):
     """El diseño aprobado sustituye el editor principal; el flujo anterior queda fuera de esa superficie."""
     from PyQt6.QtWidgets import QGroupBox
 
-    from ui.planner_tab.planificacion.multinight import MultiNightDialog
+    from ui.planner_tab.planificacion.multinight import MultiNightPage
     from ui.planner_tab.planificacion.tab import PlanificacionTab
 
     owner = PlanificacionTab()
     try:
         owner.show()
         qt_app.processEvents()
-        workspace = owner.findChild(MultiNightDialog)
+        workspace = owner.findChild(MultiNightPage)
         assert workspace is not None and workspace.isVisible()
         assert not any(group.isVisible() and group.title() == "Editor de encuadre" for group in owner.findChildren(QGroupBox))
         assert memory_db.execute("SELECT COUNT(*) FROM work_drafts").fetchone()[0] == 0
+    finally:
+        owner.close()
+
+
+def test_planificacion_es_pagina_nativa_sin_dialogo_ni_selector_legacy(qt_app, memory_db):
+    """La planificación completa pertenece a la pestaña, no a un diálogo reutilizado ni a un modo alternativo."""
+    from PyQt6.QtWidgets import QComboBox, QDialog
+
+    from ui.planner_tab.planificacion.tab import PlanificacionTab
+
+    owner = PlanificacionTab()
+    try:
+        owner.show()
+        qt_app.processEvents()
+        workspace = owner._workspace
+        assert not isinstance(workspace, QDialog)
+        assert not workspace.isWindow()
+        assert workspace.window() is owner.window()
+        assert not any(combo.isVisible() and combo.accessibleName() == "Vista de Planificación"
+                       for combo in owner.findChildren(QComboBox))
+        assert not hasattr(workspace, "exec")
     finally:
         owner.close()
 

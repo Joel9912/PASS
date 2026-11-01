@@ -1,4 +1,4 @@
-"""Planificación: espacio multinoches principal y formulario anterior separado para consulta y recuperación.
+"""Planificación: página multinoches única con recuperación de entradas anteriores sin un modo alternativo.
 
 La vista principal se construye al entrar y usa el mismo borrador protegido.
 Este controlador conserva la API de objetivo/equipo/ubicación y los controles
@@ -58,7 +58,7 @@ PLAN_COLUMNS: tuple[str, ...] = (
 
 
 class PlanificacionTab(QWidget):
-    """Controlador del espacio multinoches principal y la recuperación del formulario anterior."""
+    """Controlador de la página multinoches y la recuperación de entradas del formulario anterior."""
 
     session_saved = pyqtSignal(int)          # id de la sesión creada
     # API pública prevista (A-14): sin consumidor hoy; el Planetario/
@@ -89,15 +89,12 @@ class PlanificacionTab(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(6)
-        self._view_selector = QComboBox()
-        self._view_selector.addItems(["Plan multinoches", "Formulario anterior · consulta / sesión legacy"])
-        self._view_selector.setAccessibleName("Vista de Planificación")
-        outer.addWidget(self._view_selector)
         self._views = QStackedWidget()
         self._placeholder = QLabel("Plan multinoches")
         self._placeholder.setTextFormat(Qt.TextFormat.PlainText)
         self._views.addWidget(self._placeholder)
-        self._legacy_panel = QWidget()
+        self._legacy_panel = QWidget(self)
+        self._legacy_panel.hide()
         root = QVBoxLayout(self._legacy_panel)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(10)
@@ -130,46 +127,35 @@ class PlanificacionTab(QWidget):
             (self._tiles_x, "valueChanged"), (self._tiles_y, "valueChanged"),
         ):
             getattr(control, signal).connect(self._draft.changed)
-        self._views.addWidget(self._legacy_panel)
         outer.addWidget(self._views, 1)
         recovery = QHBoxLayout()
         recovery.addWidget(self._draft.label, 1)
         recovery.addWidget(self._draft.button)
         outer.addLayout(recovery)
-        self._view_selector.currentIndexChanged.connect(self._switch_view)
 
     def _ensure_workspace(self):
         """Construye la vista principal al entrar, sin duplicar lienzos/curvas al arrancar todas las pestañas."""
         if self._workspace is not None:
             return self._workspace
-        from .multinight import MultiNightDialog
+        from .multinight import MultiNightPage
 
         try:
-            workspace = MultiNightDialog(self)
+            workspace = MultiNightPage(self)
         except (ValueError, KeyError, TypeError, sqlite3.Error) as exc:
             self._placeholder.setText(f"No se pudo recuperar el espacio multinoches: {exc}. El borrador se conserva.")
             return None
-        workspace.setParent(self._views, Qt.WindowType.Widget)
-        workspace._embedded = True
         workspace.setEnabled(not self._draft.pending)
         self._workspace = workspace
         self._views.insertWidget(0, workspace)
         self._views.removeWidget(self._placeholder)
         self._placeholder.deleteLater()
-        self._views.setCurrentIndex(self._view_selector.currentIndex())
+        self._views.setCurrentWidget(workspace)
         return workspace
-
-    def _switch_view(self, index):
-        """El diseño multinoches es principal; el formulario anterior no se usa como autoridad del nuevo plan."""
-        if index == 0:
-            self._ensure_workspace()
-        self._views.setCurrentIndex(index)
 
     def showEvent(self, event) -> None:
         """Ofrece continuar solo al entrar en Planificación, no al arrancar PASS."""
         super().showEvent(event)
-        if self._view_selector.currentIndex() == 0:
-            self._ensure_workspace()
+        self._ensure_workspace()
         self._draft.entered()
 
     def _block_draft(self, blocked: bool) -> None:
@@ -317,7 +303,6 @@ class PlanificacionTab(QWidget):
     def _open_multinight(self):
         """Vuelve a la vista multinoches incrustada, sin abrir otra autoridad ni ventana de planificación."""
         self._ensure_workspace()
-        self._view_selector.setCurrentIndex(0)
         self._views.setCurrentIndex(0)
 
     # ------------------------------------------------------------------ #

@@ -16,7 +16,7 @@ La rama de desarrollo incluye avances posteriores a esa release; consulta **Sin 
 | **Planetario** | Carta de catálogos con controles superpuestos, búsqueda, encuadre manual y envío de regiones al Catálogo Personal del Planificador | Exploración inicial; sin motor 3D ni imágenes DSS2; integración multinoches pendiente |
 | **Equipo** | Setups y localizaciones del equipo con datos fríos y adjuntos visuales | ✅ |
 | **Planificador de Equipo** | Comparativas de equipo por características comparables y presupuesto | 🔶 placeholder |
-| **Planificador** ⭐ | Búsqueda y catálogo personal; nuevo espacio multinoches con restricciones, reparto por objeto/filtro/tesela, borrador y maestro portable confirmado | Primera implementación multinoches; flujo anterior conservado y conexión con capturas pendiente |
+| **Planificador** ⭐ | Búsqueda y catálogo personal; página multinoches con restricciones, reparto por objeto/filtro/tesela, borrador y maestro portable confirmado | Primera implementación multinoches; conexión con capturas pendiente |
 | **Apilador** | Sesiones y FOV, calibración, métricas de SirIL y apilado con drizzle, rechazo, ponderación y RGB | Flujo implementado; diagnóstico avanzado y nuevos modos pendientes |
 
 ## Requisitos
