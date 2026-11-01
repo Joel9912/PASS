@@ -5,6 +5,8 @@ Cambios relevantes para quienes usan PASS. Los detalles de implementación y cad
 ## Sin publicar — desarrollo posterior a v0.2-alpha
 
 ### Añadido
+- Reparto multinoches por visitas continuas, con alternativas recomendada, extendida y excepcional; considera capacidad futura, cobertura, prioridad de filtros y altura/tránsito. Preferencias de horas por noche, límites de filtros/teselas y margen editable sobre obstrucciones. Búsqueda heurística, sin garantía de óptimo global.
+- Calendario nocturno y tarjetas de cobertura con integración y operación separadas. Ampliación de fechas evaluada bajo demanda y adoptada solo tras confirmar. Maestro v2 conserva perfil, maniobras y alternativa elegida; consulta sin reoptimizar y lectura de maestros anteriores.
 - Perfil operativo por equipo: descanso entre tomas, movimiento/recentrado, cambio de filtro, ventana de meridiano y disparadores opcionales de autoenfoque, con sus duraciones estimadas. Se guarda junto al equipo, sin controlar dispositivos; los tiempos no informados permanecen identificados como ausentes.
 - Planificación es una única página nativa dentro de su pestaña, sin contenedor de diálogo ni selector al formulario anterior; conserva planes y borradores (U-0014).
 - Planificación tiene como vista principal **Plan multinoches**: dos columnas con encuadre/FOV de lectura y curva a la izquierda; objetos, disponibilidad, valores del plan y cobertura a la derecha. Permite varios objetos/filtros, integración por tesela o total equitativa elegida, rango de fechas, días y franjas propias, altura mínima configurable y obstrucciones de la ubicación con interpretación explícita. El cálculo local se ejecuta en segundo plano, es cancelable y no reutiliza resultados de entradas anteriores.

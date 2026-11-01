@@ -10,6 +10,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from db.connection import get_connection
+from equipment.planning_profile import profile_from_data
 
 from .multinight import (
     Allocation,
@@ -22,6 +23,7 @@ from .multinight import (
     validate,
     validate_editor,
 )
+from .planning_models import Alternative, Operation, SkyTrack, Visit
 
 _MAX_BYTES = 64*1024*1024
 _INDEX_KEY = "capture_plan_index_v1"
@@ -73,9 +75,12 @@ def _moment(value):
 
 def decode_request(data):
     """Restaura una petición por valor, sin buscar catálogos/equipos ni cambiar sus coordenadas guardadas."""
-    if not isinstance(data, dict) or set(data) != set(Request.__dataclass_fields__):
+    new_fields = {"horizon_margin", "max_filters", "filter_order", "profile"}
+    if not isinstance(data, dict) or set(data)-new_fields != set(Request.__dataclass_fields__)-new_fields:
         raise ValueError("Petición del documento incompatible.")
     fields = dict(data)
+    fields["profile"] = profile_from_data(data.get("profile"))
+    fields["filter_order"] = tuple(data.get("filter_order", ()))
     for item in data["objectives"]:
         exposures = [goal["exposure_s"] for goal in item["demands"]]
         if not exposures or any(value != exposures[0] for value in exposures):
@@ -90,9 +95,10 @@ def decode_request(data):
 
 def decode_result(data):
     """Restaura los bloques y balances; nunca procesa imágenes al leer un maestro."""
-    if not isinstance(data, dict) or set(data) != set(Result.__dataclass_fields__):
+    new_fields = {"operations", "visits", "alternatives", "selected", "tracks"}
+    if not isinstance(data, dict) or set(data)-new_fields != set(Result.__dataclass_fields__)-new_fields:
         raise ValueError("Resultado del documento incompatible.")
-    if any(not isinstance(data[key], list) for key in data):
+    if any(not isinstance(data[key], list) for key in data if key != "selected"):
         raise ValueError("Colecciones del resultado incompatibles.")
     opportunities, allocations = [], []
     for source, cls, output in ((data["opportunities"], Opportunity, opportunities), (data["allocations"], Allocation, allocations)):
@@ -100,8 +106,20 @@ def decode_result(data):
             values = dict(item)
             values["start"], values["end"] = _moment(item["start"]), _moment(item["end"])
             output.append(cls(**values))
+    def timed(cls, item):
+        """Valida instantes tipados antes de construir eventos o visitas del maestro."""
+        return cls(**dict(item, start=_moment(item["start"]), end=_moment(item["end"])))
+
+    tracks = tuple(SkyTrack(**dict(item, times=tuple(map(_moment, item["times"])), altitudes=tuple(item["altitudes"]),
+                                 transits=tuple(map(_moment, item["transits"])))) for item in data.get("tracks", ()))
+    alternatives = []
+    for item in data.get("alternatives", ()):
+        alternatives.append(Alternative(item["key"], item["label"], tuple(timed(Allocation, f) for f in item["allocations"]),
+                                        tuple(Balance(**b) for b in item["balances"]), tuple(timed(Operation, e) for e in item["operations"]),
+                                        tuple(timed(Visit, v) for v in item["visits"]), tuple(item["notes"]), item["requires_consent"]))
     return Result(tuple(opportunities), tuple(allocations), tuple(Balance(**item) for item in data["balances"]),
-                  tuple(data["accuracy"]), tuple(data["warnings"]))
+                  tuple(data["accuracy"]), tuple(data["warnings"]), tuple(timed(Operation, e) for e in data.get("operations", ())),
+                  tuple(timed(Visit, v) for v in data.get("visits", ())), tuple(alternatives), data.get("selected", "recommended"), tracks)
 
 
 def validate_document(document):
@@ -112,7 +130,7 @@ def validate_document(document):
         raise ValueError("Estructura de maestro incompatible.")
     if "reference_scope" in document:
         _identifier(document["reference_scope"])
-    if document["format"] != "pass-capture-plan" or type(document["version"]) is not int or document["version"] != 1:
+    if document["format"] != "pass-capture-plan" or type(document["version"]) is not int or document["version"] not in (1, 2):
         raise ValueError("Formato o versión de maestro no compatible; se conserva sin modificar.")
     if document["state"] != "created":
         raise ValueError("El archivo no es un plan creado confirmado.")
@@ -155,9 +173,28 @@ def validate_document(document):
             raise ValueError("Las restricciones guardadas no corresponden al calendario.")
     if tuple(editor["weekdays"]) != request.weekdays or editor["use_obstacles"] != (request.obstacles is not None):
         raise ValueError("La disponibilidad guardada no corresponde al calendario.")
-    calculated = distribute(request, result.opportunities, result.accuracy)
-    if calculated.allocations != result.allocations or calculated.balances != result.balances:
-        raise ValueError("El reparto guardado no corresponde a sus ventanas/objetivos.")
+    if document["version"] == 2:
+        from .planning_scheduler import select_alternative, validate_calendar
+
+        if request.policy != "balanced":
+            raise ValueError("Política incompatible con el maestro operativo.")
+        for name in ("horizon_margin", "max_filters", "filter_order"):
+            value = tuple(editor.get(name, ())) if name == "filter_order" else editor.get(name, 0 if name == "horizon_margin" else 1)
+            if value != getattr(request, name):
+                raise ValueError("La configuración operativa no corresponde a la petición.")
+        capacities = validate_calendar(request, result)
+        if result.alternatives:
+            if len({a.key for a in result.alternatives}) != len(result.alternatives):
+                raise ValueError("Alternativas repetidas.")
+            selected = select_alternative(result, result.selected)
+            if (selected.allocations, selected.balances, selected.operations, selected.visits) != (result.allocations, result.balances, result.operations, result.visits):
+                raise ValueError("La alternativa seleccionada no coincide con el calendario guardado.")
+            for alternative in result.alternatives:
+                validate_calendar(request, select_alternative(result, alternative.key), capacities=capacities)
+    else:
+        calculated = distribute(request, result.opportunities, result.accuracy)
+        if calculated.allocations != result.allocations or calculated.balances != result.balances:
+            raise ValueError("El reparto guardado no corresponde a sus ventanas/objetivos.")
     if any(not isinstance(value, str) for value in result.accuracy+result.warnings):
         raise ValueError("Procedencia del resultado inválida.")
     return request, result
@@ -170,12 +207,9 @@ def make_document(editor, request, result, previous=None, *, scope=None):
     old_ids = previous["objective_ids"] if previous else {}
     identities = {obj.key:old_ids.get(obj.key, uuid4().hex) for obj in request.objectives}
     stable_request = replace(request, objectives=tuple(replace(obj, key=identities[obj.key]) for obj in request.objectives))
-    stable_result = replace(result,
-                            opportunities=tuple(replace(item, objective=identities[item.objective]) for item in result.opportunities),
-                            allocations=tuple(replace(item, objective=identities[item.objective]) for item in result.allocations),
-                            balances=tuple(replace(item, objective=identities[item.objective]) for item in result.balances))
+    stable_result = remap_result(result, identities)
     now = _utc_now()
-    document = {"format":"pass-capture-plan", "version":1, "id":previous["id"] if previous else uuid4().hex,
+    document = {"format":"pass-capture-plan", "version":2 if request.policy == "balanced" else 1, "id":previous["id"] if previous else uuid4().hex,
                 "revision":uuid4().hex, "created_at":previous["created_at"] if previous else now, "updated_at":now,
                 "state":"created", "objective_ids":identities, "editor":editor,
                 "request":asdict(stable_request), "result":asdict(stable_result)}
@@ -187,6 +221,25 @@ def make_document(editor, request, result, previous=None, *, scope=None):
     document = json.loads(json.dumps(document, default=_json_value, ensure_ascii=False, allow_nan=False))
     validate_document(document)
     return document
+
+
+def remap_result(result, identities):
+    """Reexpresa identidades usando solo el mapa explícito del maestro, sin resolver nombres ni IDs coincidentes."""
+    def remap(items):
+        """Conserva todos los valores temporales al transportar referencias de una representación a otra."""
+        return tuple(replace(item, objective=identities[item.objective]) for item in items)
+
+    return replace(result, opportunities=remap(result.opportunities), allocations=remap(result.allocations), balances=remap(result.balances),
+                   operations=remap(result.operations), visits=remap(result.visits), tracks=remap(result.tracks),
+                   alternatives=tuple(replace(a, allocations=remap(a.allocations), balances=remap(a.balances),
+                                              operations=remap(a.operations), visits=remap(a.visits)) for a in result.alternatives))
+
+
+def editor_calendar(document):
+    """Recupera el calendario por valor; la UI verifica el ámbito antes de adoptar las referencias locales."""
+    request, result = validate_document(document)
+    identities = {identity:key for key, identity in document["objective_ids"].items()}
+    return replace(request, objectives=tuple(replace(obj, key=identities[obj.key]) for obj in request.objectives)), remap_result(result, identities)
 
 
 def reference_scope(*, create=False):

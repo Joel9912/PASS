@@ -4,7 +4,8 @@ import copy
 import json
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict
+from dataclasses import asdict, replace
+from datetime import date, timedelta
 from threading import Event
 
 import pyqtgraph as pg
@@ -20,6 +21,7 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -36,8 +38,10 @@ from PyQt6.QtWidgets import (
 )
 
 from equipment.localizations import list_locations, planning_location
+from equipment.manager import get as get_setup
 from equipment.manager import list_setups
 from equipment.models import DIRECTIONS
+from equipment.planning_profile import profile_from_data
 from planners import personal_catalog
 from planners.framing import calculate_fov
 from planners.multinight import (
@@ -54,15 +58,19 @@ from planners.multinight import (
     validate_editor,
 )
 from planners.plan_document import (
+    editor_calendar,
     index_document,
     make_document,
     read_document,
     reference_scope,
     write_document,
 )
+from planners.planning_scheduler import select_alternative
 from planners.sky_state import location_clock
 from planners.timezones import local_moment, utc_moment
 
+from .night_timeline import NightTimeline
+from .plan_results import CoverageCards
 from .planetario_visual import PlanetarioVisual
 
 _EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="multinight")
@@ -131,7 +139,7 @@ class PlanningJob(QObject):
         def work():
             """Calcula un plan o su inspección; los callbacks solo emiten señales."""
             try:
-                if kind == "plan":
+                if kind in ("plan", "extension"):
                     result = calculate(request, cancelled=event.is_set,
                                        progress=lambda done, total: self.progressed.emit(generation, done, total))
                 else:
@@ -150,7 +158,7 @@ class PlanningJob(QObject):
 class ObjectiveDialog(QDialog):
     """Un objeto del plan con horas por filtro y elección explícita de FOV y reparto entre teselas."""
 
-    def __init__(self, targets, setup, exposure, parent=None, existing=None):
+    def __init__(self, targets, setup, exposure, parent=None, existing=None, filters=None):
         """Presenta referencias personales reales; no guarda catálogo ni selecciona un encuadre por inferencia."""
         super().__init__(parent)
         self.setWindowTitle("Objetivo de captura")
@@ -159,6 +167,7 @@ class ObjectiveDialog(QDialog):
         self._setup_fov = calculate_fov(setup) if setup else None
         self._exposure = exposure
         self._existing = existing
+        self._common_filters = filters
         form = QFormLayout(self)
         self.target = QComboBox()
         for item in targets:
@@ -192,6 +201,21 @@ class ObjectiveDialog(QDialog):
         self.mode.addItem("Horas por cada tesela", "per_tile")
         self.mode.addItem("Horas totales · repartir igual entre teselas", "total_equal")
         form.addRow("Integración", self.mode)
+        self.night_mode = QComboBox()
+        self.night_mode.addItem("Automático recomendado", "auto")
+        self.night_mode.addItem("Horas deseadas por noche", "desired")
+        self.night_mode.addItem("Máxima integración por noche", "maximum")
+        self.night_hours = QDoubleSpinBox()
+        self.night_hours.setRange(.01, 24)
+        self.night_hours.setValue(1)
+        self.night_hours.setSuffix(" h / noche")
+        self.night_hours.setEnabled(False)
+        self.night_mode.currentIndexChanged.connect(lambda: self.night_hours.setEnabled(self.night_mode.currentData() == "desired"))
+        self.max_tiles = QSpinBox()
+        self.max_tiles.setRange(1, 400)
+        form.addRow("Reparto de este objeto", self.night_mode)
+        form.addRow("Integración orientativa", self.night_hours)
+        form.addRow("Hasta N teselas / noche", self.max_tiles)
         self.filters = QTableWidget(0, 2)
         self.filters.setHorizontalHeaderLabels(["Filtro (o Sin filtro)", "Horas objetivo"])
         self.filters.horizontalHeader().setStretchLastSection(True)
@@ -218,6 +242,9 @@ class ObjectiveDialog(QDialog):
             self.tiles_x.setValue(existing["objective"]["tiles_x"])
             self.tiles_y.setValue(existing["objective"]["tiles_y"])
             self.mode.setCurrentIndex(self.mode.findData(existing["objective"]["integration_mode"]))
+            self.night_mode.setCurrentIndex(self.night_mode.findData(existing["objective"].get("night_mode", "auto")))
+            self.night_hours.setValue(existing["objective"].get("night_hours") or 1)
+            self.max_tiles.setValue(existing["objective"].get("max_tiles", 1))
             for demand in existing["objective"]["demands"]:
                 self._add_filter(demand["filter_name"], str(demand["hours"]))
         else:
@@ -229,6 +256,15 @@ class ObjectiveDialog(QDialog):
         row = self.filters.rowCount()
         self.filters.insertRow(row)
         self.filters.setItem(row, 0, QTableWidgetItem(name))
+        if self._common_filters is not None:
+            combo = QComboBox()
+            combo.addItem("Elegir filtro común…", None)
+            for value in self._common_filters:
+                combo.addItem(value, value)
+            if name and name not in self._common_filters:
+                combo.addItem(f"Referencia no definida: {name}", name)
+            combo.setCurrentIndex(max(0, combo.findData(name)))
+            self.filters.setCellWidget(row, 0, combo)
         self.filters.setItem(row, 1, QTableWidgetItem(hours))
 
     def _fov(self):
@@ -267,12 +303,17 @@ class ObjectiveDialog(QDialog):
         demands = []
         for row in range(self.filters.rowCount()):
             name = self.filters.item(row, 0).text().strip() if self.filters.item(row, 0) else ""
+            if self.filters.cellWidget(row, 0):
+                name = self.filters.cellWidget(row, 0).currentData() or ""
+            if self._common_filters is not None and name not in self._common_filters:
+                raise ValueError("Define el filtro común en Valores del plan antes de asignarlo al objeto.")
             raw = self.filters.item(row, 1).text() if self.filters.item(row, 1) else ""
             demands.append(Demand(name, float(raw.replace(",", ".")), self._exposure))
         key = json.dumps([target["catalog"], target["object_id"]], ensure_ascii=False)
         objective = Objective(key, str(target["object_id"]), float(target["ra_hours"]), float(target["dec_deg"]), tuple(demands),
                               self.tiles_x.value(), self.tiles_y.value(), fov[0] if fov else None, fov[1] if fov else None,
-                              self.mode.currentData())
+                              self.mode.currentData(), self.night_mode.currentData(),
+                              self.night_hours.value() if self.night_mode.currentData() == "desired" else None, self.max_tiles.value())
         return {"object_id": target["object_id"], "catalog": target["catalog"], "source": self.source.currentData(),
                 "region_fov_mode":self.region_mode.currentData() if self.source.currentData() == "region" else None,
                 "objective": asdict(objective)}
@@ -298,8 +339,12 @@ class MultiNightPage(QWidget):
         self.owner = owner
         self._restoring = True
         self._result = None
+        self._master_readonly_view = False
         self._request = None
+        self._extension_request = None
+        self._editor_version = 2
         self._preview_caption = ""
+        self._preview_key = None
         self._objectives = []
         self._targets = personal_catalog.list_objects()
         self._locations = {row["id"]: row for row in list_locations()}
@@ -402,6 +447,7 @@ class MultiNightPage(QWidget):
         self.policy = QComboBox()
         self.policy.addItem("Elegir política…", None)
         self.policy.addItem("Consultar ventanas, sin repartir", "windows_only")
+        self.policy.addItem("Sesiones equilibradas · tránsito y operación", "balanced")
         self.policy.addItem("Cronológico por orden de objetos y filtros", "chronological_order")
         self.policy.setToolTip("Propuesta explícita, no optimizador global. El orden puede cambiar el déficit de otros objetos.")
         form.addRow("Reparto", self.policy)
@@ -455,6 +501,11 @@ class MultiNightPage(QWidget):
         self.minimum_altitude.setSuffix("°")
         self.minimum_altitude.valueChanged.connect(self._changed)
         form.addRow("Altura mínima", self.minimum_altitude)
+        self.horizon_margin = QDoubleSpinBox()
+        self.horizon_margin.setRange(0, 90)
+        self.horizon_margin.setSuffix("°")
+        self.horizon_margin.valueChanged.connect(self._changed)
+        form.addRow("Margen de obstrucciones", self.horizon_margin)
         self.use_obstacles = QCheckBox("Aplicar obstrucciones de la ubicación")
         self.use_obstacles.toggled.connect(self._changed)
         form.addRow(self.use_obstacles)
@@ -483,9 +534,23 @@ class MultiNightPage(QWidget):
             self.setup.addItem(item["name"], key)
         self.setup.currentIndexChanged.connect(self._changed)
         form.addRow("Nombre del plan", self.name)
-        form.addRow("Equipo para nuevos objetivos", self.setup)
+        form.addRow("Equipo del plan", self.setup)
+        self.profile_label = _plain("Tiempos operativos del equipo seleccionado; los no informados se indicarán al calcular.")
+        form.addRow(self.profile_label)
         form.addRow("Exposición", self.exposure)
         form.addRow("Notas del plan", self.notes)
+        self.filter_order = QLineEdit("Sin filtro")
+        self.filter_order.setPlaceholderText("L, R, G, B · de mayor a menor prioridad")
+        self.filter_order.setToolTip("Definiciones comunes del plan, separadas por comas. Cada nombre identifica un único filtro; usa etiquetas distintas para filtros físicos diferentes.")
+        self.filter_order.textChanged.connect(self._changed)
+        self.max_filters = QSpinBox()
+        self.max_filters.setRange(1, 100)
+        self.max_filters.valueChanged.connect(self._changed)
+        form.addRow("Filtros comunes · prioridad", self.filter_order)
+        form.addRow("Hasta N filtros / noche", self.max_filters)
+        equipment_filters = QPushButton("Definir filtros desde el equipo")
+        equipment_filters.clicked.connect(self._equipment_filters)
+        form.addRow(equipment_filters)
         self.new_plan_button = QPushButton("Nuevo plan…")
         self.new_plan_button.clicked.connect(self._new_plan)
         form.addRow(self.new_plan_button)
@@ -496,6 +561,15 @@ class MultiNightPage(QWidget):
         widget = QWidget()
         layout = QVBoxLayout(widget)
         self.result_views = QTabWidget()
+        self.alternative = QComboBox()
+        self.alternative.setAccessibleName("Alternativa de distribución")
+        self.alternative.currentIndexChanged.connect(self._choose_alternative)
+        layout.addWidget(self.alternative)
+        self.timeline = NightTimeline()
+        self.timeline.visit_selected.connect(self._inspect_visit)
+        self.result_views.addTab(self.timeline, "Noches")
+        self.coverage_cards = CoverageCards()
+        self.result_views.addTab(self.coverage_cards, "Resumen")
         self.allocations_table = _table(["Fecha", "Objeto", "Tesela", "Filtro", "Desde", "Hasta", "Tomas"])
         self.balance_table = _table(["Objeto", "Tesela", "Filtro", "Objetivo h", "Asignadas h", "Faltan h"])
         self.windows_table = _table(["Fecha", "Objeto", "Tesela", "Desde", "Hasta"])
@@ -510,9 +584,16 @@ class MultiNightPage(QWidget):
         self.result_views.addTab(self.balance_table, "Cobertura")
         self.result_views.addTab(self.windows_table, "Ventanas")
         layout.addWidget(self.result_views)
+        self.block_details = _plain("Selecciona una noche y un bloque; las franjas tramadas indican maniobras.")
+        layout.addWidget(self.block_details)
         detail = QPushButton("Condiciones y límites del cálculo")
         detail.clicked.connect(self._details)
-        layout.addWidget(detail)
+        extension = QPushButton("Estudiar ampliación…")
+        extension.clicked.connect(self._consider_extension)
+        secondary = QHBoxLayout()
+        secondary.addWidget(detail)
+        secondary.addWidget(extension)
+        layout.addLayout(secondary)
         self.tabs.addTab(widget, "Resultado")
 
     def _defaults(self):
@@ -521,15 +602,16 @@ class MultiNightPage(QWidget):
         choices = [key for key, row in self._locations.items()
                    if (row["latitude"], row["longitude"], location_clock(row)) ==
                    (self.owner._latitude, self.owner._longitude, self.owner._utc_offset_hours)]
-        return {"version":1, "start":self.owner._date_iso(), "end":self.owner._date.date().addDays(29).toString("yyyy-MM-dd"),
+        return {"version":2, "start":self.owner._date_iso(), "end":self.owner._date.date().addDays(29).toString("yyyy-MM-dd"),
                 "start_minute":19*60, "end_minute":6*60, "weekdays":list(range(7)), "minimum_altitude":30,
                 "policy":None, "location_id":choices[0] if len(choices) == 1 else None,
                 "setup_id":setup["id"] if setup else None, "use_obstacles":False, "horizon_policy":None,
-                "exposure":self.owner._exposure.value(), "notes":"", "name":"", "objectives":[]}
+                "exposure":self.owner._exposure.value(), "notes":"", "name":"", "objectives":[],
+                "horizon_margin":5., "max_filters":1, "filter_order":["Sin filtro"]}
 
     def snapshot(self):
         """Recoge configuración incluso incompleta, sin persistir resultados como autoridad de un plan creado."""
-        return {"version":1, "start":self.start.date().toString("yyyy-MM-dd"), "end":self.end.date().toString("yyyy-MM-dd"),
+        data = {"version":self._editor_version, "start":self.start.date().toString("yyyy-MM-dd"), "end":self.end.date().toString("yyyy-MM-dd"),
                 "start_minute":self.start_slider.value(), "end_minute":self.end_slider.value(),
                 "weekdays":[i for i, check in enumerate(self.days) if check.isChecked()],
                 "minimum_altitude":self.minimum_altitude.value(), "policy":self.policy.currentData(),
@@ -537,6 +619,30 @@ class MultiNightPage(QWidget):
                 "use_obstacles":self.use_obstacles.isChecked(), "horizon_policy":self.horizon_policy.currentData(),
                 "exposure":self.exposure.value(), "notes":self.notes.text(), "name":self.name.text(),
                 "objectives":copy.deepcopy(self._objectives)}
+        if self._editor_version >= 2:
+            data.update(horizon_margin=self.horizon_margin.value(), max_filters=self.max_filters.value(),
+                        filter_order=self._filters())
+        return data
+
+    def _filters(self):
+        """Lee las definiciones compartidas sin unir filtros de distintos objetos por inferencia."""
+        return [value.strip() for value in self.filter_order.text().split(",") if value.strip()]
+
+    def _equipment_filters(self):
+        """Asigna etiquetas inequívocas del equipo solo mediante una acción explícita del usuario."""
+        from equipment.components import get_filter
+
+        setup = get_setup(self.setup.currentData()) if self.setup.currentData() is not None else None
+        if setup is None:
+            self.status.setText("Elige un equipo guardado antes de definir sus filtros.")
+            return
+        values = [get_filter(identity) for identity in setup["filter_ids"]]
+        labels = [f"{value['name']} [#{value['id']}]" for value in values if value]
+        if labels:
+            self.filter_order.setText(", ".join(labels))
+            self.status.setText("Filtros definidos; revisa su prioridad y asígnalos explícitamente a los objetivos.")
+        else:
+            self.status.setText("Este equipo no tiene filtros asignados. Puedes definirlos manualmente en el plan.")
 
     def validate_references(self, data):
         """Prevalida referencias locales sin modificar el editor ni sustituir ausencias por otro elemento."""
@@ -553,6 +659,7 @@ class MultiNightPage(QWidget):
     def restore(self, data):
         """Prevalida el documento y referencias antes de escribir controles, conservando ausencias como error."""
         self.validate_references(data)
+        self._editor_version = data["version"]
         self.start.setDate(QDate.fromString(data["start"], "yyyy-MM-dd"))
         self.end.setDate(QDate.fromString(data["end"], "yyyy-MM-dd"))
         self.start_slider.setValue(data["start_minute"])
@@ -560,6 +667,9 @@ class MultiNightPage(QWidget):
         for index, check in enumerate(self.days):
             check.setChecked(index in data["weekdays"])
         self.minimum_altitude.setValue(data["minimum_altitude"])
+        self.horizon_margin.setValue(data.get("horizon_margin", 0))
+        self.max_filters.setValue(data.get("max_filters", 1))
+        self.filter_order.setText(", ".join(data.get("filter_order", ["Sin filtro"])))
         self.policy.setCurrentIndex(self.policy.findData(data["policy"]))
         self.location.setCurrentIndex(self.location.findData(data["location_id"]))
         self.setup.setCurrentIndex(self.setup.findData(data["setup_id"]))
@@ -581,14 +691,28 @@ class MultiNightPage(QWidget):
         clock = location_clock(location) if location else None
         self.clock_label.setText(str(clock) if isinstance(clock, str) else f"UTC {clock:+g}" if clock is not None else
                                  "≈ por longitud" if location else "—")
+        setup = self._setups.get(self.setup.currentData())
+        profile = profile_from_data(setup.get("planning_profile") if setup else None)
+        pause = f"{profile.pause_s:g} s" if profile.pause_s is not None else "no informada"
+        flip = f"{profile.meridian_s/60:g} min totales" if profile.meridian_flip else "no requerido"
+        self.profile_label.setText(f"Pausa: {pause} · meridiano: {flip}. Configura maniobras y enfoque en Equipo.")
 
     def _changed(self, *_args):
         """Invalida reparto/curva al editar, cancela entregas tardías y guarda únicamente borrador."""
         if self._restoring:
             return
+        self._editor_version = 2
         self.job.stop()
         self._set_busy(False)
         self._result = self._request = None
+        self._master_readonly_view = False
+        self._extension_request = None
+        self.timeline.clear()
+        self.coverage_cards.set_message("Sin propuesta vigente")
+        self.block_details.setText("Selecciona un bloque después de calcular.")
+        self.alternative.blockSignals(True)
+        self.alternative.clear()
+        self.alternative.blockSignals(False)
         self.save_plan_button.setEnabled(False)
         self.curve.clear()
         for table in (self.allocations_table, self.balance_table, self.windows_table):
@@ -622,7 +746,8 @@ class MultiNightPage(QWidget):
         if not adding and row < 0:
             return
         existing = None if adding else self._objectives[row]
-        dialog = ObjectiveDialog(self._targets, self._setups.get(self.setup.currentData()), self.exposure.value(), self, existing)
+        dialog = ObjectiveDialog(self._targets, self._setups.get(self.setup.currentData()), self.exposure.value(), self, existing,
+                                 filters=self._filters() if self.policy.currentData() == "balanced" else None)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         value = dialog.values()
@@ -692,10 +817,21 @@ class MultiNightPage(QWidget):
         location = planning_location(self.location.currentData(), require_obstacles=self.use_obstacles.isChecked())
         obstacles = tuple(location["obstacles"][direction] for direction in DIRECTIONS) if self.use_obstacles.isChecked() else None
         data = self.snapshot()
+        profile = profile_from_data(None)
+        if data["policy"] == "balanced":
+            if data["setup_id"] is not None:
+                setup = get_setup(data["setup_id"])
+                if setup is None:
+                    raise ValueError("El equipo ya no existe.")
+                profile = profile_from_data(setup.get("planning_profile"))
+            names = {d["filter_name"] for value in self._objectives for d in value["objective"]["demands"]}
+            if not names <= set(self._filters()):
+                raise ValueError("Asigna a cada objetivo filtros comunes definidos en Valores del plan; no se fusionan nombres automáticamente.")
         request = Request(data["start"], data["end"], location["latitude"], location["longitude"], location_clock(location),
                           data["start_minute"], data["end_minute"], tuple(data["weekdays"]), data["minimum_altitude"],
                           tuple(objective_from_data(item["objective"], data["exposure"]) for item in self._objectives),
-                          data["policy"], obstacles, data["horizon_policy"])
+                          data["policy"], obstacles, data["horizon_policy"],
+                          data.get("horizon_margin", 0), data.get("max_filters", 1), tuple(data.get("filter_order", ())), profile)
         availability(request)
         return request
 
@@ -746,9 +882,44 @@ class MultiNightPage(QWidget):
         if kind == "preview":
             self._draw_preview(result)
             return
+        if kind == "extension":
+            self._set_busy(False)
+            request = self._extension_request
+            self._extension_request = None
+            if request is None:
+                return
+            assigned = sum(balance.assigned_s for balance in result.balances)/3600
+            previous = sum(balance.assigned_s for balance in self._result.balances)/3600 if self._result else 0
+            choice = QMessageBox.question(self, "Ampliación calculada",
+                                          f"Hasta {request.end}: {assigned:.2f} h propuestas frente a {previous:.2f} h actuales.\n"
+                                          "¿Adoptar el nuevo rango y su propuesta? El maestro guardado no cambia hasta confirmarlo.",
+                                          QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+            if choice != QMessageBox.StandardButton.Yes:
+                self.status.setText(f"Ampliación evaluada: {assigned:.2f} h; no se adoptaron fechas ni se modificó el plan.")
+                return
+            self._restoring = True
+            try:
+                self.end.setDate(QDate.fromString(request.end, "yyyy-MM-dd"))
+            finally:
+                self._restoring = False
+            self._request = request
+            self.owner._multinight_data = self.snapshot()
+            self.owner._draft.changed()
         self._set_busy(False)
         self._result = result
-        self.save_plan_button.setEnabled(bool(result.allocations) and self._request.policy != "windows_only")
+        self.alternative.blockSignals(True)
+        self.alternative.clear()
+        for choice in result.alternatives:
+            hours = sum(balance.assigned_s for balance in choice.balances)/3600
+            nights = len({visit.night for visit in choice.visits})
+            self.alternative.addItem(f"{choice.label} · {hours:.2f} h · {nights} noches", choice.key)
+        self.alternative.setCurrentIndex(self.alternative.findData(result.selected))
+        self.alternative.blockSignals(False)
+        self.alternative.setVisible(bool(result.alternatives))
+        self.timeline.set_plan(self._request, result)
+        self.coverage_cards.set_plan(self._request, result)
+        self.result_views.setCurrentWidget(self.timeline if result.visits else self.windows_table if self._request.policy == "windows_only" else self.allocations_table)
+        self.save_plan_button.setEnabled(bool(result.allocations) and self._request.policy != "windows_only" and not self._master_readonly_view)
         names = {obj.key:obj.name for obj in self._request.objectives}
         _fill(self.allocations_table, [(item.night, names[item.objective], item.tile, item.filter_name,
                                        self._clock(item.start), self._clock(item.end), item.frames) for item in result.allocations])
@@ -758,13 +929,72 @@ class MultiNightPage(QWidget):
                                   for item in result.opportunities])
         requested = sum(item.requested_s for item in result.balances)/3600
         assigned = sum(item.assigned_s for item in result.balances)/3600
+        operational = sum((event.end-event.start).total_seconds() for event in result.operations)/3600
         self.summary.setText(f"{self.name.text() or 'Sin nombre'} · {len(names)} objetos\n"
                              f"{assigned:.2f} h propuestas / {requested:.2f} h solicitadas · faltan {requested-assigned:.2f} h\n"
-                             "Propuesta · pendiente de confirmar y guardar")
+                             f"{operational:.2f} h operación · {assigned+operational:.2f} h ocupadas · sin confirmar")
         self.status.setText("Revisa la cobertura por objeto, filtro y tesela antes de confirmar el plan.")
+        if not result.opportunities:
+            self.status.setText("No hay ventanas que cumplan todas las restricciones. Revisa disponibilidad y condiciones.")
+        elif not result.allocations:
+            self.status.setText("No hay reparto normal con los mínimos y límites elegidos; revisa cobertura, excepciones o una ampliación.")
+            if self._request.policy == "balanced":
+                self.result_views.setCurrentWidget(self.coverage_cards)
         self.tabs.setCurrentIndex(3)
-        if result.opportunities:
+        if result.visits:
+            self.timeline.setCurrentRow(0)
+        elif result.opportunities:
             self.windows_table.selectRow(0)
+
+    def _choose_alternative(self, _index):
+        """Las excepciones requieren una elección confirmada y nunca se adoptan al recibir el cálculo."""
+        if self._result is None or not self.alternative.currentData():
+            return
+        key = self.alternative.currentData()
+        choice = next(value for value in self._result.alternatives if value.key == key)
+        if choice.requires_consent and QMessageBox.question(
+            self, "Alternativa excepcional", "Esta propuesta permite fragmentación y/o un resto final corto. "
+            "¿Quieres seleccionarla?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        ) != QMessageBox.StandardButton.Yes:
+            self.alternative.blockSignals(True)
+            self.alternative.setCurrentIndex(self.alternative.findData(self._result.selected))
+            self.alternative.blockSignals(False)
+            return
+        self._delivered(self.job.generation, "plan", select_alternative(self._result, key), "")
+
+    def _consider_extension(self):
+        """Evalúa días adicionales elegidos por el usuario; no cambia el rango sin aceptar el resultado calculado."""
+        if self._master_readonly_view:
+            self.status.setText("Recalcula con las condiciones actuales antes de estudiar otra revisión del maestro.")
+            return
+        if self._request is None or self._result is None:
+            self.status.setText("Calcula primero la propuesta actual antes de comparar una ampliación.")
+            return
+        days, accepted = QInputDialog.getInt(self, "Estudiar ampliación", "Días adicionales a evaluar", 7, 1, 365)
+        if not accepted:
+            return
+        request = replace(self._request, end=(date.fromisoformat(self._request.end)+timedelta(days=days)).isoformat())
+        try:
+            availability(request)
+        except ValueError as exc:
+            self.status.setText(str(exc))
+            return
+        self._extension_request = request
+        self.status.setText("Evaluando ampliación sin modificar el rango actual…")
+        self._set_busy(True)
+        self.job.start("extension", request)
+
+    def _inspect_visit(self, visit):
+        """Sincroniza selección visual, detalle textual y curva de la tesela de ese bloque."""
+        if self._result is None:
+            return
+        frame = next((value for value in self._result.allocations if value.objective == visit.objective
+                      and visit.start <= value.start < value.end <= visit.end and value.night == visit.night), None)
+        if frame:
+            name = next(obj.name for obj in self._request.objectives if obj.key == visit.objective)
+            self.block_details.setText(f"{name} · {self._clock(visit.start)} → {self._clock(visit.end)}\n{visit.reason}")
+            self._inspect(frame)
 
     def _inspect_allocation(self):
         """Seleccionar un bloque consulta su franja real, no el top del ranking legacy."""
@@ -786,6 +1016,7 @@ class MultiNightPage(QWidget):
             self.objects_table.selectRow(index)
         name = next(obj.name for obj in self._request.objectives if obj.key == item.objective)
         self._preview_caption = f"{name} · {item.night} · tesela {item.tile}"
+        self._preview_key = item.objective, item.tile, item.night
         self.curve.clear()
         self.job.start("preview", self._request, (item.objective, item.tile, item.night))
         self.curve_status.setText(self._preview_caption + " · leyendo curva…")
@@ -803,8 +1034,18 @@ class MultiNightPage(QWidget):
             band = pg.LinearRegionItem((start, end), movable=False, brush=pg.mkBrush(34, 197, 94, 35), pen=pg.mkPen(None))
             band.setZValue(-10)
             self.curve.addItem(band)
+        if self._result is not None and self._request.profile.meridian_flip:
+            track = next((track for track in self._result.tracks if (track.objective, track.tile, track.night) == self._preview_key), None)
+            if track:
+                for transit in track.transits:
+                    center = (transit-first).total_seconds()/3600
+                    half = self._request.profile.meridian_s/7200
+                    if center+half >= 0 and center-half <= hours[-1]:
+                        veto = pg.LinearRegionItem((center-half, center+half), movable=False,
+                                                   brush=pg.mkBrush(148, 163, 184, 100), pen=pg.mkPen("#94a3b8"))
+                        self.curve.addItem(veto)
         self.curve.setYRange(0, 90)
-        self.curve_status.setText(f"{self._preview_caption}\nDesde {self._clock(first)} · fondo verde: admisible")
+        self.curve_status.setText(f"{self._preview_caption}\nDesde {self._clock(first)} · verde: condiciones del cielo · gris: meridiano")
         self.curve_status.setToolTip(preview.accuracy)
 
     def _details(self):
@@ -844,6 +1085,9 @@ class MultiNightPage(QWidget):
 
     def _save_master(self):
         """Confirma las horas pendientes antes de guardar el único maestro externo, sin vincular capturas."""
+        if self._master_readonly_view:
+            self.status.setText("Calendario guardado en consulta; recalcula antes de confirmar una nueva revisión.")
+            return
         if self._result is None or self._request is None or not self._result.allocations:
             self.status.setText("Calcula una distribución vigente antes de guardar el plan creado.")
             return
@@ -856,7 +1100,7 @@ class MultiNightPage(QWidget):
         choice = QMessageBox.question(self, "Confirmar plan creado",
                                       f"{assigned:.2f} h distribuidas / {requested:.2f} h solicitadas.\n"
                                       f"Quedan {requested-assigned:.2f} h pendientes.\n"
-                                      "No incluye sobrecostes instrumentales ni pronóstico meteorológico.\n"
+                                      "Incluye los tiempos operativos informados; no pronóstico meteorológico.\n"
                                       "¿Confirmar y guardar el maestro del plan?",
                                       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                                       QMessageBox.StandardButton.No)
@@ -924,7 +1168,11 @@ class MultiNightPage(QWidget):
             self._restoring = False
         self.owner._multinight_file = {"path":path, "sha256":digest}
         self._changed()
-        self.status.setText("Maestro abierto. Recalcula las condiciones actuales antes de confirmar una nueva revisión.")
+        if document["version"] == 2:
+            self._request, result = editor_calendar(document)
+            self._master_readonly_view = True
+            self._delivered(self.job.generation, "plan", result, "")
+        self.status.setText("Maestro abierto por valor. Recalcula las condiciones actuales antes de confirmar una nueva revisión.")
 
     def closeEvent(self, event):
         """Cancela entregas y evita cerrar si no se pueden confirmar las últimas ediciones del borrador."""
@@ -944,6 +1192,8 @@ class MultiNightPage(QWidget):
         except sqlite3.Error as exc:
             self.job.stop()
             self._request = self._result = None
+            self.timeline.clear()
+            self.coverage_cards.set_message("Referencias no disponibles · configuración conservada")
             self.save_plan_button.setEnabled(False)
             self._set_busy(False)
             self.curve.clear()

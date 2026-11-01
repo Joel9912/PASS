@@ -27,6 +27,12 @@ PALETTE = {
     "warn": "#f59e0b",        # ámbar: atención
     "error": "#ef4444",       # rojo: descarte, límite o error
     "gray": "#94a3b8",        # gris neutro (día, comprobación en marcha)
+    "planObject1": "#89b4fa",
+    "planObject2": "#c4a7e7",
+    "planObject3": "#79d5db",
+    "planObject4": "#eba6c8",
+    "planObject5": "#b7c9e2",
+    "planObject6": "#c5b88b",
 }
 
 FONT_FAMILY = "Segoe UI"

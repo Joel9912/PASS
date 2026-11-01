@@ -3,7 +3,7 @@
 import json
 import math
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
@@ -13,6 +13,7 @@ from astropy.coordinates import EarthLocation, SkyCoord, angular_separation
 from astropy.time import Time
 
 from equipment.models import DIRECTIONS
+from equipment.planning_profile import PlanningProfile
 
 from .astronomy_status import astronomy_status
 from .ephemeris import EphemerisModel, model_scope
@@ -22,6 +23,7 @@ from .moon_distance import (
     min_moon_distance,
 )
 from .planning_dates import planning_date
+from .planning_models import Alternative, Operation, SkyTrack, Visit
 from .sky_state import civil_to_utc
 from .timezones import rules_label
 from .transit import (
@@ -55,6 +57,9 @@ class Objective:
     fov_width: float | None = None
     fov_height: float | None = None
     integration_mode: str = "per_tile"
+    night_mode: str = "auto"
+    night_hours: float | None = None
+    max_tiles: int = 1
 
 
 @dataclass(frozen=True)
@@ -74,6 +79,10 @@ class Request:
     policy: str
     obstacles: tuple[float, ...] | None = None
     horizon_policy: str | None = None
+    horizon_margin: float = 0
+    max_filters: int = 1
+    filter_order: tuple[str, ...] = ()
+    profile: PlanningProfile = field(default_factory=PlanningProfile)
 
 
 @dataclass(frozen=True)
@@ -121,6 +130,11 @@ class Result:
     balances: tuple[Balance, ...]
     accuracy: tuple[str, ...]
     warnings: tuple[str, ...]
+    operations: tuple[Operation, ...] = ()
+    visits: tuple[Visit, ...] = ()
+    alternatives: tuple[Alternative, ...] = ()
+    selected: str = "recommended"
+    tracks: tuple[SkyTrack, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -137,7 +151,7 @@ class Preview:
 
 def objective_from_data(data, exposure):
     """Restaura un objetivo de borrador usando la exposición vigente de los Valores del plan."""
-    if not isinstance(data, dict) or set(data) != {
+    if not isinstance(data, dict) or set(data)-{"night_mode", "night_hours", "max_tiles"} != {
         "key", "name", "ra_hours", "dec_deg", "demands", "tiles_x", "tiles_y", "fov_width", "fov_height", "integration_mode",
     }:
         raise ValueError("Objetivo de borrador incompatible.")
@@ -157,8 +171,15 @@ def validate_editor(data):
     """Rechaza formatos futuros, claves desconocidas y valores truncables, sin exigir un plan completo."""
     keys = {"version", "start", "end", "start_minute", "end_minute", "weekdays", "minimum_altitude", "policy",
             "location_id", "setup_id", "use_obstacles", "horizon_policy", "exposure", "notes", "name", "objectives"}
-    if not isinstance(data, dict) or set(data) != keys or type(data["version"]) is not int or data["version"] != 1:
+    extra = {"horizon_margin", "max_filters", "filter_order"}
+    if not isinstance(data, dict) or set(data)-extra != keys or type(data["version"]) is not int or data["version"] not in (1, 2):
         raise ValueError("Borrador multinoches incompatible.")
+    _number(data.get("horizon_margin", 0), 0, 90)
+    if type(data.get("max_filters", 1)) is not int or not 1 <= data.get("max_filters", 1) <= 100:
+        raise ValueError("Máximo de filtros inválido.")
+    order = data.get("filter_order", [])
+    if not isinstance(order, list) or any(not isinstance(value, str) or not value.strip() for value in order):
+        raise ValueError("Orden de filtros inválido.")
     for key in ("start", "end"):
         if not isinstance(data[key], str) or date.fromisoformat(data[key]).isoformat() != data[key]:
             raise ValueError("Fecha de borrador inválida.")
@@ -172,7 +193,7 @@ def validate_editor(data):
         raise ValueError("La altura del borrador supera la resolución del editor.")
     if not isinstance(data["weekdays"], list) or any(type(day) is not int or day not in range(7) for day in data["weekdays"]):
         raise ValueError("Días de borrador inválidos.")
-    if data["policy"] not in (None, "windows_only", "chronological_order") or data["horizon_policy"] not in (None, "sectors", "linear"):
+    if data["policy"] not in (None, "windows_only", "chronological_order", "balanced") or data["horizon_policy"] not in (None, "sectors", "linear"):
         raise ValueError("Política de borrador desconocida.")
     for key in ("location_id", "setup_id"):
         if data[key] is not None and (type(data[key]) is not int or data[key] <= 0):
@@ -221,8 +242,16 @@ def validate(request: Request):
             raise ValueError("La disponibilidad debe expresarse en minutos civiles de 00:00 a 23:59.")
     if not request.weekdays or any(type(day) is not int or day not in range(7) for day in request.weekdays):
         raise ValueError("Selecciona al menos un día de disponibilidad.")
-    if request.policy not in ("windows_only", "chronological_order"):
+    if request.policy not in ("windows_only", "chronological_order", "balanced"):
         raise ValueError("Elige una política de reparto; no se impone una prioridad de objetos.")
+    _number(request.horizon_margin, 0, 90)
+    if not isinstance(request.profile, PlanningProfile):
+        raise TypeError("La petición necesita un perfil operativo inmutable.")
+    request.profile.validate()
+    if type(request.max_filters) is not int or not 1 <= request.max_filters <= 100:
+        raise ValueError("Máximo de filtros inválido.")
+    if not isinstance(request.filter_order, tuple) or any(not isinstance(name, str) or not name.strip() for name in request.filter_order) or len(set(request.filter_order)) != len(request.filter_order):
+        raise ValueError("El orden de filtros debe ser único e inmutable.")
     if request.obstacles is not None:
         if len(request.obstacles) != len(DIRECTIONS) or request.horizon_policy not in ("sectors", "linear"):
             raise ValueError("Elige cómo interpretar las ocho direcciones del horizonte.")
@@ -236,6 +265,14 @@ def validate(request: Request):
     if len(set(keys)) != len(keys) or any(not isinstance(key, str) or not key for key in keys):
         raise ValueError("Los objetivos deben tener identidades distintas.")
     for objective in request.objectives:
+        if objective.night_mode not in ("auto", "desired", "maximum"):
+            raise ValueError("Preferencia nocturna desconocida.")
+        if objective.night_hours is not None:
+            _number(objective.night_hours, .000001, 24)
+        if objective.night_mode == "desired" and objective.night_hours is None:
+            raise ValueError("Indica las horas nocturnas deseadas del objeto.")
+        if type(objective.max_tiles) is not int or not 1 <= objective.max_tiles <= 400:
+            raise ValueError("Máximo nocturno de teselas inválido.")
         _number(objective.ra_hours, 0, 24)
         _number(objective.dec_deg, -90, 90)
         if not isinstance(objective.name, str) or not objective.name.strip() or not objective.demands:
@@ -264,6 +301,12 @@ def validate(request: Request):
             if type(demand.exposure_s) is not int or not 1 <= demand.exposure_s <= 7200:
                 raise ValueError("La exposición por toma debe estar entre 1 y 7200 segundos.")
     return first, last
+
+
+def effective_horizon(request, azimuth):
+    """Suma margen solo a direcciones obstruidas; el horizonte libre y la altura mínima no cambian."""
+    values = horizon_at(azimuth, request.obstacles, request.horizon_policy)
+    return values+np.where(values > 0, request.horizon_margin, 0)
 
 
 def availability(request: Request) -> tuple[tuple[str, datetime, datetime], ...]:
@@ -382,7 +425,7 @@ def inspect_night(request: Request, key: str, tile: int, night: str, *, model: E
         moon_az, moon_alt, sun_alt = _moon_sun_series(times, location)
         az, alt = _target_arrays(times, location, SkyCoord(ra=center[0]*u.hourangle, dec=center[1]*u.deg, frame="icrs"))
         separation = angular_separation(az*u.deg, alt*u.deg, moon_az*u.deg, moon_alt*u.deg).to_value(u.deg)
-        horizon = horizon_at(az, request.obstacles, request.horizon_policy)
+        horizon = effective_horizon(request, az)
         valid = eligibility(alt, separation, moon_alt, sun_alt, horizon, request.minimum_altitude,
                             _lunar_illumination(times, location)*100)
         return Preview(tuple(str(value) for value in times.isot), tuple(map(float, alt)), tuple(map(float, moon_alt)),
@@ -410,7 +453,7 @@ def calculate(request: Request, *, model: EphemerisModel | None = None,
               cancelled: Callable[[], bool] | None = None, progress: Callable[[int, int], None] | None = None) -> Result:
     """Calcula fuera de Qt con un modelo fijo y conexión propia readonly; no escribe ni ejecuta SirIL."""
     windows = availability(request)
-    opportunities, accuracy = [], set()
+    opportunities, accuracy, tracks = [], set(), []
     total = len(windows)*sum(obj.tiles_x*obj.tiles_y for obj in request.objectives)
     done = 0
     location = EarthLocation(lat=request.latitude*u.deg, lon=request.longitude*u.deg)
@@ -426,10 +469,14 @@ def calculate(request: Request, *, model: EphemerisModel | None = None,
                     _check_cancel(cancelled)
                     az, alt = _target_arrays(times, location, SkyCoord(ra=ra*u.hourangle, dec=dec*u.deg, frame="icrs"))
                     separation = angular_separation(az*u.deg, alt*u.deg, moon_az*u.deg, moon_alt*u.deg).to_value(u.deg)
-                    horizon = horizon_at(az, request.obstacles, request.horizon_policy)
+                    horizon = effective_horizon(request, az)
                     if not all(np.all(np.isfinite(values)) for values in (az, alt, separation, moon_alt, sun_alt)):
                         raise ValueError("La malla astronómica contiene valores no finitos.")
                     valid = eligibility(alt, separation, moon_alt, sun_alt, horizon, request.minimum_altitude, illumination)
+                    if request.policy == "balanced":
+                        from .planning_candidates import sky_track
+
+                        tracks.append(sky_track(objective.key, tile, night, times, alt, location, ra, dec))
                     for a, b in sampled_windows(seconds, valid):
                         # Los límites civiles se presentan con datetime; el cálculo de duración conserva Time.
                         begin = (start_time+a*u.s).to_datetime(timezone=UTC, leap_second_strict="warn")
@@ -439,6 +486,10 @@ def calculate(request: Request, *, model: EphemerisModel | None = None,
                     if progress:
                         progress(done, total)
     _check_cancel(cancelled)
+    if request.policy == "balanced":
+        from .planning_scheduler import schedule
+
+        return schedule(request, tuple(opportunities), tuple(tracks), tuple(sorted(accuracy)), cancelled=cancelled)
     return distribute(request, tuple(opportunities), tuple(sorted(accuracy)), cancelled=cancelled)
 
 
