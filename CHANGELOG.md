@@ -5,6 +5,8 @@ Cambios relevantes para quienes usan PASS. Los detalles de implementación y cad
 ## Sin publicar — desarrollo posterior a v0.2-alpha
 
 ### Añadido
+- La curva de Planificación muestra horas locales y marca los intervalos realmente asignados a la tesela, con banda/barra del color del objeto y maniobras tramadas. Conserva duraciones reales al cruzar medianoche o cambiar de hora.
+- Los maestros se guardan directamente en `data/plans/` con el nombre del plan, tras confirmar; sin selector de carpeta ni sobrescritura de homónimos (U-0016). Las revisiones conservan ruta; un maestro externo se copia localmente sin modificar su origen. «Exportar copia…», bajo el botón «⋯», transporta el último maestro guardado sin adoptar las ediciones pendientes. El borrador sigue siendo automático.
 - Reparto multinoches por visitas continuas, con alternativas recomendada, extendida y excepcional; considera capacidad futura, cobertura, prioridad de filtros y altura/tránsito. Preferencias de horas por noche, límites de filtros/teselas y margen editable sobre obstrucciones. Búsqueda heurística, sin garantía de óptimo global.
 - Calendario nocturno y tarjetas de cobertura con integración y operación separadas. Ampliación de fechas evaluada bajo demanda y adoptada solo tras confirmar. Maestro v2 conserva perfil, maniobras y alternativa elegida; consulta sin reoptimizar y lectura de maestros anteriores.
 - Perfil operativo por equipo: descanso entre tomas, movimiento/recentrado, cambio de filtro, ventana de meridiano y disparadores opcionales de autoenfoque, con sus duraciones estimadas. Se guarda junto al equipo, sin controlar dispositivos; los tiempos no informados permanecen identificados como ausentes.

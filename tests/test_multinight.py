@@ -560,13 +560,14 @@ def test_confirmar_maestro_desde_ui_no_crea_sesiones_legacy(qt_app, memory_db, t
     from PyQt6.QtCore import QDate
     from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
-    from db import work_drafts
+    from db import connection, work_drafts
     from planners.plan_document import read_document
 
     owner, dialog = editor(qt_app, memory_db)
-    path = tmp_path/"plan.pass-plan.json"
+    path = tmp_path/"plans"/"Plan confirmado.pass-plan.json"
+    monkeypatch.setattr(connection, "DATA_DIR", tmp_path)
     monkeypatch.setattr(QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.Yes)
-    monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *args, **kwargs: (str(path), ""))
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *args, **kwargs: pytest.fail("Guardar no debe pedir carpeta"))
     try:
         dialog.location.setCurrentIndex(1)
         dialog.name.setText("Plan confirmado")

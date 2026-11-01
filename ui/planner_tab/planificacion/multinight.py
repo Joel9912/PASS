@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
     QInputDialog,
     QLabel,
     QLineEdit,
+    QMenu,
     QMessageBox,
     QProgressBar,
     QPushButton,
@@ -33,6 +34,7 @@ from PyQt6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -61,8 +63,11 @@ from planners.plan_document import (
     editor_calendar,
     index_document,
     make_document,
+    plan_filename,
+    plans_directory,
     read_document,
     reference_scope,
+    save_local_document,
     write_document,
 )
 from planners.planning_scheduler import select_alternative
@@ -70,6 +75,7 @@ from planners.sky_state import location_clock
 from planners.timezones import local_moment, utc_moment
 
 from .night_timeline import NightTimeline
+from .plan_curve import LocalTimeAxis, draw_schedule
 from .plan_results import CoverageCards
 from .planetario_visual import PlanetarioVisual
 
@@ -368,12 +374,13 @@ class MultiNightPage(QWidget):
         frame_row.addWidget(self.show_tiles)
         self.show_tiles.toggled.connect(self._show_objective)
         left_layout.addLayout(frame_row)
-        self.curve = pg.PlotWidget()
+        self.curve_axis = LocalTimeAxis()
+        self.curve = pg.PlotWidget(axisItems={"bottom": self.curve_axis})
         self.curve.setMinimumHeight(170)
         self.curve.setBackground("#0d1117")
         self.curve.addLegend(offset=(10, 10))
         self.curve.setLabel("left", "Altura", units="°")
-        self.curve.setLabel("bottom", "Horas reales desde el inicio de la franja")
+        self.curve.setLabel("bottom", "Hora local")
         self.curve.showGrid(x=True, y=True, alpha=.2)
         left_layout.addWidget(self.curve, 2)
         self.curve_status = _plain("La curva usa la franja y las restricciones del plan.")
@@ -414,6 +421,15 @@ class MultiNightPage(QWidget):
         self.open_plan_button = QPushButton("Abrir maestro…")
         self.open_plan_button.clicked.connect(self._open_master)
         file_actions.addWidget(self.open_plan_button)
+        more = QToolButton()
+        more.setText("⋯")
+        more.setAccessibleName("Más acciones del plan")
+        more.setToolTip("Exportar una copia del maestro guardado")
+        more.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        menu = QMenu(more)
+        menu.addAction("Exportar copia…", self._export_master)
+        more.setMenu(menu)
+        file_actions.addWidget(more)
         summary_layout.addLayout(file_actions)
         right_layout.addWidget(summary)
         self.status = _plain()
@@ -1026,6 +1042,7 @@ class MultiNightPage(QWidget):
         self.curve.clear()
         first = utc_moment(preview.times[0])
         hours = [(utc_moment(value)-first).total_seconds()/3600 for value in preview.times]
+        self.curve_axis.set_context(first, utc_moment(preview.times[-1]), self._request.longitude, self._request.clock)
         self.curve.plot(hours, preview.altitude, pen=pg.mkPen("#60a5fa", width=2), name="Objeto")
         self.curve.plot(hours, preview.moon_altitude, pen=pg.mkPen("#9ca3af"), name="Luna")
         self.curve.plot(hours, preview.horizon, pen=pg.mkPen("#f59e0b"), name="Horizonte")
@@ -1045,7 +1062,9 @@ class MultiNightPage(QWidget):
                                                    brush=pg.mkBrush(148, 163, 184, 100), pen=pg.mkPen("#94a3b8"))
                         self.curve.addItem(veto)
         self.curve.setYRange(0, 90)
-        self.curve_status.setText(f"{self._preview_caption}\nDesde {self._clock(first)} · verde: condiciones del cielo · gris: meridiano")
+        blocks = draw_schedule(self.curve, self._result, self._preview_key, first, self._request)
+        detail = f"\nPlanificado: {blocks}" if blocks else "\nSin bloque asignado a esta tesela y noche."
+        self.curve_status.setText(f"{self._preview_caption}\nVerde: admisible · banda/barra: plan · trama: maniobras"+detail)
         self.curve_status.setToolTip(preview.accuracy)
 
     def _details(self):
@@ -1100,38 +1119,35 @@ class MultiNightPage(QWidget):
         choice = QMessageBox.question(self, "Confirmar plan creado",
                                       f"{assigned:.2f} h distribuidas / {requested:.2f} h solicitadas.\n"
                                       f"Quedan {requested-assigned:.2f} h pendientes.\n"
-                                      "Incluye los tiempos operativos informados; no pronóstico meteorológico.\n"
+                                       "Incluye los tiempos operativos informados; no pronóstico meteorológico.\n"
+                                       "Se guardará en data/plans; un maestro externo abierto se conserva sin modificar.\n"
                                       "¿Confirmar y guardar el maestro del plan?",
                                       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                                       QMessageBox.StandardButton.No)
         if choice != QMessageBox.StandardButton.Yes:
             return
         reference = self.owner._multinight_file
-        path = reference["path"] if reference else QFileDialog.getSaveFileName(
-            self, "Guardar maestro portable", "plan.pass-plan.json", "Plan PASS (*.pass-plan.json)")[0]
-        if not path:
-            return
         try:
             if self.build_request() != self._request:
                 raise ValueError("La ubicación o sus restricciones cambiaron; recalcula antes de confirmar.")
             previous = None
             if reference:
-                previous, digest = read_document(path)
+                previous, digest = read_document(reference["path"])
                 if digest != reference["sha256"]:
                     raise ValueError("El maestro cambió desde su apertura. Ábrelo de nuevo antes de guardar.")
                 if not previous.get("reference_scope") or previous["reference_scope"] != reference_scope():
                     raise ValueError("Las referencias son de otra base o de origen no verificado; requieren revinculación explícita.")
             scope = reference_scope(create=True)
             document = make_document(self.snapshot(), self._request, self._result, previous, scope=scope)
-            digest = write_document(path, document, reference["sha256"] if reference else None)
+            path, digest = save_local_document(document, reference)
         except (ValueError, TypeError, OSError, KeyError, sqlite3.Error) as exc:
             self.status.setText(f"No se pudo guardar el maestro: {exc}")
             return
-        self.owner._multinight_file = {"path":path, "sha256":digest}
+        self.owner._multinight_file = {"path":str(path), "sha256":digest}
         self.owner._multinight_data = self.snapshot()
         indexed = ""
         try:
-            index_document(path, document)
+            index_document(path, document, previous_path=reference["path"] if reference else None)
         except (ValueError, OSError, sqlite3.Error) as exc:
             indexed = f" · Índice local no actualizado: {exc}"
         saved_draft = self.owner._draft.changed()
@@ -1139,9 +1155,32 @@ class MultiNightPage(QWidget):
         draft_error = "" if saved_draft else " · No se pudo guardar la referencia en el borrador"
         self.status.setText(f"Maestro guardado: {path}{indexed}{draft_error}")
 
+    def _export_master(self):
+        """Exporta el maestro confirmado sin cambiar su identidad, revisión, ruta activa ni borrador."""
+        reference = self.owner._multinight_file
+        if not reference:
+            self.status.setText("Guarda primero el plan creado; exportar no confirma una propuesta pendiente.")
+            return
+        try:
+            document, digest = read_document(reference["path"])
+            if digest != reference["sha256"]:
+                raise ValueError("El maestro cambió desde su apertura; ábrelo de nuevo antes de exportar.")
+            path = QFileDialog.getSaveFileName(self, "Exportar copia del maestro guardado",
+                                               str(plans_directory()/plan_filename(document["editor"]["name"])),
+                                               "Plan PASS (*.pass-plan.json)")[0]
+            if not path:
+                return
+            if not path.lower().endswith(".pass-plan.json"):
+                path += ".pass-plan.json"
+            write_document(path, document)
+        except (ValueError, TypeError, OSError, sqlite3.Error) as exc:
+            self.status.setText(f"No se pudo exportar la copia: {exc}")
+            return
+        self.status.setText(f"Copia exportada: {path}. El maestro activo no cambia.")
+
     def _open_master(self):
         """Abre por elección explícita; valida todo antes de reemplazar la configuración del borrador actual."""
-        path = QFileDialog.getOpenFileName(self, "Abrir maestro", "", "Plan PASS (*.pass-plan.json)")[0]
+        path = QFileDialog.getOpenFileName(self, "Abrir maestro", str(plans_directory()), "Plan PASS (*.pass-plan.json)")[0]
         if not path:
             return
         try:

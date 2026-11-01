@@ -177,3 +177,97 @@ def test_prioridad_incompleta_es_recuperable_pero_no_calculable(qt_app, memory_d
     finally:
         page.close()
         owner.close()
+
+
+def test_eje_horas_locales_cruza_medianoche_sin_cambiar_distancias(qt_app):
+    """Las etiquetas usan reloj del sitio, no horas transcurridas ni la zona del ordenador."""
+    from datetime import UTC, datetime, timedelta
+
+    from ui.planner_tab.planificacion.plan_curve import LocalTimeAxis
+
+    start = datetime(2026, 11, 2, 1, tzinfo=UTC)
+    axis = LocalTimeAxis()
+    axis.set_context(start, start+timedelta(hours=11), -100, -6)
+    assert axis.tickStrings([0, 2, 4, 6, 11], 1, 2) == ["19:00", "21:00", "23:00", "01:00", "06:00"]
+    assert "Hora local" in axis.labelText
+    axis.set_context(start+timedelta(hours=1), start+timedelta(hours=12), -100, -6)
+    assert axis.tickStrings([0], 1, 2) == ["20:00"]
+
+
+def test_eje_dst_distingue_horas_repetidas(qt_app):
+    """Dos posiciones separadas una hora real pueden compartir HH:MM sin perder su desfase."""
+    from datetime import UTC, datetime, timedelta
+
+    from ui.planner_tab.planificacion.plan_curve import LocalTimeAxis
+
+    start = datetime(2026, 10, 25, tzinfo=UTC)
+    axis = LocalTimeAxis()
+    axis.set_context(start, start+timedelta(hours=4), 1, "Europe/Madrid")
+    assert axis.tickStrings([0, 1, 2], 1, 1) == ["02:00\n+0200", "02:00\n+0100", "03:00\n+0100"]
+
+
+def test_curva_marca_intervalo_real_y_retira_barras_al_limpiar(qt_app, memory_db, monkeypatch):
+    """La selección muestra horas del reparto, no toda la franja verde como si estuviera asignada."""
+    import pyqtgraph as pg
+    from test_multinight import editor
+    from test_planning_scheduler import scenario
+
+    from planners.ephemeris import EphemerisModel
+    from planners.multinight import inspect_night
+    from planners.planning_scheduler import schedule
+
+    owner, page = editor(qt_app, memory_db)
+    request, windows, tracks = scenario(days=1, hours=1)
+    try:
+        result = schedule(request, windows, tracks)
+        page._request, page._result = request, result
+        frame = result.allocations[0]
+        page._preview_key = frame.objective, frame.tile, frame.night
+        page._preview_caption = "Objeto seleccionado"
+        preview = inspect_night(request, frame.objective, frame.tile, frame.night, model=EphemerisModel())
+        page._draw_preview(preview)
+        assert "Planificado:" in page.curve_status.text()
+        bars = [item for item in page.curve.listDataItems() if item.name() == "Planificado"]
+        assert len(bars) == 1
+        from planners.timezones import utc_moment
+
+        origin = utc_moment(preview.times[0])
+        own = next(v for v in result.visits if v.objective == frame.objective)
+        assert bars[0].xData.tolist() == [(own.start-origin).total_seconds()/3600,
+                                         (own.end-origin).total_seconds()/3600]
+        assert any(isinstance(item, pg.LinearRegionItem) for item in page.curve.items())
+        page._changed()
+        assert not page.curve.listDataItems()
+    finally:
+        page.close()
+        owner.close()
+
+
+def test_barras_no_incluyen_tomas_de_otra_tesela(qt_app):
+    """Si se vuelve a una tesela tras otra, la barra no presenta el intervalo intermedio como suyo."""
+    from datetime import UTC, datetime, timedelta
+    from types import SimpleNamespace
+
+    import pyqtgraph as pg
+
+    from planners.multinight import Allocation
+    from planners.planning_models import Visit
+    from ui.planner_tab.planificacion.plan_curve import draw_schedule
+
+    start = datetime(2026, 11, 1, 20, tzinfo=UTC)
+    frames = tuple(Allocation("a", tile, "L", "2026-11-01", start+timedelta(minutes=index),
+                              start+timedelta(minutes=index+1), 1, 60) for index, tile in enumerate((1, 2, 1)))
+    result = SimpleNamespace(allocations=frames, operations=(),
+                             visits=(Visit("a", "2026-11-01", start, frames[-1].end, 180, ""),))
+    plot = pg.PlotWidget()
+    try:
+        assert draw_schedule(plot, result, ("a", 1, "2026-11-01"), start, SimpleNamespace(longitude=0, clock=0))
+        bars = [item for item in plot.listDataItems() if len(item.xData) == 2]
+        assert len(bars) == 2
+        assert bars[0].xData.tolist() == [0, 1/60]
+        assert bars[1].xData.tolist() == [2/60, 3/60]
+        plot.clear()
+        assert not draw_schedule(plot, result, ("a", 3, "2026-11-01"), start, SimpleNamespace(longitude=0, clock=0))
+        assert not plot.listDataItems()
+    finally:
+        plot.close()

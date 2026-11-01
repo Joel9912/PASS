@@ -3,12 +3,14 @@
 import hashlib
 import json
 import os
+import re
 import tempfile
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
+from db import connection
 from db.connection import get_connection
 from equipment.planning_profile import profile_from_data
 
@@ -28,6 +30,45 @@ from .planning_models import Alternative, Operation, SkyTrack, Visit
 _MAX_BYTES = 64*1024*1024
 _INDEX_KEY = "capture_plan_index_v1"
 _SCOPE_KEY = "capture_reference_scope_v1"
+
+
+def plans_directory():
+    """Ubica los maestros del programa bajo sus datos, independiente del directorio de ejecución."""
+    return connection.DATA_DIR / "plans"
+
+
+def plan_filename(name):
+    """Deriva un nombre portable sin rutas, caracteres de control ni dispositivos reservados de Windows."""
+    stem = re.sub(r'[<>:"/\\|?*\x00-\x1f\x7f]', "_", name).strip().rstrip(". ")
+    if stem.casefold().endswith(".pass-plan.json"):
+        stem = stem[:-15].rstrip(". ")
+    stem = stem[:80].rstrip(". ") or "Plan"
+    if re.fullmatch(r"(?i:CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])", stem.split(".")[0]):
+        stem = "_"+stem
+    return stem+".pass-plan.json"
+
+
+def save_local_document(document, reference=None):
+    """Crea un maestro local sin colisiones o revisa su misma ruta; un origen externo nunca se modifica."""
+    directory = plans_directory().absolute()
+    directory.mkdir(parents=True, exist_ok=True)
+    if reference:
+        original = Path(reference["path"]).absolute()
+        previous, digest = read_document(original)
+        if digest != reference["sha256"] or previous["id"] != document["id"]:
+            raise ValueError("El maestro cambió desde su apertura; vuelve a abrirlo antes de guardar.")
+        if original.parent == directory:
+            return original, write_document(original, document, digest)
+    filename = plan_filename(document["editor"]["name"])
+    stem = filename[:-15]
+    for number in range(1, 10001):
+        path = directory/(filename if number == 1 else f"{stem} ({number}).pass-plan.json")
+        try:
+            digest = write_document(path, document)
+        except FileExistsError:
+            continue
+        return path, digest
+    raise FileExistsError("No hay un nombre libre para guardar el plan; revisa data/plans.")
 
 
 def _utc_now():
@@ -325,7 +366,7 @@ def write_document(path, document, expected_sha=None):
     return hashlib.sha256(raw).hexdigest()
 
 
-def index_document(path, document):
+def index_document(path, document, *, previous_path=None):
     """El índice local guarda solo identidad y ruta; el maestro externo sigue siendo la única autoridad editable."""
     _identifier(document["id"])
     conn = get_connection()
@@ -340,7 +381,8 @@ def index_document(path, document):
             if not isinstance(location, str) or not location:
                 raise ValueError("El índice contiene una ruta inválida; se conserva sin modificar.")
         known = index["plans"].get(document["id"])
-        if known and Path(known).absolute() != Path(path).absolute() and Path(known).exists():
+        relocating = previous_path is not None and known and Path(known).absolute() == Path(previous_path).absolute()
+        if known and Path(known).absolute() != Path(path).absolute() and Path(known).exists() and not relocating:
             raise ValueError("Ya hay otro maestro accesible con esta identidad; no se sustituye su referencia automáticamente.")
         index["plans"][document["id"]] = str(Path(path).absolute())
         value = json.dumps(index, ensure_ascii=False)
