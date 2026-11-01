@@ -32,6 +32,7 @@ _MIGRATIONS: dict[str, tuple[str, ...]] = {
         "consider_lp INTEGER NOT NULL DEFAULT 1",
     ),
     "equipment_setups": (
+        "planning_profile TEXT",
         "category TEXT NOT NULL DEFAULT 'general'",
         "location_id INTEGER REFERENCES locations(id) ON DELETE SET NULL",
         "notes TEXT",

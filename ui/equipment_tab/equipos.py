@@ -65,6 +65,7 @@ from .componentes import (
     spin_peso,
     spin_precio,
 )
+from .planning_profile import PlanningProfileForm
 
 
 def _formato(valor: float | None, unidad: str = "") -> str:
@@ -440,6 +441,9 @@ class EquiposTab(QWidget):
         tabs.addTab(self._columna_doble("camera", CameraForm), "Cámara")
         tabs.addTab(self._columna_montura(), "Montura")
         tabs.addTab(self._columna_filtros(), "Filtros")
+        self._planning_profile = PlanningProfileForm()
+        self._planning_profile.changed.connect(self._actualizar_estado)
+        tabs.addTab(self._planning_profile, "Operación de captura")
         return tabs
 
     def _columna_doble(self, kind: str, formularios: type) -> QWidget:
@@ -636,6 +640,7 @@ class EquiposTab(QWidget):
             tuple(editor.selected_id() for editor in self._editores),
             tuple(self._filtros.filter_ids()), tuple(self._imagenes_setup),
             self._precio.value(), self._peso.value(),
+            self._planning_profile.data(),
         )
 
     def _actualizar_estado(self, *_args) -> None:
@@ -683,6 +688,7 @@ class EquiposTab(QWidget):
                 )
                 self._ubicacion.setCurrentIndex(0)
                 self._notas.clear()
+                self._planning_profile.restore(None)
                 for editor in self._editores:
                     editor.cargar(None)
                 self._filtros.set_filter_ids([])
@@ -697,6 +703,7 @@ class EquiposTab(QWidget):
                     max(0, self._ubicacion.findData(fila.get("location_id")))
                 )
                 self._notas.setText(str(fila.get("notes") or ""))
+                self._planning_profile.restore(fila.get("planning_profile"))
                 self._tel_principal.cargar(fila.get("telescope_id"))
                 self._tel_guia.cargar(fila.get("guide_telescope_id"))
                 self._cam_principal.cargar(fila.get("camera_id"))
@@ -763,6 +770,7 @@ class EquiposTab(QWidget):
             weight_kg=(self._peso.value() or None),
             notes=self._notas.text().strip(),
             images=list(self._imagenes_setup),  # D-5: la lista es la verdad
+            planning_profile=self._planning_profile.data(),
         )
         try:
             if setup.id is None:

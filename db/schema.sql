@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS filters (
 -- (telescope_name, camera_pixel_size_um, mount_name…) viven ahora en sus
 -- tablas. La migración conserva las columnas legacy pobladas como originales.
 CREATE TABLE IF NOT EXISTS equipment_setups (
+    planning_profile TEXT,
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     name                TEXT NOT NULL,
     category            TEXT NOT NULL DEFAULT 'general',

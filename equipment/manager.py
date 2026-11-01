@@ -1,9 +1,13 @@
 """CRUD de setups de equipo sobre SQLite (tabla ``equipment_setups``)."""
+
+import json
+
 from db.connection import get_connection
 
 from . import images
 from .metrics import focal_efectiva
 from .models import EquipmentSetup
+from .planning_profile import profile_from_data
 from .validaciones import validar_setup
 
 #: Columnas de fila + alias de JOIN (los cuatro últimos son el contrato con
@@ -11,7 +15,7 @@ from .validaciones import validar_setup
 #: deja de calcular FOV en silencio).
 _SELECT = (
     "SELECT e.id, e.name, e.category, e.location_id, e.price_eur, e.weight_kg,"
-    " e.notes, e.telescope_id, e.guide_telescope_id, e.camera_id,"
+    " e.notes, e.planning_profile, e.telescope_id, e.guide_telescope_id, e.camera_id,"
     " e.guide_camera_id, e.mount_id,"
     " l.name AS location_name,"
     " t.name AS telescope_name, gt.name AS guide_telescope_name,"
@@ -42,6 +46,8 @@ def _fila(row) -> dict:
     llega ``None`` y sigue siendo ``None``.
     """
     d = dict(row)
+    raw = d.get("planning_profile")
+    d["planning_profile"] = profile_from_data(json.loads(raw)).data() if raw else None
     d["telescope_focal_mm"] = focal_efectiva(
         d.get("telescope_focal_mm"), bool(d.get("reducer")), d.get("reducer_factor")
     )
@@ -59,17 +65,18 @@ def create(setup: EquipmentSetup) -> int:
     Fila, filtros y adjuntos se confirman juntos; el id se asigna solo tras éxito.
     """
     validar_setup(setup)
+    profile = profile_from_data(setup.planning_profile).data() if setup.planning_profile is not None else None
     conn = get_connection()
     _validar_filtros(conn, setup.filter_ids)
     with images.guardado() as cambios:
         cur = conn.execute(
             "INSERT INTO equipment_setups (name, category, location_id, telescope_id,"
             " guide_telescope_id, camera_id, guide_camera_id, mount_id, price_eur,"
-            " weight_kg, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " weight_kg, notes, planning_profile) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 setup.name, setup.category, setup.location_id, setup.telescope_id,
                 setup.guide_telescope_id, setup.camera_id, setup.guide_camera_id,
-                setup.mount_id, setup.price_eur, setup.weight_kg, setup.notes,
+                setup.mount_id, setup.price_eur, setup.weight_kg, setup.notes, json.dumps(profile) if profile else None,
             ),
         )
         nuevo_id = cur.lastrowid
@@ -92,6 +99,7 @@ def update(setup: EquipmentSetup) -> None:
     if setup.id is None:
         raise ValueError("Equipo: falta el id (crea antes de actualizar).")
     validar_setup(setup)
+    profile = profile_from_data(setup.planning_profile).data() if setup.planning_profile is not None else None
     conn = get_connection()
     _validar_filtros(conn, setup.filter_ids)
     with images.guardado() as cambios:
@@ -99,11 +107,11 @@ def update(setup: EquipmentSetup) -> None:
             "UPDATE equipment_setups SET name = ?, category = ?, location_id = ?,"
             " telescope_id = ?, guide_telescope_id = ?, camera_id = ?,"
             " guide_camera_id = ?, mount_id = ?, price_eur = ?, weight_kg = ?,"
-            " notes = ? WHERE id = ?",
+            " notes = ?, planning_profile = ? WHERE id = ?",
             (
                 setup.name, setup.category, setup.location_id, setup.telescope_id,
                 setup.guide_telescope_id, setup.camera_id, setup.guide_camera_id,
-                setup.mount_id, setup.price_eur, setup.weight_kg, setup.notes, setup.id,
+                setup.mount_id, setup.price_eur, setup.weight_kg, setup.notes, json.dumps(profile) if profile else None, setup.id,
             ),
         )
         images.sync("setup", setup.id, setup.images, cambios=cambios)

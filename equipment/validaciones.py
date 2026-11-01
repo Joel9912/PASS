@@ -133,6 +133,9 @@ def validar_filtro(filt: Filter) -> None:
 
 def validar_setup(setup: EquipmentSetup) -> None:
     """Setup: nombre, categoría del usuario y precio/peso finitos no negativos."""
+    from .planning_profile import profile_from_data
+
+    profile_from_data(setup.planning_profile)
     _nombre(setup.name, "Equipo")
     _precio_peso(setup.price_eur, setup.weight_kg)
     if setup.category not in CATEGORIES:

@@ -5,6 +5,7 @@ Cambios relevantes para quienes usan PASS. Los detalles de implementación y cad
 ## Sin publicar — desarrollo posterior a v0.2-alpha
 
 ### Añadido
+- Perfil operativo por equipo: descanso entre tomas, movimiento/recentrado, cambio de filtro, ventana de meridiano y disparadores opcionales de autoenfoque, con sus duraciones estimadas. Se guarda junto al equipo, sin controlar dispositivos; los tiempos no informados permanecen identificados como ausentes.
 - Planificación es una única página nativa dentro de su pestaña, sin contenedor de diálogo ni selector al formulario anterior; conserva planes y borradores (U-0014).
 - Planificación tiene como vista principal **Plan multinoches**: dos columnas con encuadre/FOV de lectura y curva a la izquierda; objetos, disponibilidad, valores del plan y cobertura a la derecha. Permite varios objetos/filtros, integración por tesela o total equitativa elegida, rango de fechas, días y franjas propias, altura mínima configurable y obstrucciones de la ubicación con interpretación explícita. El cálculo local se ejecuta en segundo plano, es cancelable y no reutiliza resultados de entradas anteriores.
 - Distribución cronológica opcional por el orden elegido de objetos/filtros: tomas enteras sin solapes dentro del plan, con déficit por filtro/tesela y fechas/horas civiles con desfase. No es un optimizador global ni un ranking científico; usa la regla lunar de Captura Posible, muestreo de un minuto y centros de teselas nominales. No incluye sobrecostes instrumentales, clima real ni conflictos entre planes independientes.

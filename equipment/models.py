@@ -245,3 +245,4 @@ class EquipmentSetup:
     weight_kg: float | None = None
     notes: str = ""
     images: list[str] = field(default_factory=list)  # rutas adjuntas (solo visuales)
+    planning_profile: dict | None = None
