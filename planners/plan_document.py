@@ -171,7 +171,7 @@ def validate_document(document):
         raise ValueError("Estructura de maestro incompatible.")
     if "reference_scope" in document:
         _identifier(document["reference_scope"])
-    if document["format"] != "pass-capture-plan" or type(document["version"]) is not int or document["version"] not in (1, 2):
+    if document["format"] != "pass-capture-plan" or type(document["version"]) is not int or document["version"] not in (1, 2, 3):
         raise ValueError("Formato o versión de maestro no compatible; se conserva sin modificar.")
     if document["state"] != "created":
         raise ValueError("El archivo no es un plan creado confirmado.")
@@ -190,6 +190,8 @@ def validate_document(document):
     if len(set(identities.values())) != len(identities):
         raise ValueError("El maestro repite una identidad de objetivo.")
     request = decode_request(document["request"])
+    if document["version"] < 3 and any(obj.rotation_deg or obj.overlap_x or obj.overlap_y for obj in request.objectives):
+        raise ValueError("La geometría con rotación/solape requiere un maestro v3.")
     result = decode_result(document["result"])
     for allocation in result.allocations:
         if type(allocation.frames) is not int or allocation.frames <= 0 or type(allocation.exposure_s) is not int:
@@ -214,7 +216,7 @@ def validate_document(document):
             raise ValueError("Las restricciones guardadas no corresponden al calendario.")
     if tuple(editor["weekdays"]) != request.weekdays or editor["use_obstacles"] != (request.obstacles is not None):
         raise ValueError("La disponibilidad guardada no corresponde al calendario.")
-    if document["version"] == 2:
+    if document["version"] == 2 or document["version"] == 3 and request.policy == "balanced":
         from .planning_scheduler import select_alternative, validate_calendar
 
         if request.policy != "balanced":
@@ -250,7 +252,9 @@ def make_document(editor, request, result, previous=None, *, scope=None):
     stable_request = replace(request, objectives=tuple(replace(obj, key=identities[obj.key]) for obj in request.objectives))
     stable_result = remap_result(result, identities)
     now = _utc_now()
-    document = {"format":"pass-capture-plan", "version":2 if request.policy == "balanced" else 1, "id":previous["id"] if previous else uuid4().hex,
+    geometry = editor["version"] >= 3 or any(obj.rotation_deg or obj.overlap_x or obj.overlap_y for obj in request.objectives)
+    version = 3 if geometry else 2 if request.policy == "balanced" else 1
+    document = {"format":"pass-capture-plan", "version":version, "id":previous["id"] if previous else uuid4().hex,
                 "revision":uuid4().hex, "created_at":previous["created_at"] if previous else now, "updated_at":now,
                 "state":"created", "objective_ids":identities, "editor":editor,
                 "request":asdict(stable_request), "result":asdict(stable_result)}

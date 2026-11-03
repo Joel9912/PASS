@@ -22,6 +22,7 @@ from .moon_distance import (
     POSSIBLE_MOON_MARGIN,
     min_moon_distance,
 )
+from .mosaic import mosaic_extent, mosaic_tiles, validate_geometry
 from .planning_dates import planning_date
 from .planning_models import Alternative, Operation, SkyTrack, Visit
 from .sky_state import civil_to_utc
@@ -60,6 +61,9 @@ class Objective:
     night_mode: str = "auto"
     night_hours: float | None = None
     max_tiles: int = 1
+    rotation_deg: float = 0.
+    overlap_x: float = 0.
+    overlap_y: float = 0.
 
 
 @dataclass(frozen=True)
@@ -151,7 +155,7 @@ class Preview:
 
 def objective_from_data(data, exposure):
     """Restaura un objetivo de borrador usando la exposición vigente de los Valores del plan."""
-    if not isinstance(data, dict) or set(data)-{"night_mode", "night_hours", "max_tiles"} != {
+    if not isinstance(data, dict) or set(data)-{"night_mode", "night_hours", "max_tiles", "rotation_deg", "overlap_x", "overlap_y"} != {
         "key", "name", "ra_hours", "dec_deg", "demands", "tiles_x", "tiles_y", "fov_width", "fov_height", "integration_mode",
     }:
         raise ValueError("Objetivo de borrador incompatible.")
@@ -172,7 +176,7 @@ def validate_editor(data):
     keys = {"version", "start", "end", "start_minute", "end_minute", "weekdays", "minimum_altitude", "policy",
             "location_id", "setup_id", "use_obstacles", "horizon_policy", "exposure", "notes", "name", "objectives"}
     extra = {"horizon_margin", "max_filters", "filter_order"}
-    if not isinstance(data, dict) or set(data)-extra != keys or type(data["version"]) is not int or data["version"] not in (1, 2):
+    if not isinstance(data, dict) or set(data)-extra != keys or type(data["version"]) is not int or data["version"] not in (1, 2, 3):
         raise ValueError("Borrador multinoches incompatible.")
     _number(data.get("horizon_margin", 0), 0, 90)
     if type(data.get("max_filters", 1)) is not int or not 1 <= data.get("max_filters", 1) <= 100:
@@ -265,6 +269,7 @@ def validate(request: Request):
     if len(set(keys)) != len(keys) or any(not isinstance(key, str) or not key for key in keys):
         raise ValueError("Los objetivos deben tener identidades distintas.")
     for objective in request.objectives:
+        validate_geometry(objective.rotation_deg, objective.overlap_x, objective.overlap_y)
         if objective.night_mode not in ("auto", "desired", "maximum"):
             raise ValueError("Preferencia nocturna desconocida.")
         if objective.night_hours is not None:
@@ -291,6 +296,8 @@ def validate(request: Request):
             _number(objective.fov_height, .000001, 90)
         elif objective.tiles_x * objective.tiles_y > 1:
             raise ValueError("No se calculan centros de teselas sin un FOV explícito.")
+        elif objective.rotation_deg or objective.overlap_x or objective.overlap_y:
+            raise ValueError("Rotación y solape necesitan un FOV explícito.")
         names = [demand.filter_name for demand in objective.demands]
         if len(set(names)) != len(names):
             raise ValueError("Un filtro no puede repetirse dentro del mismo objeto.")
@@ -334,32 +341,18 @@ def availability(request: Request) -> tuple[tuple[str, datetime, datetime], ...]
 
 
 def tile_centers(objective: Objective) -> tuple[tuple[float, float], ...]:
-    """Centros nominales gnomónicos norte-arriba sin solape/rotación inventados; misma geometría que la carta."""
+    """Centros de las mismas cámaras rotadas y solapadas que se dibujan; ausencias anteriores equivalen a cero."""
     if objective.tiles_x * objective.tiles_y == 1:
         return ((objective.ra_hours, objective.dec_deg),)
-    ra0, dec0 = math.radians(objective.ra_hours*15), math.radians(objective.dec_deg)
-    width, height = 2*math.tan(math.radians(objective.fov_width)/2), 2*math.tan(math.radians(objective.fov_height)/2)
-    result = []
-    for y in range(objective.tiles_y):
-        for x in range(objective.tiles_x):
-            xi = ((objective.tiles_x-1)/2-x)*width
-            eta = ((objective.tiles_y-1)/2-y)*height
-            rho = math.hypot(xi, eta)
-            if rho == 0:
-                result.append((objective.ra_hours, objective.dec_deg))
-                continue
-            c = math.atan(rho)
-            dec = math.asin(math.cos(c)*math.sin(dec0)+eta*math.sin(c)*math.cos(dec0)/rho)
-            ra = ra0 + math.atan2(xi*math.sin(c), rho*math.cos(dec0)*math.cos(c)-eta*math.sin(dec0)*math.sin(c))
-            result.append((math.degrees(ra) % 360 / 15, math.degrees(dec)))
-    return tuple(result)
+    return tuple((tile.ra_hours, tile.dec_deg) for tile in mosaic_tiles(
+        objective.ra_hours, objective.dec_deg, objective.fov_width, objective.fov_height,
+        objective.tiles_x, objective.tiles_y, rotation_deg=objective.rotation_deg,
+        overlap_x=objective.overlap_x, overlap_y=objective.overlap_y))
 
 
-def mosaic_fov(width, height, tiles_x, tiles_y, *, inverse=False):
-    """Convierte FOV por tesela ↔ campo total sobre el mismo plano tangente, sin sumar ángulos linealmente."""
-    operation = (lambda angle, count: math.tan(math.radians(angle)/2)/count) if inverse else (
-        lambda angle, count: math.tan(math.radians(angle)/2)*count)
-    return (math.degrees(2*math.atan(operation(width, tiles_x))), math.degrees(2*math.atan(operation(height, tiles_y))))
+def mosaic_fov(width, height, tiles_x, tiles_y, *, inverse=False, overlap_x=0., overlap_y=0.):
+    """Convierte FOV por tesela ↔ extensión nominal alineada, descontando solape sin sumar grados linealmente."""
+    return mosaic_extent(width, height, tiles_x, tiles_y, inverse=inverse, overlap_x=overlap_x, overlap_y=overlap_y)
 
 
 def horizon_at(azimuth, profile, policy):
@@ -551,7 +544,7 @@ def distribute(request: Request, opportunities: tuple[Opportunity, ...], accurac
     warnings = ("Muestreo de un minuto; evaluación en el centro de cada tesela, no de toda su huella.",
                 "Admisibilidad lunar de Captura Posible, con el polinomio y margen vigentes; altura mínima elegida por el usuario.",
                 "Integración sin tiempos de descarga, enfoque, cambios de filtro o meridiano; sin pronóstico meteorológico.",
-                "Teselas nominales norte-arriba, sin rotación ni solape calculado.",
+                 "Centros y huellas de cámara esféricos; solape lineal nominal elegido, no área garantizada ni control de rotador.",
                 "No detecta conflictos de horario con otros maestros ni consolida planes independientes.")
     warnings += (rules_label(),)
     if request.policy == "windows_only":

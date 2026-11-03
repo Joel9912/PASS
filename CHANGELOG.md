@@ -5,6 +5,8 @@ Cambios relevantes para quienes usan PASS. Los detalles de implementación y cad
 ## Sin publicar — desarrollo posterior a v0.2-alpha
 
 ### Añadido
+- Mosaicos centrados pares e impares con FOV completo por cámara, solape horizontal/vertical configurable y ángulo de captura que gira tanto centros como huellas. Controles directos junto al encuadre, teselas numeradas y resaltado de la inspeccionada; los cálculos usan esos mismos centros. El solape es lineal nominal, no una garantía de área cubierta ni control de rotador.
+- Maestro v3 y borrador conservan rotación/solape por objeto; maestros v1/v2 siguen legibles con su geometría anterior. La tabla de horas del editor reserva filas visibles también con fuente grande (U-0017).
 - La curva de Planificación muestra horas locales y marca los intervalos realmente asignados a la tesela, con banda/barra del color del objeto y maniobras tramadas. Conserva duraciones reales al cruzar medianoche o cambiar de hora.
 - Los maestros se guardan directamente en `data/plans/` con el nombre del plan, tras confirmar; sin selector de carpeta ni sobrescritura de homónimos (U-0016). Las revisiones conservan ruta; un maestro externo se copia localmente sin modificar su origen. «Exportar copia…», bajo el botón «⋯», transporta el último maestro guardado sin adoptar las ediciones pendientes. El borrador sigue siendo automático.
 - Reparto multinoches por visitas continuas, con alternativas recomendada, extendida y excepcional; considera capacidad futura, cobertura, prioridad de filtros y altura/tránsito. Preferencias de horas por noche, límites de filtros/teselas y margen editable sobre obstrucciones. Búsqueda heurística, sin garantía de óptimo global.

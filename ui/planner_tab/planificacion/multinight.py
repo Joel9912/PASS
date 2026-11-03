@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QInputDialog,
     QLabel,
     QLineEdit,
@@ -74,6 +75,7 @@ from planners.planning_scheduler import select_alternative
 from planners.sky_state import location_clock
 from planners.timezones import local_moment, utc_moment
 
+from ..widgets import format_dec, format_ra
 from .night_timeline import NightTimeline
 from .plan_curve import LocalTimeAxis, draw_schedule
 from .plan_results import CoverageCards
@@ -188,7 +190,7 @@ class ObjectiveDialog(QDialog):
         self.region_mode = QComboBox()
         self.region_mode.addItem("Elegir significado del FOV regional…", None)
         self.region_mode.addItem("Campo de una tesela", "per_tile")
-        self.region_mode.addItem("Campo total para dividir en teselas", "whole_frame")
+        self.region_mode.addItem("Cobertura total nominal del mosaico", "whole_frame")
         self.region_mode.currentIndexChanged.connect(self._show_fov)
         form.addRow("FOV de la región", self.region_mode)
         self.fov_label = _plain()
@@ -201,7 +203,25 @@ class ObjectiveDialog(QDialog):
             spin.setRange(1, 20)
             spin.valueChanged.connect(self._show_fov)
             tiles.addWidget(spin)
-        form.addRow("Teselas nominales ×/y", tiles)
+        form.addRow("Teselas horizontales × verticales", tiles)
+        self.rotation_deg = QDoubleSpinBox()
+        self.rotation_deg.setRange(0, 360)
+        self.rotation_deg.setDecimals(2)
+        self.rotation_deg.setSuffix("°")
+        self.rotation_deg.setToolTip("PA del mosaico: 0° norte arriba; positivo gira norte hacia este. Rota centros y cámaras.")
+        self.rotation_deg.valueChanged.connect(self._show_fov)
+        form.addRow("Ángulo de captura (PA)", self.rotation_deg)
+        self.overlap_x, self.overlap_y = QDoubleSpinBox(), QDoubleSpinBox()
+        overlap = QHBoxLayout()
+        for spin in (self.overlap_x, self.overlap_y):
+            spin.setRange(0, 90)
+            spin.setDecimals(2)
+            spin.setSuffix(" %")
+            spin.setToolTip("Solape lineal nominal entre vecinas de este eje; 0% significa sin solape. No es porcentaje de área esférica.")
+            spin.valueChanged.connect(self._show_fov)
+            spin.setAccessibleName("Solape horizontal" if spin is self.overlap_x else "Solape vertical")
+            overlap.addWidget(spin)
+        form.addRow("Solape horizontal / vertical", overlap)
         self.mode = QComboBox()
         self.mode.addItem("Elegir integración…", None)
         self.mode.addItem("Horas por cada tesela", "per_tile")
@@ -224,7 +244,9 @@ class ObjectiveDialog(QDialog):
         form.addRow("Hasta N teselas / noche", self.max_tiles)
         self.filters = QTableWidget(0, 2)
         self.filters.setHorizontalHeaderLabels(["Filtro (o Sin filtro)", "Horas objetivo"])
-        self.filters.horizontalHeader().setStretchLastSection(True)
+        self.filters.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        row_height = max(self.filters.verticalHeader().defaultSectionSize(), self.fontMetrics().height()+12)
+        self.filters.setMinimumHeight(self.filters.horizontalHeader().sizeHint().height()+2*row_height+8)
         form.addRow(self.filters)
         actions = QHBoxLayout()
         add, remove = QPushButton("Añadir filtro"), QPushButton("Quitar filtro")
@@ -251,6 +273,9 @@ class ObjectiveDialog(QDialog):
             self.night_mode.setCurrentIndex(self.night_mode.findData(existing["objective"].get("night_mode", "auto")))
             self.night_hours.setValue(existing["objective"].get("night_hours") or 1)
             self.max_tiles.setValue(existing["objective"].get("max_tiles", 1))
+            self.rotation_deg.setValue(existing["objective"].get("rotation_deg", 0))
+            self.overlap_x.setValue(100*existing["objective"].get("overlap_x", 0))
+            self.overlap_y.setValue(100*existing["objective"].get("overlap_y", 0))
             for demand in existing["objective"]["demands"]:
                 self._add_filter(demand["filter_name"], str(demand["hours"]))
         else:
@@ -284,7 +309,8 @@ class ObjectiveDialog(QDialog):
                 return None
             fov = float(width)/60, float(height)/60
             if self.region_mode.currentData() == "whole_frame":
-                return mosaic_fov(*fov, self.tiles_x.value(), self.tiles_y.value(), inverse=True)
+                return mosaic_fov(*fov, self.tiles_x.value(), self.tiles_y.value(), inverse=True,
+                                  overlap_x=self.overlap_x.value()/100, overlap_y=self.overlap_y.value()/100)
             return fov
         return None
 
@@ -294,7 +320,14 @@ class ObjectiveDialog(QDialog):
             return
         self.region_mode.setEnabled(self.source.currentData() == "region")
         fov = self._fov()
-        self.fov_label.setText(f"{fov[0]:.3f}° × {fov[1]:.3f}° por tesela" if fov else "Sin FOV disponible para esta elección")
+        for control in (self.rotation_deg, self.overlap_x, self.overlap_y):
+            control.setEnabled(bool(fov))
+        text = "Sin FOV disponible para esta elección"
+        if fov:
+            total = mosaic_fov(*fov, self.tiles_x.value(), self.tiles_y.value(),
+                               overlap_x=self.overlap_x.value()/100, overlap_y=self.overlap_y.value()/100)
+            text = f"Cada tesela: {fov[0]:.3f}° × {fov[1]:.3f}° · cobertura nominal: {total[0]:.3f}° × {total[1]:.3f}°"
+        self.fov_label.setText(text)
 
     def values(self):
         """Recoge la geometría real y filtros del usuario en un documento de borrador versionable."""
@@ -319,7 +352,9 @@ class ObjectiveDialog(QDialog):
         objective = Objective(key, str(target["object_id"]), float(target["ra_hours"]), float(target["dec_deg"]), tuple(demands),
                               self.tiles_x.value(), self.tiles_y.value(), fov[0] if fov else None, fov[1] if fov else None,
                               self.mode.currentData(), self.night_mode.currentData(),
-                              self.night_hours.value() if self.night_mode.currentData() == "desired" else None, self.max_tiles.value())
+                              self.night_hours.value() if self.night_mode.currentData() == "desired" else None, self.max_tiles.value(),
+                              self.rotation_deg.value() if fov else 0., self.overlap_x.value()/100 if fov else 0.,
+                              self.overlap_y.value()/100 if fov else 0.)
         return {"object_id": target["object_id"], "catalog": target["catalog"], "source": self.source.currentData(),
                 "region_fov_mode":self.region_mode.currentData() if self.source.currentData() == "region" else None,
                 "objective": asdict(objective)}
@@ -348,7 +383,7 @@ class MultiNightPage(QWidget):
         self._master_readonly_view = False
         self._request = None
         self._extension_request = None
-        self._editor_version = 2
+        self._editor_version = 3
         self._preview_caption = ""
         self._preview_key = None
         self._objectives = []
@@ -374,6 +409,22 @@ class MultiNightPage(QWidget):
         frame_row.addWidget(self.show_tiles)
         self.show_tiles.toggled.connect(self._show_objective)
         left_layout.addLayout(frame_row)
+        geometry_row = QHBoxLayout()
+        self.rotation_deg, self.overlap_x, self.overlap_y = QDoubleSpinBox(), QDoubleSpinBox(), QDoubleSpinBox()
+        for control, text, maximum in ((self.rotation_deg, "PA", 360), (self.overlap_x, "Solape X", 90),
+                                       (self.overlap_y, "Y", 90)):
+            control.setRange(0, maximum)
+            control.setDecimals(2)
+            control.setSuffix("°" if control is self.rotation_deg else " %")
+            control.setEnabled(False)
+            control.setAccessibleName("Ángulo de captura" if control is self.rotation_deg else
+                                      "Solape horizontal" if control is self.overlap_x else "Solape vertical")
+            control.setToolTip("PA norte→este; gira el mosaico entero." if control is self.rotation_deg else
+                               "Solape lineal nominal entre cámaras completas; 0% sin solape. Configurable por eje.")
+            control.valueChanged.connect(self._framing_changed)
+            geometry_row.addWidget(_plain(text))
+            geometry_row.addWidget(control, 1)
+        left_layout.addLayout(geometry_row)
         self.curve_axis = LocalTimeAxis()
         self.curve = pg.PlotWidget(axisItems={"bottom": self.curve_axis})
         self.curve.setMinimumHeight(170)
@@ -618,7 +669,7 @@ class MultiNightPage(QWidget):
         choices = [key for key, row in self._locations.items()
                    if (row["latitude"], row["longitude"], location_clock(row)) ==
                    (self.owner._latitude, self.owner._longitude, self.owner._utc_offset_hours)]
-        return {"version":2, "start":self.owner._date_iso(), "end":self.owner._date.date().addDays(29).toString("yyyy-MM-dd"),
+        return {"version":3, "start":self.owner._date_iso(), "end":self.owner._date.date().addDays(29).toString("yyyy-MM-dd"),
                 "start_minute":19*60, "end_minute":6*60, "weekdays":list(range(7)), "minimum_altitude":30,
                 "policy":None, "location_id":choices[0] if len(choices) == 1 else None,
                 "setup_id":setup["id"] if setup else None, "use_obstacles":False, "horizon_policy":None,
@@ -717,7 +768,7 @@ class MultiNightPage(QWidget):
         """Invalida reparto/curva al editar, cancela entregas tardías y guarda únicamente borrador."""
         if self._restoring:
             return
-        self._editor_version = 2
+        self._editor_version = 3
         self.job.stop()
         self._set_busy(False)
         self._result = self._request = None
@@ -807,22 +858,55 @@ class MultiNightPage(QWidget):
         """Vista de consulta del objeto seleccionado; no reescribe el centro del objetivo por arrastrar el cielo."""
         row = self.objects_table.currentRow()
         if row < 0 or row >= len(self._objectives):
+            for control in (self.rotation_deg, self.overlap_x, self.overlap_y):
+                control.setEnabled(False)
             return
         obj = self._objectives[row]["objective"]
+        for control, value in ((self.rotation_deg, obj.get("rotation_deg", 0)),
+                               (self.overlap_x, 100*obj.get("overlap_x", 0)),
+                               (self.overlap_y, 100*obj.get("overlap_y", 0))):
+            control.blockSignals(True)
+            control.setValue(value)
+            control.setEnabled(obj["fov_width"] is not None)
+            control.blockSignals(False)
         if not _args:
+            self.sky.set_active_tile(None)
             self.sky.clear_target()
             self.sky.set_center(obj["ra_hours"], obj["dec_deg"], obj["name"])
         if obj["fov_width"] is not None:
-            width, height = mosaic_fov(obj["fov_width"], obj["fov_height"], obj["tiles_x"], obj["tiles_y"])
-            self.sky.set_framing(obj["ra_hours"], obj["dec_deg"], width, height,
-                                 obj["tiles_x"] if self.show_tiles.isChecked() else 1,
-                                 obj["tiles_y"] if self.show_tiles.isChecked() else 1)
-            self.fov_label.setText(f"FOV por tesela {obj['fov_width']:.3f}° × {obj['fov_height']:.3f}°")
+            width, height = mosaic_fov(obj["fov_width"], obj["fov_height"], obj["tiles_x"], obj["tiles_y"],
+                                       overlap_x=obj.get("overlap_x", 0), overlap_y=obj.get("overlap_y", 0))
+            self.sky.set_mosaic(obj["ra_hours"], obj["dec_deg"], obj["fov_width"], obj["fov_height"], obj["tiles_x"], obj["tiles_y"],
+                                rotation_deg=obj.get("rotation_deg", 0), overlap_x=obj.get("overlap_x", 0), overlap_y=obj.get("overlap_y", 0),
+                                show_tiles=self.show_tiles.isChecked())
+            self.fov_label.setText(f"Cada tesela {obj['fov_width']:.3f}° × {obj['fov_height']:.3f}° · mosaico {obj['tiles_x']}×{obj['tiles_y']}")
             if not _args:
                 self.sky.set_fov_deg(max(1., min(180., max(width, height)*2.5)))
         else:
             self.sky.clear_framing()
             self.fov_label.setText("Sin FOV · centro del objeto")
+
+    def _framing_changed(self):
+        """Edita la geometría del objetivo seleccionado y retira el calendario, sin modificar el maestro confirmado."""
+        if self._restoring:
+            return
+        row = self.objects_table.currentRow()
+        if not 0 <= row < len(self._objectives):
+            return
+        value = self._objectives[row]
+        obj = value["objective"]
+        if obj["fov_width"] is None:
+            return
+        overlaps = self.overlap_x.value()/100, self.overlap_y.value()/100
+        if value["source"] == "region" and value["region_fov_mode"] == "whole_frame":
+            total = mosaic_fov(obj["fov_width"], obj["fov_height"], obj["tiles_x"], obj["tiles_y"],
+                               overlap_x=obj.get("overlap_x", 0), overlap_y=obj.get("overlap_y", 0))
+            obj["fov_width"], obj["fov_height"] = mosaic_fov(*total, obj["tiles_x"], obj["tiles_y"], inverse=True,
+                                                           overlap_x=overlaps[0], overlap_y=overlaps[1])
+        obj.update(rotation_deg=self.rotation_deg.value(), overlap_x=overlaps[0], overlap_y=overlaps[1])
+        self.sky.set_active_tile(None)
+        self._show_objective(True)
+        self._changed()
 
     def build_request(self):
         """Construye una petición completa solo desde elecciones explícitas y ubicaciones guardadas."""
@@ -1011,6 +1095,10 @@ class MultiNightPage(QWidget):
             name = next(obj.name for obj in self._request.objectives if obj.key == visit.objective)
             self.block_details.setText(f"{name} · {self._clock(visit.start)} → {self._clock(visit.end)}\n{visit.reason}")
             self._inspect(frame)
+            if self.sky.mosaic_tiles:
+                tile = self.sky.mosaic_tiles[frame.tile-1]
+                self.block_details.setText(self.block_details.text()+
+                                          f"\nT{tile.number}: RA {format_ra(tile.ra_hours)} · Dec {format_dec(tile.dec_deg)} · PA local {tile.position_angle:.2f}°")
 
     def _inspect_allocation(self):
         """Seleccionar un bloque consulta su franja real, no el top del ranking legacy."""
@@ -1033,6 +1121,7 @@ class MultiNightPage(QWidget):
         name = next(obj.name for obj in self._request.objectives if obj.key == item.objective)
         self._preview_caption = f"{name} · {item.night} · tesela {item.tile}"
         self._preview_key = item.objective, item.tile, item.night
+        self.sky.set_active_tile(item.tile)
         self.curve.clear()
         self.job.start("preview", self._request, (item.objective, item.tile, item.night))
         self.curve_status.setText(self._preview_caption + " · leyendo curva…")
@@ -1207,7 +1296,7 @@ class MultiNightPage(QWidget):
             self._restoring = False
         self.owner._multinight_file = {"path":path, "sha256":digest}
         self._changed()
-        if document["version"] == 2:
+        if document["version"] >= 2:
             self._request, result = editor_calendar(document)
             self._master_readonly_view = True
             self._delivered(self.job.generation, "plan", result, "")

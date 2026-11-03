@@ -592,7 +592,9 @@ def test_confirmar_maestro_desde_ui_no_crea_sesiones_legacy(qt_app, memory_db, t
         assert dialog._result is None
         dialog._open_master()
         assert dialog.name.text() == "Plan confirmado"
-        assert dialog._result is None
+        assert dialog._result is not None
+        assert dialog._master_readonly_view
+        assert not dialog.save_plan_button.isEnabled()
         assert read_document(path)[1] == digest
     finally:
         dialog.close()

@@ -262,7 +262,7 @@ def schedule(request, opportunities, tracks=(), accuracy=(), *, cancelled=None):
                if getattr(request.profile, name) is None]
     notes = ("Búsqueda heurística acotada por candidatos y ancho de exploración; no certifica óptimo global ni imposibilidad.",
              "Orden: oportunidades que se pierden, cobertura equilibrada, prioridad de filtros, altura/tránsito; desempate por noches y maniobras.",
-             "Alturas de centros de teselas, malla de un minuto; sin clima previsto, rotación/solape real ni conflictos entre maestros.")
+             "Alturas de centros de teselas, malla de un minuto; geometría de cámara y solape nominal, sin clima previsto ni conflictos entre maestros.")
     if unknown:
         notes += ("Tiempos no informados y no contemplados: "+", ".join(unknown)+".",)
     if any(balance.assigned_s < balance.requested_s for balance in _balances(goals, best[0])):

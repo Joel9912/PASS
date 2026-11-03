@@ -24,8 +24,8 @@ Lista de los problemas encontrados en PASS y su estado. Cada entrada tiene un ID
 
 ## Resumen
 
-**130 hallazgos**: 🔴 18 graves · 🟠 82 medios · 🟡 21 bajos · 9 decisiones (2 aplazadas).
-Estado: ✅ 114 corregidos · 🟡 2 contenidos · ⏳ 4 pendientes · 🔎 1 sin reproducir.
+**131 hallazgos**: 🔴 18 graves · 🟠 83 medios · 🟡 21 bajos · 9 decisiones (2 aplazadas).
+Estado: ✅ 114 corregidos · 🟡 2 contenidos · ⏳ 5 pendientes · 🔎 1 sin reproducir.
 
 ---
 
@@ -122,6 +122,7 @@ Estado: ✅ 114 corregidos · 🟡 2 contenidos · ⏳ 4 pendientes · 🔎 1 si
 | **U-0014** | Planificación conserva un contenedor de diálogo y un selector al formulario anterior en lugar de una única página nativa. | ✅ `e7f7f07` |
 | **U-0015** | Una prioridad de filtros temporalmente duplicada durante la edición impide recuperar su borrador autoguardado. | ✅ `82dcb3b` |
 | **U-0016** | Guardar un plan abre el selector en la raíz del programa en lugar de guardar sus datos en una carpeta propia. | ✅ `0983a8e` |
+| **U-0017** | El editor de objetivo puede comprimir la tabla de filtros hasta ocultar las horas de la primera fila. | ⏳ Corrección en verificación. |
 | **C-0001** | Se admiten umbrales de sub/sobremuestreo contradictorios entre sí. | ✅ `a7f5ead` |
 | **C-0002** | Configuración guarda varias claves sin atomicidad: un fallo a mitad deja ajustes a medias. | ✅ `a7f5ead` |
 | **C-0003** | Editar la ruta de SirIL deja el ✓ de «encontrado» obsoleto hasta reabrir. | ✅ `600200c` |

@@ -23,9 +23,10 @@ import math
 
 import numpy as np
 from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QPainter, QPen, QPolygonF
+from PyQt6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QPolygonF
 from PyQt6.QtWidgets import QWidget
 
+from planners.mosaic import mosaic_tiles
 from planners.sky_loader import load_sky, target_index
 
 #: Nº máximo de estrellas pintadas por refresco (más allá se ven las más brillantes).
@@ -171,6 +172,10 @@ class PlanetarioVisual(QWidget):
 
         # Encuadre y resaltado
         self._framing: tuple[float, float, float, float, int, int] | None = None
+        self._mosaic_tiles = ()
+        self._mosaic_center = None
+        self._show_mosaic_tiles = True
+        self._active_tile = None
         self._selected: tuple[str, str] | None = None
         self._selected_index: int | None = None
 
@@ -224,6 +229,8 @@ class PlanetarioVisual(QWidget):
         tiles_y: int = 1,
     ) -> None:
         """Dibuja el rectángulo de encuadre y sus teselas (None lo borra)."""
+        self._mosaic_tiles = ()
+        self._mosaic_center = None
         if ra_hours is None or dec_deg is None or not fov_major_deg or not fov_minor_deg:
             self._framing = None
         else:
@@ -234,9 +241,33 @@ class PlanetarioVisual(QWidget):
             )
         self.update()
 
+    def set_mosaic(self, ra_hours, dec_deg, width, height, tiles_x=1, tiles_y=1, *,
+                   rotation_deg=0., overlap_x=0., overlap_y=0., show_tiles=True):
+        """Dibuja las cámaras completas del backend, no subdivisiones de un rectángulo en pantalla."""
+        tiles = mosaic_tiles(ra_hours, dec_deg, width, height, tiles_x, tiles_y,
+                             rotation_deg=rotation_deg, overlap_x=overlap_x, overlap_y=overlap_y)
+        self._framing = None
+        self._mosaic_tiles = tiles
+        self._mosaic_center = ra_hours*15, dec_deg
+        self._show_mosaic_tiles = show_tiles
+        self.update()
+
+    @property
+    def mosaic_tiles(self):
+        """Geometría celeste inmutable de las cámaras mostradas; no deriva centros del tamaño del widget."""
+        return self._mosaic_tiles
+
+    def set_active_tile(self, number):
+        """Resalta la tesela inspeccionada en el calendario sin alterar su posición ni el encuadre."""
+        self._active_tile = number
+        self.update()
+
     def clear_framing(self) -> None:
         """Elimina el encuadre dibujado."""
         self._framing = None
+        self._mosaic_tiles = ()
+        self._mosaic_center = None
+        self._active_tile = None
         self.update()
 
     def reset_view(self) -> None:
@@ -581,6 +612,9 @@ class PlanetarioVisual(QWidget):
         El rectángulo se dibuja centrado en la proyección de su propio eje y
         con ancho/alto positivos (mitad = tan(fov/2) en radianes × escala).
         """
+        if self._mosaic_tiles:
+            self._draw_mosaic(painter, ppr)
+            return
         if not self._framing:
             return
         ra, dec, major, minor, tiles_x, tiles_y = self._framing
@@ -614,6 +648,49 @@ class PlanetarioVisual(QWidget):
         for k in range(1, tiles_y):
             y = rect.top() + rect.height() * k / tiles_y
             painter.drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y))
+
+    def _draw_mosaic(self, painter, ppr):
+        """Proyecta cada huella esférica a la vista actual; solapes se ven y el centro maestro queda fijo."""
+        painter.save()
+        outline = QPainterPath()
+        labels = []
+        for tile in self._mosaic_tiles:
+            ras, decs = zip(*tile.corners)
+            xi, eta, ok = gnomonic(np.asarray(ras)*15, decs, self._ra0, self._dec0)
+            if not all(ok):
+                continue
+            xs, ys = self._to_screen(xi, eta, ppr)
+            polygon = QPolygonF([QPointF(float(x), float(y)) for x, y in zip(xs, ys)])
+            if self._show_mosaic_tiles:
+                pen = QPen(QColor("#60a5fa" if tile.number == self._active_tile else self._color_marco),
+                           2.5 if tile.number == self._active_tile else 1.3)
+                painter.setPen(pen)
+                painter.setBrush(self._color_relleno_marco)
+                painter.drawPolygon(polygon)
+                cx, cy, valid = gnomonic(tile.ra_hours*15, tile.dec_deg, self._ra0, self._dec0)
+                if valid[0]:
+                    sx, sy = self._to_screen(cx, cy, ppr)
+                    labels.append((float(sx[0]), float(sy[0]), f"T{tile.number}"))
+            else:
+                path = QPainterPath()
+                path.addPolygon(polygon)
+                path.closeSubpath()
+                outline = outline.united(path)
+        if not self._show_mosaic_tiles:
+            painter.setPen(QPen(QColor(self._color_marco), 1.8))
+            painter.setBrush(self._color_relleno_marco)
+            painter.drawPath(outline)
+        painter.setPen(QColor(self._color_marco))
+        for x, y, label in labels:
+            painter.drawText(QPointF(x+4, y-4), label)
+        xi, eta, ok = gnomonic(*self._mosaic_center, self._ra0, self._dec0)
+        if ok[0]:
+            x, y = self._to_screen(xi, eta, ppr)
+            center = QPointF(float(x[0]), float(y[0]))
+            painter.setPen(QPen(QColor("#e6edf3"), 1.5))
+            painter.drawLine(center+QPointF(-5, 0), center+QPointF(5, 0))
+            painter.drawLine(center+QPointF(0, -5), center+QPointF(0, 5))
+        painter.restore()
 
     def _draw_compass(self, painter: QPainter) -> None:
         """Rosa de los vientos abajo a la izquierda (norte arriba, este a la izq.)."""
